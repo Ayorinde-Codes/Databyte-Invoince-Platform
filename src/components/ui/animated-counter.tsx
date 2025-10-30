@@ -8,12 +8,12 @@ interface AnimatedCounterProps {
   decimals?: number;
 }
 
-const AnimatedCounter = ({ 
-  end, 
-  duration = 2000, 
-  prefix = '', 
-  suffix = '', 
-  decimals = 0 
+const AnimatedCounter = ({
+  end,
+  duration = 2000,
+  prefix = '',
+  suffix = '',
+  decimals = 0,
 }: AnimatedCounterProps) => {
   const [count, setCount] = useState(0);
   const [isVisible, setIsVisible] = useState(false);
@@ -45,11 +45,11 @@ const AnimatedCounter = ({
     const animate = (timestamp: number) => {
       if (!startTime) startTime = timestamp;
       const progress = Math.min((timestamp - startTime) / duration, 1);
-      
+
       // Easing function for smooth animation
       const easeOutQuart = 1 - Math.pow(1 - progress, 4);
       const currentCount = Math.floor(easeOutQuart * end);
-      
+
       setCount(currentCount);
 
       if (progress < 1) {
@@ -75,7 +75,9 @@ const AnimatedCounter = ({
 
   return (
     <span ref={counterRef} className="font-bold">
-      {prefix}{formatNumber(count)}{suffix}
+      {prefix}
+      {formatNumber(count)}
+      {suffix}
     </span>
   );
 };

@@ -80,7 +80,12 @@ export interface FIRSComplianceStatus {
 
 export interface FIRSComplianceIssue {
   id: string;
-  type: 'validation_error' | 'submission_failure' | 'certificate_expiry' | 'api_limit' | 'configuration_error';
+  type:
+    | 'validation_error'
+    | 'submission_failure'
+    | 'certificate_expiry'
+    | 'api_limit'
+    | 'configuration_error';
   severity: 'critical' | 'high' | 'medium' | 'low';
   title: string;
   description: string;
@@ -98,7 +103,12 @@ export interface FIRSInvoiceStatus {
   irn?: string;
   service_id?: string;
   validation_status: 'pending' | 'valid' | 'invalid' | 'rejected' | 'cancelled';
-  submission_status: 'not_submitted' | 'submitted' | 'processing' | 'approved' | 'rejected';
+  submission_status:
+    | 'not_submitted'
+    | 'submitted'
+    | 'processing'
+    | 'approved'
+    | 'rejected';
   validation_response?: FIRSValidationResponse;
   submission_response?: FIRSSubmissionResponse;
   qr_code?: string;
