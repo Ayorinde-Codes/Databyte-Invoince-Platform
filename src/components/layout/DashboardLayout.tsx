@@ -40,7 +40,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
 }) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const { user, logout } = useAuth();
+  const { user, company, logout } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -202,7 +202,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                     {user?.name}
                   </p>
                   <p className="text-xs text-gray-500 truncate">
-                    {user?.company?.name}
+                    {company?.name}
                   </p>
                 </div>
               )}
