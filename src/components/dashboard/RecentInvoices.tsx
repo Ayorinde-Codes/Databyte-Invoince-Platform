@@ -1,24 +1,30 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { 
-  MoreHorizontal, 
-  Eye, 
-  Download, 
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import {
+  MoreHorizontal,
+  Eye,
+  Download,
   Send,
   CheckCircle,
   Clock,
   AlertTriangle,
-  XCircle
-} from "lucide-react";
+  XCircle,
+} from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { formatCurrency, formatDate } from "../../utils/helpers";
+} from '@/components/ui/dropdown-menu';
+import { formatCurrency, formatDate } from '../../utils/helpers';
 
 interface Invoice {
   id: string;
@@ -42,36 +48,37 @@ export const RecentInvoices: React.FC<RecentInvoicesProps> = ({
 }) => {
   const getStatusBadge = (status: string) => {
     const statusConfig = {
-      paid: { 
-        label: 'Paid', 
+      paid: {
+        label: 'Paid',
         className: 'bg-green-100 text-green-800 border-green-200',
-        icon: CheckCircle
+        icon: CheckCircle,
       },
-      sent: { 
-        label: 'Sent', 
+      sent: {
+        label: 'Sent',
         className: 'bg-blue-100 text-blue-800 border-blue-200',
-        icon: Send
+        icon: Send,
       },
-      overdue: { 
-        label: 'Overdue', 
+      overdue: {
+        label: 'Overdue',
         className: 'bg-red-100 text-red-800 border-red-200',
-        icon: AlertTriangle
+        icon: AlertTriangle,
       },
-      draft: { 
-        label: 'Draft', 
+      draft: {
+        label: 'Draft',
         className: 'bg-gray-100 text-gray-800 border-gray-200',
-        icon: Clock
+        icon: Clock,
       },
-      cancelled: { 
-        label: 'Cancelled', 
+      cancelled: {
+        label: 'Cancelled',
         className: 'bg-gray-100 text-gray-800 border-gray-200',
-        icon: XCircle
+        icon: XCircle,
       },
     };
-    
-    const config = statusConfig[status as keyof typeof statusConfig] || statusConfig.draft;
+
+    const config =
+      statusConfig[status as keyof typeof statusConfig] || statusConfig.draft;
     const IconComponent = config.icon;
-    
+
     return (
       <Badge variant="outline" className={config.className}>
         <IconComponent className="w-3 h-3 mr-1" />
@@ -82,31 +89,33 @@ export const RecentInvoices: React.FC<RecentInvoicesProps> = ({
 
   const getFirsStatusBadge = (status: string) => {
     const statusConfig = {
-      approved: { 
-        label: 'FIRS Approved', 
+      approved: {
+        label: 'FIRS Approved',
         className: 'bg-green-100 text-green-800 border-green-200',
-        icon: CheckCircle
+        icon: CheckCircle,
       },
-      pending: { 
-        label: 'FIRS Pending', 
+      pending: {
+        label: 'FIRS Pending',
         className: 'bg-yellow-100 text-yellow-800 border-yellow-200',
-        icon: Clock
+        icon: Clock,
       },
-      rejected: { 
-        label: 'FIRS Rejected', 
+      rejected: {
+        label: 'FIRS Rejected',
         className: 'bg-red-100 text-red-800 border-red-200',
-        icon: XCircle
+        icon: XCircle,
       },
-      not_required: { 
-        label: 'FIRS N/A', 
+      not_required: {
+        label: 'FIRS N/A',
         className: 'bg-gray-100 text-gray-800 border-gray-200',
-        icon: CheckCircle
+        icon: CheckCircle,
       },
     };
-    
-    const config = statusConfig[status as keyof typeof statusConfig] || statusConfig.not_required;
+
+    const config =
+      statusConfig[status as keyof typeof statusConfig] ||
+      statusConfig.not_required;
     const IconComponent = config.icon;
-    
+
     return (
       <Badge variant="outline" className={`${config.className} text-xs`}>
         <IconComponent className="w-3 h-3 mr-1" />
@@ -118,7 +127,7 @@ export const RecentInvoices: React.FC<RecentInvoicesProps> = ({
   const getCustomerInitials = (name: string) => {
     return name
       .split(' ')
-      .map(word => word.charAt(0))
+      .map((word) => word.charAt(0))
       .join('')
       .toUpperCase()
       .slice(0, 2);
@@ -142,33 +151,40 @@ export const RecentInvoices: React.FC<RecentInvoicesProps> = ({
       <CardContent>
         <div className="space-y-4">
           {invoices.map((invoice) => (
-            <div 
-              key={invoice.id} 
+            <div
+              key={invoice.id}
               className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors"
             >
               <div className="flex items-center space-x-4">
                 <Avatar className="h-10 w-10">
-                  <AvatarImage src={invoice.customerAvatar} alt={invoice.customer} />
+                  <AvatarImage
+                    src={invoice.customerAvatar}
+                    alt={invoice.customer}
+                  />
                   <AvatarFallback className="bg-primary/10 text-primary">
                     {getCustomerInitials(invoice.customer)}
                   </AvatarFallback>
                 </Avatar>
-                
+
                 <div>
                   <div className="flex items-center space-x-2 mb-1">
                     <p className="font-medium text-sm">{invoice.id}</p>
                     {getStatusBadge(invoice.status)}
                   </div>
-                  <p className="text-sm text-muted-foreground">{invoice.customer}</p>
+                  <p className="text-sm text-muted-foreground">
+                    {invoice.customer}
+                  </p>
                   <div className="mt-1">
                     {getFirsStatusBadge(invoice.firsStatus)}
                   </div>
                 </div>
               </div>
-              
+
               <div className="flex items-center space-x-4">
                 <div className="text-right">
-                  <p className="font-semibold">{formatCurrency(invoice.amount)}</p>
+                  <p className="font-semibold">
+                    {formatCurrency(invoice.amount)}
+                  </p>
                   <p className="text-sm text-muted-foreground">
                     {formatDate(invoice.date)}
                   </p>
@@ -178,7 +194,7 @@ export const RecentInvoices: React.FC<RecentInvoicesProps> = ({
                     </p>
                   )}
                 </div>
-                
+
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
@@ -206,7 +222,7 @@ export const RecentInvoices: React.FC<RecentInvoicesProps> = ({
             </div>
           ))}
         </div>
-        
+
         {invoices.length === 0 && (
           <div className="text-center py-8">
             <p className="text-muted-foreground">No recent invoices found</p>

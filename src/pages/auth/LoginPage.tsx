@@ -7,7 +7,13 @@ import { Eye, EyeOff, FileText, ArrowLeft } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -46,17 +52,21 @@ export const LoginPage = () => {
 
   const onSubmit = async (data: LoginFormData) => {
     setIsLoading(true);
-    
+
     try {
       await login({
         email: data.email,
         password: data.password,
       });
-      
+
       toast.success('Login successful! Welcome back.');
       navigate('/dashboard');
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Login failed. Please try again.');
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : 'Login failed. Please try again.'
+      );
     } finally {
       setIsLoading(false);
     }
@@ -79,23 +89,29 @@ export const LoginPage = () => {
               Welcome back to your invoice management platform
             </h1>
             <p className="text-xl text-primary-foreground/80 leading-relaxed">
-              Streamline your FIRS e-invoicing compliance and manage your invoices 
-              with enterprise-grade security and reliability.
+              Streamline your FIRS e-invoicing compliance and manage your
+              invoices with enterprise-grade security and reliability.
             </p>
           </div>
-          
+
           <div className="space-y-4">
             <div className="flex items-center space-x-3">
               <div className="w-2 h-2 bg-primary-foreground/60 rounded-full" />
-              <span className="text-primary-foreground/80">FIRS Certified Integration</span>
+              <span className="text-primary-foreground/80">
+                FIRS Certified Integration
+              </span>
             </div>
             <div className="flex items-center space-x-3">
               <div className="w-2 h-2 bg-primary-foreground/60 rounded-full" />
-              <span className="text-primary-foreground/80">Real-time ERP Synchronization</span>
+              <span className="text-primary-foreground/80">
+                Real-time ERP Synchronization
+              </span>
             </div>
             <div className="flex items-center space-x-3">
               <div className="w-2 h-2 bg-primary-foreground/60 rounded-full" />
-              <span className="text-primary-foreground/80">Advanced Analytics & Reporting</span>
+              <span className="text-primary-foreground/80">
+                Advanced Analytics & Reporting
+              </span>
             </div>
           </div>
         </div>
@@ -105,8 +121,8 @@ export const LoginPage = () => {
       <div className="flex-1 flex flex-col justify-center px-6 py-12 lg:px-12">
         <div className="w-full max-w-md mx-auto">
           {/* Back to Home Link */}
-          <Link 
-            to="/" 
+          <Link
+            to="/"
             className="inline-flex items-center text-muted-foreground hover:text-foreground transition-colors mb-8"
           >
             <ArrowLeft className="w-4 h-4 mr-2" />
@@ -115,12 +131,14 @@ export const LoginPage = () => {
 
           <Card className="border-0 shadow-lg">
             <CardHeader className="space-y-1 pb-6">
-              <CardTitle className="text-2xl font-bold">Sign in to your account</CardTitle>
+              <CardTitle className="text-2xl font-bold">
+                Sign in to your account
+              </CardTitle>
               <CardDescription>
                 Enter your email and password to access your dashboard
               </CardDescription>
             </CardHeader>
-            
+
             <CardContent>
               <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
                 <div className="space-y-2">
@@ -133,7 +151,9 @@ export const LoginPage = () => {
                     className={errors.email ? 'border-destructive' : ''}
                   />
                   {errors.email && (
-                    <p className="text-sm text-destructive">{errors.email.message}</p>
+                    <p className="text-sm text-destructive">
+                      {errors.email.message}
+                    </p>
                   )}
                 </div>
 
@@ -145,7 +165,9 @@ export const LoginPage = () => {
                       type={showPassword ? 'text' : 'password'}
                       placeholder="Enter your password"
                       {...register('password')}
-                      className={errors.password ? 'border-destructive pr-10' : 'pr-10'}
+                      className={
+                        errors.password ? 'border-destructive pr-10' : 'pr-10'
+                      }
                     />
                     <Button
                       type="button"
@@ -162,7 +184,9 @@ export const LoginPage = () => {
                     </Button>
                   </div>
                   {errors.password && (
-                    <p className="text-sm text-destructive">{errors.password.message}</p>
+                    <p className="text-sm text-destructive">
+                      {errors.password.message}
+                    </p>
                   )}
                 </div>
 
@@ -171,13 +195,15 @@ export const LoginPage = () => {
                     <Checkbox
                       id="remember_me"
                       checked={rememberMe}
-                      onCheckedChange={(checked) => setValue('remember_me', !!checked)}
+                      onCheckedChange={(checked) =>
+                        setValue('remember_me', !!checked)
+                      }
                     />
                     <Label htmlFor="remember_me" className="text-sm">
                       Remember me
                     </Label>
                   </div>
-                  
+
                   <Link
                     to="/auth/forgot-password"
                     className="text-sm text-primary hover:underline"
@@ -186,11 +212,7 @@ export const LoginPage = () => {
                   </Link>
                 </div>
 
-                <Button
-                  type="submit"
-                  className="w-full"
-                  disabled={isLoading}
-                >
+                <Button type="submit" className="w-full" disabled={isLoading}>
                   {isLoading ? 'Signing in...' : 'Sign in'}
                 </Button>
               </form>
@@ -209,10 +231,16 @@ export const LoginPage = () => {
 
               {/* Demo Credentials */}
               <div className="mt-6 p-4 bg-muted/50 rounded-lg">
-                <p className="text-sm font-medium text-muted-foreground mb-2">Demo Credentials:</p>
+                <p className="text-sm font-medium text-muted-foreground mb-2">
+                  Demo Credentials:
+                </p>
                 <div className="text-sm text-muted-foreground space-y-1">
-                  <p><strong>Email:</strong> demo@databyte.com</p>
-                  <p><strong>Password:</strong> demo123</p>
+                  <p>
+                    <strong>Email:</strong> demo@databyte.com
+                  </p>
+                  <p>
+                    <strong>Password:</strong> demo123
+                  </p>
                 </div>
               </div>
             </CardContent>

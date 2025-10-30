@@ -1,13 +1,13 @@
 // ERP System Types
-export type ERPType = 
-  | 'sage_300' 
-  | 'sage_x3' 
-  | 'sage_evolution' 
-  | 'dynamics_365' 
-  | 'dynamics_nav' 
-  | 'quickbooks' 
-  | 'oracle_erp' 
-  | 'sap_business_one' 
+export type ERPType =
+  | 'sage_300'
+  | 'sage_x3'
+  | 'sage_evolution'
+  | 'dynamics_365'
+  | 'dynamics_nav'
+  | 'quickbooks'
+  | 'oracle_erp'
+  | 'sap_business_one'
   | 'sap_s4hana'
   | 'xero'
   | 'zoho_books'

@@ -1,7 +1,7 @@
-import { useState } from "react";
-import { Link } from "react-router-dom";
-import { Button } from "@/components/ui/button";
-import { BarChart3, Menu, X } from "lucide-react";
+import { useState } from 'react';
+import { Link } from 'react-router-dom';
+import { Button } from '@/components/ui/button';
+import { BarChart3, Menu, X } from 'lucide-react';
 
 const Navbar = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -15,31 +15,47 @@ const Navbar = () => {
             <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center">
               <BarChart3 className="w-6 h-6 text-white" />
             </div>
-            <span className="text-2xl font-bold text-gray-900">
-              Databyte
-            </span>
+            <span className="text-2xl font-bold text-gray-900">Databyte</span>
           </Link>
 
           {/* Desktop Navigation */}
           <div className="hidden lg:flex items-center space-x-10">
-            <Link to="/" className="text-gray-600 hover:text-gray-900 font-medium transition-colors">
+            <Link
+              to="/"
+              className="text-gray-600 hover:text-gray-900 font-medium transition-colors"
+            >
               Home
             </Link>
-            <Link to="/about" className="text-gray-600 hover:text-gray-900 font-medium transition-colors">
+            <Link
+              to="/about"
+              className="text-gray-600 hover:text-gray-900 font-medium transition-colors"
+            >
               About
             </Link>
-            <Link to="/api-docs" className="text-gray-600 hover:text-gray-900 font-medium transition-colors">
+            <Link
+              to="/api-docs"
+              className="text-gray-600 hover:text-gray-900 font-medium transition-colors"
+            >
               API Docs
             </Link>
-            <Link to="/partners" className="text-gray-600 hover:text-gray-900 font-medium transition-colors">
+            <Link
+              to="/partners"
+              className="text-gray-600 hover:text-gray-900 font-medium transition-colors"
+            >
               Partners
             </Link>
-            <Link to="/contact" className="text-gray-600 hover:text-gray-900 font-medium transition-colors">
+            <Link
+              to="/contact"
+              className="text-gray-600 hover:text-gray-900 font-medium transition-colors"
+            >
               Contact
             </Link>
             <div className="flex items-center space-x-4">
               <Link to="/auth/login">
-                <Button variant="outline" className="border-gray-300 text-gray-700 hover:bg-gray-50 px-6 py-2.5 rounded-lg font-medium transition-all duration-200">
+                <Button
+                  variant="outline"
+                  className="border-gray-300 text-gray-700 hover:bg-gray-50 px-6 py-2.5 rounded-lg font-medium transition-all duration-200"
+                >
                   Login
                 </Button>
               </Link>
@@ -68,14 +84,42 @@ const Navbar = () => {
             <div className="lg:hidden absolute top-full left-0 right-0 py-6 border-t border-gray-100 bg-white shadow-lg">
               <div className="container mx-auto px-6">
                 <div className="flex flex-col space-y-6">
-                  <Link to="/" className="text-gray-600 hover:text-gray-900 font-medium transition-colors">Home</Link>
-                  <Link to="/about" className="text-gray-600 hover:text-gray-900 font-medium transition-colors">About</Link>
-                  <Link to="/api-docs" className="text-gray-600 hover:text-gray-900 font-medium transition-colors">API Docs</Link>
-                  <Link to="/partners" className="text-gray-600 hover:text-gray-900 font-medium transition-colors">Partners</Link>
-                  <Link to="/contact" className="text-gray-600 hover:text-gray-900 font-medium transition-colors">Contact</Link>
+                  <Link
+                    to="/"
+                    className="text-gray-600 hover:text-gray-900 font-medium transition-colors"
+                  >
+                    Home
+                  </Link>
+                  <Link
+                    to="/about"
+                    className="text-gray-600 hover:text-gray-900 font-medium transition-colors"
+                  >
+                    About
+                  </Link>
+                  <Link
+                    to="/api-docs"
+                    className="text-gray-600 hover:text-gray-900 font-medium transition-colors"
+                  >
+                    API Docs
+                  </Link>
+                  <Link
+                    to="/partners"
+                    className="text-gray-600 hover:text-gray-900 font-medium transition-colors"
+                  >
+                    Partners
+                  </Link>
+                  <Link
+                    to="/contact"
+                    className="text-gray-600 hover:text-gray-900 font-medium transition-colors"
+                  >
+                    Contact
+                  </Link>
                   <div className="flex flex-col space-y-3 pt-4">
                     <Link to="/auth/login">
-                      <Button variant="outline" className="w-full border-gray-300 text-gray-700 hover:bg-gray-50 font-medium">
+                      <Button
+                        variant="outline"
+                        className="w-full border-gray-300 text-gray-700 hover:bg-gray-50 font-medium"
+                      >
                         Login
                       </Button>
                     </Link>

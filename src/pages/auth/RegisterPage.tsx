@@ -3,27 +3,51 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Eye, EyeOff, FileText, ArrowLeft, Building, User, Mail, Phone } from 'lucide-react';
+import {
+  Eye,
+  EyeOff,
+  FileText,
+  ArrowLeft,
+  Building,
+  User,
+  Mail,
+  Phone,
+} from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 
-const registerSchema = z.object({
-  name: z.string().min(2, 'Name must be at least 2 characters'),
-  email: z.string().email('Please enter a valid email address'),
-  password: z.string().min(8, 'Password must be at least 8 characters'),
-  confirm_password: z.string(),
-  company_name: z.string().min(2, 'Company name must be at least 2 characters'),
-  phone: z.string().optional(),
-  terms_accepted: z.boolean().refine(val => val === true, 'You must accept the terms and conditions'),
-}).refine((data) => data.password === data.confirm_password, {
-  message: "Passwords don't match",
-  path: ["confirm_password"],
-});
+const registerSchema = z
+  .object({
+    name: z.string().min(2, 'Name must be at least 2 characters'),
+    email: z.string().email('Please enter a valid email address'),
+    password: z.string().min(8, 'Password must be at least 8 characters'),
+    confirm_password: z.string(),
+    company_name: z
+      .string()
+      .min(2, 'Company name must be at least 2 characters'),
+    phone: z.string().optional(),
+    terms_accepted: z
+      .boolean()
+      .refine(
+        (val) => val === true,
+        'You must accept the terms and conditions'
+      ),
+  })
+  .refine((data) => data.password === data.confirm_password, {
+    message: "Passwords don't match",
+    path: ['confirm_password'],
+  });
 
 type RegisterFormData = z.infer<typeof registerSchema>;
 
@@ -56,12 +80,14 @@ export const RegisterPage = () => {
 
   const onSubmit = async (data: RegisterFormData) => {
     setIsLoading(true);
-    
+
     try {
       // Mock registration API call
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      toast.success('Registration successful! Please check your email to verify your account.');
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+
+      toast.success(
+        'Registration successful! Please check your email to verify your account.'
+      );
       navigate('/auth/login');
     } catch (error) {
       toast.error('Registration failed. Please try again.');
@@ -87,19 +113,24 @@ export const RegisterPage = () => {
               Join thousands of businesses streamlining their invoice management
             </h1>
             <p className="text-xl text-primary-foreground/80 leading-relaxed">
-              Get started with our comprehensive FIRS e-invoicing compliance platform. 
-              Integrate with your ERP, automate compliance, and focus on growing your business.
+              Get started with our comprehensive FIRS e-invoicing compliance
+              platform. Integrate with your ERP, automate compliance, and focus
+              on growing your business.
             </p>
           </div>
-          
+
           <div className="space-y-4">
             <div className="flex items-center space-x-3">
               <div className="w-2 h-2 bg-primary-foreground/60 rounded-full" />
-              <span className="text-primary-foreground/80">14-day free trial</span>
+              <span className="text-primary-foreground/80">
+                14-day free trial
+              </span>
             </div>
             <div className="flex items-center space-x-3">
               <div className="w-2 h-2 bg-primary-foreground/60 rounded-full" />
-              <span className="text-primary-foreground/80">No credit card required</span>
+              <span className="text-primary-foreground/80">
+                No credit card required
+              </span>
             </div>
             <div className="flex items-center space-x-3">
               <div className="w-2 h-2 bg-primary-foreground/60 rounded-full" />
@@ -113,8 +144,8 @@ export const RegisterPage = () => {
       <div className="flex-1 flex flex-col justify-center px-6 py-12 lg:px-12">
         <div className="w-full max-w-md mx-auto">
           {/* Back to Home Link */}
-          <Link 
-            to="/" 
+          <Link
+            to="/"
             className="inline-flex items-center text-muted-foreground hover:text-foreground transition-colors mb-8"
           >
             <ArrowLeft className="w-4 h-4 mr-2" />
@@ -123,12 +154,15 @@ export const RegisterPage = () => {
 
           <Card className="border-0 shadow-lg">
             <CardHeader className="space-y-1 pb-6">
-              <CardTitle className="text-2xl font-bold">Create your account</CardTitle>
+              <CardTitle className="text-2xl font-bold">
+                Create your account
+              </CardTitle>
               <CardDescription>
-                Start your free trial and streamline your invoice management today
+                Start your free trial and streamline your invoice management
+                today
               </CardDescription>
             </CardHeader>
-            
+
             <CardContent>
               <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
                 {/* Personal Information */}
@@ -137,7 +171,7 @@ export const RegisterPage = () => {
                     <User className="w-4 h-4" />
                     <span>Personal Information</span>
                   </div>
-                  
+
                   <div className="space-y-2">
                     <Label htmlFor="name">Full Name</Label>
                     <Input
@@ -148,7 +182,9 @@ export const RegisterPage = () => {
                       className={errors.name ? 'border-destructive' : ''}
                     />
                     {errors.name && (
-                      <p className="text-sm text-destructive">{errors.name.message}</p>
+                      <p className="text-sm text-destructive">
+                        {errors.name.message}
+                      </p>
                     )}
                   </div>
 
@@ -162,7 +198,9 @@ export const RegisterPage = () => {
                       className={errors.email ? 'border-destructive' : ''}
                     />
                     {errors.email && (
-                      <p className="text-sm text-destructive">{errors.email.message}</p>
+                      <p className="text-sm text-destructive">
+                        {errors.email.message}
+                      </p>
                     )}
                   </div>
 
@@ -176,7 +214,9 @@ export const RegisterPage = () => {
                       className={errors.phone ? 'border-destructive' : ''}
                     />
                     {errors.phone && (
-                      <p className="text-sm text-destructive">{errors.phone.message}</p>
+                      <p className="text-sm text-destructive">
+                        {errors.phone.message}
+                      </p>
                     )}
                   </div>
                 </div>
@@ -187,7 +227,7 @@ export const RegisterPage = () => {
                     <Building className="w-4 h-4" />
                     <span>Company Information</span>
                   </div>
-                  
+
                   <div className="space-y-2">
                     <Label htmlFor="company_name">Company Name</Label>
                     <Input
@@ -195,10 +235,14 @@ export const RegisterPage = () => {
                       type="text"
                       placeholder="Enter your company name"
                       {...register('company_name')}
-                      className={errors.company_name ? 'border-destructive' : ''}
+                      className={
+                        errors.company_name ? 'border-destructive' : ''
+                      }
                     />
                     {errors.company_name && (
-                      <p className="text-sm text-destructive">{errors.company_name.message}</p>
+                      <p className="text-sm text-destructive">
+                        {errors.company_name.message}
+                      </p>
                     )}
                   </div>
                 </div>
@@ -209,7 +253,7 @@ export const RegisterPage = () => {
                     <Mail className="w-4 h-4" />
                     <span>Security</span>
                   </div>
-                  
+
                   <div className="space-y-2">
                     <Label htmlFor="password">Password</Label>
                     <div className="relative">
@@ -218,7 +262,9 @@ export const RegisterPage = () => {
                         type={showPassword ? 'text' : 'password'}
                         placeholder="Create a strong password"
                         {...register('password')}
-                        className={errors.password ? 'border-destructive pr-10' : 'pr-10'}
+                        className={
+                          errors.password ? 'border-destructive pr-10' : 'pr-10'
+                        }
                       />
                       <Button
                         type="button"
@@ -235,7 +281,9 @@ export const RegisterPage = () => {
                       </Button>
                     </div>
                     {errors.password && (
-                      <p className="text-sm text-destructive">{errors.password.message}</p>
+                      <p className="text-sm text-destructive">
+                        {errors.password.message}
+                      </p>
                     )}
                   </div>
 
@@ -247,14 +295,20 @@ export const RegisterPage = () => {
                         type={showConfirmPassword ? 'text' : 'password'}
                         placeholder="Confirm your password"
                         {...register('confirm_password')}
-                        className={errors.confirm_password ? 'border-destructive pr-10' : 'pr-10'}
+                        className={
+                          errors.confirm_password
+                            ? 'border-destructive pr-10'
+                            : 'pr-10'
+                        }
                       />
                       <Button
                         type="button"
                         variant="ghost"
                         size="sm"
                         className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
-                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                        onClick={() =>
+                          setShowConfirmPassword(!showConfirmPassword)
+                        }
                       >
                         {showConfirmPassword ? (
                           <EyeOff className="h-4 w-4 text-muted-foreground" />
@@ -264,7 +318,9 @@ export const RegisterPage = () => {
                       </Button>
                     </div>
                     {errors.confirm_password && (
-                      <p className="text-sm text-destructive">{errors.confirm_password.message}</p>
+                      <p className="text-sm text-destructive">
+                        {errors.confirm_password.message}
+                      </p>
                     )}
                   </div>
                 </div>
@@ -274,8 +330,12 @@ export const RegisterPage = () => {
                   <Checkbox
                     id="terms_accepted"
                     checked={termsAccepted}
-                    onCheckedChange={(checked) => setValue('terms_accepted', !!checked)}
-                    className={errors.terms_accepted ? 'border-destructive' : ''}
+                    onCheckedChange={(checked) =>
+                      setValue('terms_accepted', !!checked)
+                    }
+                    className={
+                      errors.terms_accepted ? 'border-destructive' : ''
+                    }
                   />
                   <div className="grid gap-1.5 leading-none">
                     <Label htmlFor="terms_accepted" className="text-sm">
@@ -289,16 +349,14 @@ export const RegisterPage = () => {
                       </a>
                     </Label>
                     {errors.terms_accepted && (
-                      <p className="text-sm text-destructive">{errors.terms_accepted.message}</p>
+                      <p className="text-sm text-destructive">
+                        {errors.terms_accepted.message}
+                      </p>
                     )}
                   </div>
                 </div>
 
-                <Button
-                  type="submit"
-                  className="w-full"
-                  disabled={isLoading}
-                >
+                <Button type="submit" className="w-full" disabled={isLoading}>
                   {isLoading ? 'Creating Account...' : 'Create Account'}
                 </Button>
               </form>

@@ -218,11 +218,7 @@ export const USER_ROLES = {
   viewer: {
     name: 'Viewer',
     description: 'Read-only access to invoices and reports',
-    permissions: [
-      'invoices.view',
-      'dashboard.view',
-      'reports.view',
-    ],
+    permissions: ['invoices.view', 'dashboard.view', 'reports.view'],
   },
 } as const;
 
@@ -245,7 +241,16 @@ export const UPLOAD_CONFIG = {
     'image/png',
     'image/gif',
   ],
-  allowed_extensions: ['.pdf', '.xls', '.xlsx', '.csv', '.jpg', '.jpeg', '.png', '.gif'],
+  allowed_extensions: [
+    '.pdf',
+    '.xls',
+    '.xlsx',
+    '.csv',
+    '.jpg',
+    '.jpeg',
+    '.png',
+    '.gif',
+  ],
 } as const;
 
 // Date and Time Formats
@@ -267,14 +272,30 @@ export const CURRENCIES = {
 
 // Notification Types
 export const NOTIFICATION_TYPES = {
-  invoice_created: { label: 'Invoice Created', icon: 'FileText', color: 'blue' },
+  invoice_created: {
+    label: 'Invoice Created',
+    icon: 'FileText',
+    color: 'blue',
+  },
   invoice_sent: { label: 'Invoice Sent', icon: 'Send', color: 'green' },
-  payment_received: { label: 'Payment Received', icon: 'DollarSign', color: 'green' },
+  payment_received: {
+    label: 'Payment Received',
+    icon: 'DollarSign',
+    color: 'green',
+  },
   firs_submission: { label: 'FIRS Submission', icon: 'Upload', color: 'blue' },
-  firs_approval: { label: 'FIRS Approval', icon: 'CheckCircle', color: 'green' },
+  firs_approval: {
+    label: 'FIRS Approval',
+    icon: 'CheckCircle',
+    color: 'green',
+  },
   firs_rejection: { label: 'FIRS Rejection', icon: 'XCircle', color: 'red' },
   erp_sync: { label: 'ERP Sync', icon: 'RefreshCw', color: 'blue' },
-  system_alert: { label: 'System Alert', icon: 'AlertTriangle', color: 'yellow' },
+  system_alert: {
+    label: 'System Alert',
+    icon: 'AlertTriangle',
+    color: 'yellow',
+  },
 } as const;
 
 // Chart Colors

@@ -1,7 +1,11 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User, Company, AuthResponse } from '../types/auth';
 import { AUTH_CONFIG } from '../utils/constants';
-import { getLocalStorage, setLocalStorage, removeLocalStorage } from '../utils/helpers';
+import {
+  getLocalStorage,
+  setLocalStorage,
+  removeLocalStorage,
+} from '../utils/helpers';
 
 interface AuthContextType {
   user: User | null;
@@ -9,7 +13,10 @@ interface AuthContextType {
   token: string | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  login: (credentials: { email: string; password: string }) => Promise<AuthResponse>;
+  login: (credentials: {
+    email: string;
+    password: string;
+  }) => Promise<AuthResponse>;
   logout: () => void;
   updateUser: (user: Partial<User>) => void;
   updateCompany: (company: Partial<Company>) => void;
@@ -64,13 +71,16 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   }, []);
 
   // Mock login function (replace with actual API call)
-  const login = async (credentials: { email: string; password: string }): Promise<AuthResponse> => {
+  const login = async (credentials: {
+    email: string;
+    password: string;
+  }): Promise<AuthResponse> => {
     setIsLoading(true);
-    
+
     try {
       // Mock API call - replace with actual implementation
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+
       // Mock successful response
       const mockResponse: AuthResponse = {
         token: 'mock-jwt-token-' + Date.now(),
@@ -107,9 +117,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setToken(mockResponse.token);
       setUser(mockResponse.user);
       setCompany(mockResponse.company);
-      
+
       setLocalStorage(AUTH_CONFIG.token_key, mockResponse.token);
-      setLocalStorage(AUTH_CONFIG.refresh_token_key, mockResponse.refresh_token);
+      setLocalStorage(
+        AUTH_CONFIG.refresh_token_key,
+        mockResponse.refresh_token
+      );
       setLocalStorage(AUTH_CONFIG.user_key, mockResponse.user);
       setLocalStorage(AUTH_CONFIG.company_key, mockResponse.company);
 
@@ -126,7 +139,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     setUser(null);
     setCompany(null);
     setToken(null);
-    
+
     removeLocalStorage(AUTH_CONFIG.token_key);
     removeLocalStorage(AUTH_CONFIG.refresh_token_key);
     removeLocalStorage(AUTH_CONFIG.user_key);
@@ -151,15 +164,18 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const refreshToken = async () => {
     try {
-      const storedRefreshToken = getLocalStorage(AUTH_CONFIG.refresh_token_key, null);
-      
+      const storedRefreshToken = getLocalStorage(
+        AUTH_CONFIG.refresh_token_key,
+        null
+      );
+
       if (!storedRefreshToken) {
         throw new Error('No refresh token available');
       }
 
       // Mock refresh token API call
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
       const newToken = 'refreshed-jwt-token-' + Date.now();
       setToken(newToken);
       setLocalStorage(AUTH_CONFIG.token_key, newToken);
@@ -193,9 +209,5 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     refreshToken,
   };
 
-  return (
-    <AuthContext.Provider value={value}>
-      {children}
-    </AuthContext.Provider>
-  );
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
