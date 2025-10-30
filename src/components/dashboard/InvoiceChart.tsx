@@ -1,20 +1,26 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { 
-  BarChart, 
-  Bar, 
-  XAxis, 
-  YAxis, 
-  CartesianGrid, 
-  Tooltip, 
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
   ResponsiveContainer,
   PieChart,
   Pie,
   Cell,
   LineChart,
-  Line
+  Line,
 } from 'recharts';
-import { formatCurrency } from "../../utils/helpers";
+import { formatCurrency } from '../../utils/helpers';
 
 interface ChartData {
   name: string;
@@ -31,7 +37,14 @@ interface InvoiceChartProps {
   className?: string;
 }
 
-const COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#06B6D4'];
+const COLORS = [
+  '#3B82F6',
+  '#10B981',
+  '#F59E0B',
+  '#EF4444',
+  '#8B5CF6',
+  '#06B6D4',
+];
 
 export const InvoiceChart: React.FC<InvoiceChartProps> = ({
   type,
@@ -44,32 +57,23 @@ export const InvoiceChart: React.FC<InvoiceChartProps> = ({
     <ResponsiveContainer width="100%" height={300}>
       <BarChart data={data}>
         <CartesianGrid strokeDasharray="3 3" />
-        <XAxis 
-          dataKey="name" 
-          fontSize={12}
-          tickLine={false}
-          axisLine={false}
-        />
-        <YAxis 
+        <XAxis dataKey="name" fontSize={12} tickLine={false} axisLine={false} />
+        <YAxis
           fontSize={12}
           tickLine={false}
           axisLine={false}
           tickFormatter={(value) => formatCurrency(value, 'NGN', false)}
         />
-        <Tooltip 
+        <Tooltip
           formatter={(value: number) => [formatCurrency(value), 'Amount']}
           labelStyle={{ color: '#374151' }}
-          contentStyle={{ 
-            backgroundColor: '#fff', 
+          contentStyle={{
+            backgroundColor: '#fff',
             border: '1px solid #e5e7eb',
-            borderRadius: '6px'
+            borderRadius: '6px',
           }}
         />
-        <Bar 
-          dataKey="value" 
-          fill="#3B82F6" 
-          radius={[4, 4, 0, 0]}
-        />
+        <Bar dataKey="value" fill="#3B82F6" radius={[4, 4, 0, 0]} />
       </BarChart>
     </ResponsiveContainer>
   );
@@ -82,7 +86,9 @@ export const InvoiceChart: React.FC<InvoiceChartProps> = ({
           cx="50%"
           cy="50%"
           labelLine={false}
-          label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+          label={({ name, percent }) =>
+            `${name} ${(percent * 100).toFixed(0)}%`
+          }
           outerRadius={80}
           fill="#8884d8"
           dataKey="value"
@@ -91,12 +97,12 @@ export const InvoiceChart: React.FC<InvoiceChartProps> = ({
             <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
           ))}
         </Pie>
-        <Tooltip 
+        <Tooltip
           formatter={(value: number) => [formatCurrency(value), 'Amount']}
-          contentStyle={{ 
-            backgroundColor: '#fff', 
+          contentStyle={{
+            backgroundColor: '#fff',
             border: '1px solid #e5e7eb',
-            borderRadius: '6px'
+            borderRadius: '6px',
           }}
         />
       </PieChart>
@@ -107,31 +113,26 @@ export const InvoiceChart: React.FC<InvoiceChartProps> = ({
     <ResponsiveContainer width="100%" height={300}>
       <LineChart data={data}>
         <CartesianGrid strokeDasharray="3 3" />
-        <XAxis 
-          dataKey="name" 
-          fontSize={12}
-          tickLine={false}
-          axisLine={false}
-        />
-        <YAxis 
+        <XAxis dataKey="name" fontSize={12} tickLine={false} axisLine={false} />
+        <YAxis
           fontSize={12}
           tickLine={false}
           axisLine={false}
           tickFormatter={(value) => formatCurrency(value, 'NGN', false)}
         />
-        <Tooltip 
+        <Tooltip
           formatter={(value: number) => [formatCurrency(value), 'Amount']}
           labelStyle={{ color: '#374151' }}
-          contentStyle={{ 
-            backgroundColor: '#fff', 
+          contentStyle={{
+            backgroundColor: '#fff',
             border: '1px solid #e5e7eb',
-            borderRadius: '6px'
+            borderRadius: '6px',
           }}
         />
-        <Line 
-          type="monotone" 
-          dataKey="value" 
-          stroke="#3B82F6" 
+        <Line
+          type="monotone"
+          dataKey="value"
+          stroke="#3B82F6"
           strokeWidth={2}
           dot={{ fill: '#3B82F6', strokeWidth: 2, r: 4 }}
           activeDot={{ r: 6 }}
@@ -164,9 +165,7 @@ export const InvoiceChart: React.FC<InvoiceChartProps> = ({
           <div>
             <CardTitle className="text-lg">{title}</CardTitle>
             {description && (
-              <CardDescription className="mt-1">
-                {description}
-              </CardDescription>
+              <CardDescription className="mt-1">{description}</CardDescription>
             )}
           </div>
           {type === 'pie' && (
@@ -178,16 +177,18 @@ export const InvoiceChart: React.FC<InvoiceChartProps> = ({
       </CardHeader>
       <CardContent>
         {renderChart()}
-        
+
         {type === 'pie' && (
           <div className="mt-4 grid grid-cols-2 gap-4">
             {data.map((item, index) => (
               <div key={item.name} className="flex items-center space-x-2">
-                <div 
+                <div
                   className="w-3 h-3 rounded-full"
                   style={{ backgroundColor: COLORS[index % COLORS.length] }}
                 />
-                <span className="text-sm text-muted-foreground">{item.name}</span>
+                <span className="text-sm text-muted-foreground">
+                  {item.name}
+                </span>
                 <span className="text-sm font-medium ml-auto">
                   {formatCurrency(item.value)}
                 </span>

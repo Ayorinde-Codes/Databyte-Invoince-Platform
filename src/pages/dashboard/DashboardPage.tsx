@@ -10,14 +10,19 @@ import {
   CheckCircle,
   AlertTriangle,
   Settings,
-
   Plus,
   Shield,
-  Activity
+  Activity,
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 
 import { useAuth } from '../../hooks/useAuth';
@@ -114,8 +119,6 @@ export const DashboardPage = () => {
     { name: 'Rejected', value: 50, color: '#EF4444' },
   ];
 
-
-
   return (
     <DashboardLayout>
       <div className="space-y-6">
@@ -124,7 +127,8 @@ export const DashboardPage = () => {
           <div>
             <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
             <p className="text-muted-foreground">
-              Welcome back, {user?.name}! Here's what's happening with {company?.name} today.
+              Welcome back, {user?.name}! Here's what's happening with{' '}
+              {company?.name} today.
             </p>
           </div>
 
@@ -206,16 +210,37 @@ export const DashboardPage = () => {
             <CardContent>
               <div className="space-y-3">
                 <div className="flex justify-between items-center">
-                  <span className="text-sm text-muted-foreground">API Uptime</span>
-                  <Badge variant="secondary" className="bg-green-100 text-green-800">99.9%</Badge>
+                  <span className="text-sm text-muted-foreground">
+                    API Uptime
+                  </span>
+                  <Badge
+                    variant="secondary"
+                    className="bg-green-100 text-green-800"
+                  >
+                    99.9%
+                  </Badge>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-sm text-muted-foreground">ERP Sync Status</span>
-                  <Badge variant="secondary" className="bg-green-100 text-green-800">Connected</Badge>
+                  <span className="text-sm text-muted-foreground">
+                    ERP Sync Status
+                  </span>
+                  <Badge
+                    variant="secondary"
+                    className="bg-green-100 text-green-800"
+                  >
+                    Connected
+                  </Badge>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-sm text-muted-foreground">FIRS API Status</span>
-                  <Badge variant="secondary" className="bg-green-100 text-green-800">Active</Badge>
+                  <span className="text-sm text-muted-foreground">
+                    FIRS API Status
+                  </span>
+                  <Badge
+                    variant="secondary"
+                    className="bg-green-100 text-green-800"
+                  >
+                    Active
+                  </Badge>
                 </div>
               </div>
             </CardContent>
