@@ -1,7 +1,11 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { TrendingUp, TrendingDown, Minus } from "lucide-react";
-import { formatCurrency, formatNumber, formatPercentage } from "../../utils/helpers";
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { TrendingUp, TrendingDown, Minus } from 'lucide-react';
+import {
+  formatCurrency,
+  formatNumber,
+  formatPercentage,
+} from '../../utils/helpers';
 
 interface MetricsCardProps {
   title: string;
@@ -27,7 +31,7 @@ export const MetricsCard: React.FC<MetricsCardProps> = ({
 }) => {
   const formatValue = (val: number | string) => {
     if (typeof val === 'string') return val;
-    
+
     switch (format) {
       case 'currency':
         return formatCurrency(val);
@@ -71,23 +75,20 @@ export const MetricsCard: React.FC<MetricsCardProps> = ({
         {Icon && <Icon className="h-4 w-4 text-muted-foreground" />}
       </CardHeader>
       <CardContent>
-        <div className="text-2xl font-bold mb-1">
-          {formatValue(value)}
-        </div>
-        
+        <div className="text-2xl font-bold mb-1">{formatValue(value)}</div>
+
         {change !== undefined && (
           <div className={`flex items-center text-xs ${getChangeColor()}`}>
             {getChangeIcon()}
             <span className="ml-1">
-              {change > 0 ? '+' : ''}{formatPercentage(change / 100)} from last month
+              {change > 0 ? '+' : ''}
+              {formatPercentage(change / 100)} from last month
             </span>
           </div>
         )}
-        
+
         {description && (
-          <p className="text-xs text-muted-foreground mt-1">
-            {description}
-          </p>
+          <p className="text-xs text-muted-foreground mt-1">{description}</p>
         )}
       </CardContent>
     </Card>

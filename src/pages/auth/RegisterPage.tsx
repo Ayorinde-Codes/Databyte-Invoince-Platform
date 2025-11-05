@@ -11,15 +11,16 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
+import { useAuth } from '../../hooks/useAuth';
 
 const registerSchema = z.object({
   name: z.string().min(2, 'Company name must be at least 2 characters'),
   email: z.string().email('Please enter a valid email address'),
   password: z.string().min(8, 'Password must be at least 8 characters'),
   confirm_password: z.string(),
-  phone: z.string().min(10, 'Phone number is required'),
-  address: z.string().min(5, 'Address is required'),
-  tin: z.string().min(10, 'TIN must be at least 10 characters'),
+  phone: z.string().min(10, 'Phone number must be at least 10 characters'),
+  address: z.string().min(5, 'Address must be at least 5 characters'),
+  tin: z.string().min(8, 'TIN must be at least 8 characters'),
   terms_accepted: z.boolean().refine(val => val === true, 'You must accept the terms and conditions'),
 }).refine((data) => data.password === data.confirm_password, {
   message: "Passwords don't match",
@@ -33,7 +34,6 @@ export const RegisterPage = () => {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
-  const { register: registerUser } = useAuth();
 
   const {
     register,
@@ -57,6 +57,8 @@ export const RegisterPage = () => {
 
   const termsAccepted = watch('terms_accepted');
 
+  const { register: registerUser } = useAuth();
+
   const onSubmit = async (data: RegisterFormData) => {
     setIsLoading(true);
 
@@ -70,10 +72,10 @@ export const RegisterPage = () => {
         tin: data.tin,
       });
 
-      toast.success('Registration successful! Please check your email to verify your account.');
-      navigate('/auth/login');
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Registration failed. Please try again.');
+      toast.success('Registration successful! Welcome to Databyte.');
+      navigate('/dashboard');
+    } catch (error: any) {
+      toast.error(error.message || 'Registration failed. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -148,11 +150,11 @@ export const RegisterPage = () => {
                   </div>
                   
                   <div className="space-y-2">
-                    <Label htmlFor="name">Company Name</Label>
+                    <Label htmlFor="name">Full Name</Label>
                     <Input
                       id="name"
                       type="text"
-                      placeholder="Enter your company name"
+                      placeholder="Enter your full name"
                       {...register('name')}
                       className={errors.name ? 'border-destructive' : ''}
                     />
@@ -176,11 +178,11 @@ export const RegisterPage = () => {
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="phone">Phone Number</Label>
+                    <Label htmlFor="phone">Phone Number (Optional)</Label>
                     <Input
                       id="phone"
                       type="tel"
-                      placeholder="Enter your phone number (e.g., +234-1-123-4567)"
+                      placeholder="Enter your phone number"
                       {...register('phone')}
                       className={errors.phone ? 'border-destructive' : ''}
                     />
@@ -195,6 +197,20 @@ export const RegisterPage = () => {
                   <div className="flex items-center space-x-2 text-sm font-medium text-muted-foreground">
                     <Building className="w-4 h-4" />
                     <span>Company Information</span>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="name">Company Name</Label>
+                    <Input
+                      id="name"
+                      type="text"
+                      placeholder="Enter your company name"
+                      {...register('name')}
+                      className={errors.name ? 'border-destructive' : ''}
+                    />
+                    {errors.name && (
+                      <p className="text-sm text-destructive">{errors.name.message}</p>
+                    )}
                   </div>
 
                   <div className="space-y-2">

@@ -16,6 +16,24 @@ export const API_CONFIG = {
   retry_delay: 1000,
 } as const;
 
+// API Endpoints
+export const API_ENDPOINTS = {
+  auth: {
+    login: '/api/auth/login',
+    register: '/api/auth/register',
+    logout: '/api/auth/logout',
+    refresh: '/api/auth/refresh',
+    profile: '/api/auth/profile',
+  },
+  dashboard: {
+    overview: '/api/dashboard/overview',
+    customers: '/api/dashboard/customers',
+    vendors: '/api/dashboard/vendors',
+    products: '/api/dashboard/products',
+    batches: '/api/dashboard/batches',
+  },
+} as const;
+
 // Authentication
 export const AUTH_CONFIG = {
   token_key: 'databyte_auth_token',

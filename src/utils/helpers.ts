@@ -3,7 +3,10 @@ import { CURRENCIES, DATE_FORMATS } from './constants';
 import type { StatusBadge } from '../types';
 
 // Date and Time Utilities
-export const formatDate = (date: string | Date, formatStr: string = DATE_FORMATS.display): string => {
+export const formatDate = (
+  date: string | Date,
+  formatStr: string = DATE_FORMATS.display
+): string => {
   try {
     const dateObj = typeof date === 'string' ? parseISO(date) : date;
     return isValid(dateObj) ? format(dateObj, formatStr) : 'Invalid Date';
@@ -25,7 +28,7 @@ export const getRelativeDate = (date: string | Date): string => {
     const dateObj = typeof date === 'string' ? parseISO(date) : date;
     const now = new Date();
     const diffDays = differenceInDays(now, dateObj);
-    
+
     if (diffDays === 0) return 'Today';
     if (diffDays === 1) return 'Yesterday';
     if (diffDays === -1) return 'Tomorrow';
@@ -56,19 +59,19 @@ export const getDaysUntilDue = (dueDate: string | Date): number => {
 
 // Currency and Number Formatting
 export const formatCurrency = (
-  amount: number, 
-  currency: string = 'NGN', 
+  amount: number,
+  currency: string = 'NGN',
   showSymbol: boolean = true
 ): string => {
   const currencyInfo = CURRENCIES[currency as keyof typeof CURRENCIES];
   const symbol = currencyInfo?.symbol || currency;
   const decimalPlaces = currencyInfo?.decimal_places || 2;
-  
+
   const formatted = new Intl.NumberFormat('en-US', {
     minimumFractionDigits: decimalPlaces,
     maximumFractionDigits: decimalPlaces,
   }).format(amount);
-  
+
   return showSymbol ? `${symbol}${formatted}` : formatted;
 };
 
@@ -79,7 +82,10 @@ export const formatNumber = (num: number, decimals: number = 0): string => {
   }).format(num);
 };
 
-export const formatPercentage = (value: number, decimals: number = 1): string => {
+export const formatPercentage = (
+  value: number,
+  decimals: number = 1
+): string => {
   return `${(value * 100).toFixed(decimals)}%`;
 };
 
@@ -102,7 +108,7 @@ export const capitalizeFirst = (text: string): string => {
 export const camelToTitle = (text: string): string => {
   return text
     .replace(/([A-Z])/g, ' $1')
-    .replace(/^./, str => str.toUpperCase())
+    .replace(/^./, (str) => str.toUpperCase())
     .trim();
 };
 
@@ -122,19 +128,26 @@ export const generateId = (prefix: string = ''): string => {
 
 // Array and Object Utilities
 export const groupBy = <T>(array: T[], key: keyof T): Record<string, T[]> => {
-  return array.reduce((groups, item) => {
-    const group = String(item[key]);
-    groups[group] = groups[group] || [];
-    groups[group].push(item);
-    return groups;
-  }, {} as Record<string, T[]>);
+  return array.reduce(
+    (groups, item) => {
+      const group = String(item[key]);
+      groups[group] = groups[group] || [];
+      groups[group].push(item);
+      return groups;
+    },
+    {} as Record<string, T[]>
+  );
 };
 
-export const sortBy = <T>(array: T[], key: keyof T, order: 'asc' | 'desc' = 'asc'): T[] => {
+export const sortBy = <T>(
+  array: T[],
+  key: keyof T,
+  order: 'asc' | 'desc' = 'asc'
+): T[] => {
   return [...array].sort((a, b) => {
     const aVal = a[key];
     const bVal = b[key];
-    
+
     if (aVal < bVal) return order === 'asc' ? -1 : 1;
     if (aVal > bVal) return order === 'asc' ? 1 : -1;
     return 0;
@@ -142,7 +155,7 @@ export const sortBy = <T>(array: T[], key: keyof T, order: 'asc' | 'desc' = 'asc
 };
 
 export const filterBy = <T>(array: T[], filters: Partial<T>): T[] => {
-  return array.filter(item => {
+  return array.filter((item) => {
     return Object.entries(filters).every(([key, value]) => {
       if (value === undefined || value === null || value === '') return true;
       return item[key as keyof T] === value;
@@ -152,7 +165,7 @@ export const filterBy = <T>(array: T[], filters: Partial<T>): T[] => {
 
 export const uniqueBy = <T>(array: T[], key: keyof T): T[] => {
   const seen = new Set();
-  return array.filter(item => {
+  return array.filter((item) => {
     const value = item[key];
     if (seen.has(value)) return false;
     seen.add(value);
@@ -197,16 +210,16 @@ export const isValidURL = (url: string): boolean => {
 // File Utilities
 export const formatFileSize = (bytes: number): string => {
   if (bytes === 0) return '0 Bytes';
-  
+
   const k = 1024;
   const sizes = ['Bytes', 'KB', 'MB', 'GB'];
   const i = Math.floor(Math.log(bytes) / Math.log(k));
-  
+
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 };
 
 export const getFileExtension = (filename: string): string => {
-  return filename.slice((filename.lastIndexOf('.') - 1 >>> 0) + 2);
+  return filename.slice(((filename.lastIndexOf('.') - 1) >>> 0) + 2);
 };
 
 export const isImageFile = (filename: string): boolean => {
@@ -216,8 +229,15 @@ export const isImageFile = (filename: string): boolean => {
 };
 
 // Status Badge Utilities
-export const getStatusBadge = (status: string, statusConfig: Record<string, any>): StatusBadge => {
-  const config = statusConfig[status] || { label: status, color: 'gray', icon: 'Circle' };
+export const getStatusBadge = (
+  status: string,
+  statusConfig: Record<string, any>
+): StatusBadge => {
+  const config = statusConfig[status] || {
+    label: status,
+    color: 'gray',
+    icon: 'Circle',
+  };
   return {
     status,
     label: config.label,
@@ -256,24 +276,24 @@ export const removeLocalStorage = (key: string): void => {
 // URL and Query Utilities
 export const buildQueryString = (params: Record<string, any>): string => {
   const searchParams = new URLSearchParams();
-  
+
   Object.entries(params).forEach(([key, value]) => {
     if (value !== undefined && value !== null && value !== '') {
       if (Array.isArray(value)) {
-        value.forEach(v => searchParams.append(key, String(v)));
+        value.forEach((v) => searchParams.append(key, String(v)));
       } else {
         searchParams.append(key, String(value));
       }
     }
   });
-  
+
   return searchParams.toString();
 };
 
 export const parseQueryString = (queryString: string): Record<string, any> => {
   const params = new URLSearchParams(queryString);
   const result: Record<string, any> = {};
-  
+
   for (const [key, value] of params.entries()) {
     if (result[key]) {
       if (Array.isArray(result[key])) {
@@ -285,7 +305,7 @@ export const parseQueryString = (queryString: string): Record<string, any> => {
       result[key] = value;
     }
   }
-  
+
   return result;
 };
 
@@ -295,7 +315,7 @@ export const debounce = <T extends (...args: any[]) => any>(
   wait: number
 ): ((...args: Parameters<T>) => void) => {
   let timeout: NodeJS.Timeout;
-  
+
   return (...args: Parameters<T>) => {
     clearTimeout(timeout);
     timeout = setTimeout(() => func(...args), wait);
@@ -307,34 +327,38 @@ export const throttle = <T extends (...args: any[]) => any>(
   limit: number
 ): ((...args: Parameters<T>) => void) => {
   let inThrottle: boolean;
-  
+
   return (...args: Parameters<T>) => {
     if (!inThrottle) {
       func(...args);
       inThrottle = true;
-      setTimeout(() => inThrottle = false, limit);
+      setTimeout(() => (inThrottle = false), limit);
     }
   };
 };
 
 // Color Utilities
-export const hexToRgb = (hex: string): { r: number; g: number; b: number } | null => {
+export const hexToRgb = (
+  hex: string
+): { r: number; g: number; b: number } | null => {
   const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-  return result ? {
-    r: parseInt(result[1], 16),
-    g: parseInt(result[2], 16),
-    b: parseInt(result[3], 16)
-  } : null;
+  return result
+    ? {
+        r: parseInt(result[1], 16),
+        g: parseInt(result[2], 16),
+        b: parseInt(result[3], 16),
+      }
+    : null;
 };
 
 export const rgbToHex = (r: number, g: number, b: number): string => {
-  return "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
+  return '#' + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
 };
 
 export const getContrastColor = (hexColor: string): string => {
   const rgb = hexToRgb(hexColor);
   if (!rgb) return '#000000';
-  
+
   const brightness = (rgb.r * 299 + rgb.g * 587 + rgb.b * 114) / 1000;
   return brightness > 128 ? '#000000' : '#ffffff';
 };

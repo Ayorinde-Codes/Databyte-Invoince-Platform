@@ -1,36 +1,104 @@
 // Dashboard and Analytics Types
-export interface DashboardMetrics {
-  // Financial Metrics
-  total_revenue: number;
-  revenue_growth: number;
-  outstanding_amount: number;
-  overdue_amount: number;
-  
-  // Invoice Metrics
-  total_invoices: number;
-  invoices_this_month: number;
-  invoice_growth: number;
-  average_invoice_value: number;
-  
-  // Customer Metrics
-  total_customers: number;
-  new_customers_this_month: number;
-  customer_growth: number;
-  
-  // FIRS Compliance Metrics
-  compliance_rate: number;
-  pending_submissions: number;
-  rejected_submissions: number;
-  compliance_score: 'excellent' | 'good' | 'fair' | 'poor';
-  
-  // Performance Metrics
-  average_processing_time: number;
-  system_uptime: number;
-  api_response_time: number;
-  
-  // Period Information
-  period: string;
-  last_updated: string;
+export interface DashboardService {
+  id: number;
+  name: string;
+  code: string;
+}
+
+export interface DashboardCounts {
+  ar_invoices: number;
+  ap_invoices: number;
+  customers: number;
+  vendors: number;
+  products: number;
+  pending_firs_submissions: number;
+}
+
+export interface Customer {
+  id: number;
+  company_id: number;
+  party_type: string;
+  source_system: string;
+  source_id: string;
+  code: string;
+  party_name: string;
+  tin: string | null;
+  email: string;
+  telephone: string;
+  address: string | null;
+  city: string | null;
+  state: string | null;
+  country: string | null;
+  postal_code: string | null;
+  business_description: string | null;
+  contact_person: string | null;
+  contact_phone: string | null;
+  contact_email: string | null;
+  payment_terms: string | null;
+  credit_limit: string | null;
+  is_active: boolean;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+}
+
+export interface Vendor extends Customer {
+  vendor_id?: number;
+}
+
+export interface Invoice {
+  id: number;
+  company_id: number;
+  batch_number: string;
+  batch_date: string;
+  invoice_number: string;
+  invoice_type: string;
+  invoice_date: string;
+  due_date: string;
+  customer_id?: number;
+  vendor_id?: number;
+  subtotal: string;
+  tax_amount: string;
+  discount_amount: string;
+  total_amount: string;
+  currency: string;
+  payment_terms: string | null;
+  notes: string;
+  status: string;
+  source_system: string;
+  source_id: string;
+  source_batch_id: string;
+  firs_irn: string | null;
+  firs_qr_code: string | null;
+  firs_status: string | null;
+  firs_submitted_at: string | null;
+  firs_reference: string | null;
+  created_by: string | null;
+  approved_by: string | null;
+  approved_at: string | null;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+  customer?: Customer;
+  vendor?: Vendor;
+}
+
+export interface DashboardRecentInvoices {
+  ar_invoices: Invoice[];
+  ap_invoices: Invoice[];
+}
+
+export interface DashboardOverview {
+  service: DashboardService;
+  counts: DashboardCounts;
+  recent_invoices: DashboardRecentInvoices;
+}
+
+export interface DashboardApiResponse {
+  status: boolean;
+  message: string;
+  data: DashboardOverview;
 }
 
 export interface ChartDataPoint {
@@ -90,7 +158,15 @@ export interface TopCustomersData {
 
 export interface RecentActivity {
   id: string;
-  type: 'invoice_created' | 'invoice_sent' | 'payment_received' | 'firs_submission' | 'firs_approval' | 'firs_rejection' | 'erp_sync' | 'user_login';
+  type:
+    | 'invoice_created'
+    | 'invoice_sent'
+    | 'payment_received'
+    | 'firs_submission'
+    | 'firs_approval'
+    | 'firs_rejection'
+    | 'erp_sync'
+    | 'user_login';
   title: string;
   description: string;
   user_name?: string;
@@ -186,28 +262,28 @@ export interface PerformanceMetrics {
     average_response_time: number;
     error_rate: number;
   };
-  
+
   database_metrics: {
     query_count: number;
     average_query_time: number;
     slow_queries: number;
     connection_pool_usage: number;
   };
-  
+
   firs_metrics: {
     submission_success_rate: number;
     average_submission_time: number;
     api_quota_usage: number;
     rate_limit_hits: number;
   };
-  
+
   erp_metrics: {
     sync_success_rate: number;
     average_sync_time: number;
     connection_uptime: number;
     data_accuracy: number;
   };
-  
+
   system_metrics: {
     cpu_usage: number;
     memory_usage: number;
@@ -220,7 +296,7 @@ export interface NotificationSettings {
   email_notifications: boolean;
   push_notifications: boolean;
   sms_notifications: boolean;
-  
+
   notification_types: {
     invoice_updates: boolean;
     payment_reminders: boolean;
@@ -229,14 +305,14 @@ export interface NotificationSettings {
     security_alerts: boolean;
     performance_alerts: boolean;
   };
-  
+
   frequency: {
     immediate: boolean;
     daily_digest: boolean;
     weekly_summary: boolean;
     monthly_report: boolean;
   };
-  
+
   quiet_hours: {
     enabled: boolean;
     start_time: string;

@@ -5,34 +5,16 @@ export interface User {
   email: string;
   avatar?: string | null;
   roles: string[];
-  company_id?: number;
-  is_active?: boolean;
-  last_login_at?: string;
-  created_at?: string;
-  updated_at?: string;
+  company: Company;
 }
 
 export interface Company {
   id: number;
   name: string;
   email: string;
-  api_public_key?: string;
-  subscription_status: string;
-  primary_service?: string;
-  phone?: string;
-  address?: string;
-  city?: string;
-  state?: string;
-  country?: string;
-  postal_code?: string;
-  domain?: string;
-  tin?: string;
-  business_registration_number?: string;
-  logo?: string;
-  subscription_plan?: 'basic' | 'professional' | 'enterprise';
-  subscription_expires_at?: string;
-  created_at?: string;
-  updated_at?: string;
+  api_public_key: string;
+  subscription_status: 'active' | 'suspended' | 'cancelled' | 'trial';
+  primary_service: string;
 }
 
 export interface LoginFormData {
@@ -54,9 +36,14 @@ export interface RegisterFormData {
 
 export interface AuthResponse {
   token: string;
-  user: User & {
-    company: Company;
-  };
+  user: User;
+}
+
+// API Response wrapper for authentication
+export interface AuthApiResponse {
+  status: boolean;
+  message: string;
+  data: AuthResponse;
 }
 
 export interface OnboardingData {
