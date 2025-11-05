@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User, Company, AuthResponse } from '../types/auth';
 import { AUTH_CONFIG } from '../utils/constants';
 import { getLocalStorage, setLocalStorage, removeLocalStorage } from '../utils/helpers';
+import { authService } from '../services/authService';
 
 interface AuthContextType {
   user: User | null;
@@ -10,6 +11,7 @@ interface AuthContextType {
   isAuthenticated: boolean;
   isLoading: boolean;
   login: (credentials: { email: string; password: string }) => Promise<AuthResponse>;
+  register: (userData: { name: string; email: string; password: string; phone: string; address: string; tin: string }) => Promise<void>;
   logout: () => void;
   updateUser: (user: Partial<User>) => void;
   updateCompany: (company: Partial<Company>) => void;
@@ -63,74 +65,71 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     initializeAuth();
   }, []);
 
-  // Mock login function (replace with actual API call)
   const login = async (credentials: { email: string; password: string }): Promise<AuthResponse> => {
     setIsLoading(true);
-    
+
     try {
-      // Mock API call - replace with actual implementation
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // Mock successful response
-      const mockResponse: AuthResponse = {
-        token: 'mock-jwt-token-' + Date.now(),
-        refresh_token: 'mock-refresh-token-' + Date.now(),
-        expires_in: 86400, // 24 hours
-        user: {
-          id: 'user-1',
-          name: 'John Doe',
-          email: credentials.email,
-          role: 'admin',
-          company_id: 'company-1',
-          is_active: true,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        },
-        company: {
-          id: 'company-1',
-          name: 'Acme Corporation',
-          email: 'admin@acme.com',
-          phone: '+234-800-123-4567',
-          address: '123 Business District, Lagos',
-          city: 'Lagos',
-          state: 'Lagos',
-          country: 'Nigeria',
-          tin: '12345678',
-          subscription_status: 'active',
-          subscription_plan: 'professional',
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        },
-      };
+      const response = await authService.login(credentials);
+
+      if (!response.status) {
+        throw new Error(response.message || 'Login failed');
+      }
+
+      const { token, user } = response.data;
 
       // Store auth data
-      setToken(mockResponse.token);
-      setUser(mockResponse.user);
-      setCompany(mockResponse.company);
-      
-      setLocalStorage(AUTH_CONFIG.token_key, mockResponse.token);
-      setLocalStorage(AUTH_CONFIG.refresh_token_key, mockResponse.refresh_token);
-      setLocalStorage(AUTH_CONFIG.user_key, mockResponse.user);
-      setLocalStorage(AUTH_CONFIG.company_key, mockResponse.company);
+      setToken(token);
+      setUser(user);
+      setCompany(user.company);
 
-      return mockResponse;
+      setLocalStorage(AUTH_CONFIG.token_key, token);
+      setLocalStorage(AUTH_CONFIG.user_key, user);
+      setLocalStorage(AUTH_CONFIG.company_key, user.company);
+
+      return {
+        token,
+        user,
+      };
     } catch (error) {
       console.error('Login error:', error);
-      throw new Error('Login failed. Please check your credentials.');
+      throw new Error(error instanceof Error ? error.message : 'Login failed. Please check your credentials.');
     } finally {
       setIsLoading(false);
     }
   };
 
-  const logout = () => {
-    setUser(null);
-    setCompany(null);
-    setToken(null);
-    
-    removeLocalStorage(AUTH_CONFIG.token_key);
-    removeLocalStorage(AUTH_CONFIG.refresh_token_key);
-    removeLocalStorage(AUTH_CONFIG.user_key);
-    removeLocalStorage(AUTH_CONFIG.company_key);
+  const register = async (userData: { name: string; email: string; password: string; phone: string; address: string; tin: string }): Promise<void> => {
+    setIsLoading(true);
+
+    try {
+      const response = await authService.register(userData);
+
+      if (!response.status) {
+        throw new Error(response.message || 'Registration failed');
+      }
+    } catch (error) {
+      console.error('Registration error:', error);
+      throw new Error(error instanceof Error ? error.message : 'Registration failed. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const logout = async () => {
+    try {
+      await authService.logout();
+    } catch (error) {
+      console.error('Logout error:', error);
+    } finally {
+      setUser(null);
+      setCompany(null);
+      setToken(null);
+
+      removeLocalStorage(AUTH_CONFIG.token_key);
+      removeLocalStorage(AUTH_CONFIG.refresh_token_key);
+      removeLocalStorage(AUTH_CONFIG.user_key);
+      removeLocalStorage(AUTH_CONFIG.company_key);
+    }
   };
 
   const updateUser = (userData: Partial<User>) => {
@@ -187,6 +186,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     isAuthenticated: !!token && !!user,
     isLoading,
     login,
+    register,
     logout,
     updateUser,
     updateCompany,

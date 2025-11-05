@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   BarChart3,
   FileText,
@@ -22,6 +22,9 @@ import { Badge } from '@/components/ui/badge';
 
 import { useAuth } from '../../hooks/useAuth';
 import { formatCurrency, formatDate } from '../../utils/helpers';
+import { dashboardService } from '../../services/dashboardService';
+import { DashboardOverview } from '../../services/authService';
+import { toast } from 'sonner';
 
 // Dashboard Components
 import { MetricsCard } from '../../components/dashboard/MetricsCard';
@@ -30,68 +33,69 @@ import { DashboardLayout } from '../../components/layout/DashboardLayout';
 import { RecentInvoices } from '../../components/dashboard/RecentInvoices';
 
 export const DashboardPage = () => {
-  const { user, company, logout } = useAuth();
-  const [searchQuery, setSearchQuery] = useState('');
+  const { user, company } = useAuth();
+  const [dashboardData, setDashboardData] = useState<DashboardOverview | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
-  // Mock data for dashboard
-  const metrics = {
-    totalRevenue: 2500000,
-    revenueGrowth: 12.5,
-    totalInvoices: 6500,
-    invoiceGrowth: 8.2,
-    totalCustomers: 18500,
-    customerGrowth: 15.3,
-    complianceRate: 98.5,
-  };
+  useEffect(() => {
+    const fetchDashboardData = async () => {
+      try {
+        setIsLoading(true);
+        const response = await dashboardService.getOverview();
 
-  const recentInvoices = [
-    {
-      id: 'INV-001',
-      customer: 'Acme Corporation',
-      amount: 125000,
-      status: 'paid' as const,
-      firsStatus: 'approved' as const,
-      date: '2024-01-15',
-      dueDate: '2024-01-30',
-    },
-    {
-      id: 'INV-002',
-      customer: 'Tech Solutions Ltd',
-      amount: 89500,
-      status: 'sent' as const,
-      firsStatus: 'pending' as const,
-      date: '2024-01-14',
-      dueDate: '2024-01-29',
-    },
-    {
-      id: 'INV-003',
-      customer: 'Global Industries',
-      amount: 234000,
-      status: 'overdue' as const,
-      firsStatus: 'rejected' as const,
-      date: '2024-01-12',
-      dueDate: '2024-01-27',
-    },
-    {
-      id: 'INV-004',
-      customer: 'StartUp Inc',
-      amount: 45000,
-      status: 'paid' as const,
-      firsStatus: 'approved' as const,
-      date: '2024-01-11',
-      dueDate: '2024-01-26',
-    },
-    {
-      id: 'INV-005',
-      customer: 'Digital Agency',
-      amount: 156000,
-      status: 'sent' as const,
-      firsStatus: 'pending' as const,
-      date: '2024-01-10',
-      dueDate: '2024-01-25',
-    },
-  ];
+        if (response.status) {
+          setDashboardData(response.data);
+        } else {
+          toast.error('Failed to load dashboard data');
+        }
+      } catch (error) {
+        console.error('Dashboard error:', error);
+        toast.error('Failed to load dashboard data');
+      } finally {
+        setIsLoading(false);
+      }
+    };
 
+    fetchDashboardData();
+  }, []);
+
+  if (isLoading) {
+    return (
+      <DashboardLayout>
+        <div className="flex items-center justify-center h-64">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+            <p className="text-muted-foreground">Loading dashboard...</p>
+          </div>
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  if (!dashboardData) {
+    return (
+      <DashboardLayout>
+        <div className="flex items-center justify-center h-64">
+          <div className="text-center">
+            <p className="text-muted-foreground">No dashboard data available</p>
+          </div>
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  // Transform API data to match RecentInvoices component format
+  const recentInvoices = dashboardData.recent_invoices.ar_invoices.map(invoice => ({
+    id: invoice.invoice_number.trim(),
+    customer: invoice.customer.party_name.trim(),
+    amount: parseFloat(invoice.total_amount),
+    status: invoice.status === 'approved' ? 'paid' as const : 'sent' as const,
+    firsStatus: (invoice.firs_status || 'pending') as 'approved' | 'pending' | 'rejected' | 'not_required',
+    date: invoice.invoice_date.split('T')[0],
+    dueDate: invoice.due_date.split('T')[0],
+  }));
+
+  // Chart data - using mock data for now since API doesn't provide chart data
   const revenueChartData = [
     { name: 'Jan', value: 2100000 },
     { name: 'Feb', value: 2300000 },
@@ -102,16 +106,16 @@ export const DashboardPage = () => {
   ];
 
   const statusChartData = [
-    { name: 'Paid', value: 1850000, color: '#10B981' },
-    { name: 'Sent', value: 420000, color: '#3B82F6' },
-    { name: 'Overdue', value: 180000, color: '#EF4444' },
-    { name: 'Draft', value: 50000, color: '#6B7280' },
+    { name: 'AR Invoices', value: dashboardData.counts.ar_invoices, color: '#10B981' },
+    { name: 'AP Invoices', value: dashboardData.counts.ap_invoices, color: '#3B82F6' },
+    { name: 'Customers', value: dashboardData.counts.customers, color: '#F59E0B' },
+    { name: 'Vendors', value: dashboardData.counts.vendors, color: '#6B7280' },
   ];
 
   const complianceData = [
-    { name: 'FIRS Approved', value: 6200, color: '#10B981' },
-    { name: 'Pending', value: 250, color: '#F59E0B' },
-    { name: 'Rejected', value: 50, color: '#EF4444' },
+    { name: 'FIRS Approved', value: dashboardData.counts.ar_invoices - dashboardData.counts.pending_firs_submissions, color: '#10B981' },
+    { name: 'Pending', value: dashboardData.counts.pending_firs_submissions, color: '#F59E0B' },
+    { name: 'Products', value: dashboardData.counts.products, color: '#EF4444' },
   ];
 
 
@@ -137,29 +141,29 @@ export const DashboardPage = () => {
         {/* Metrics Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           <MetricsCard
-            title="Total Revenue"
-            value={metrics.totalRevenue}
-            change={metrics.revenueGrowth}
-            changeType="increase"
-            format="currency"
-            icon={DollarSign}
-            description="Monthly recurring revenue"
-          />
-
-          <MetricsCard
-            title="Total Invoices"
-            value={metrics.totalInvoices}
-            change={metrics.invoiceGrowth}
+            title="AR Invoices"
+            value={dashboardData.counts.ar_invoices}
+            change={0}
             changeType="increase"
             format="number"
             icon={FileText}
-            description="Invoices processed this month"
+            description="Accounts Receivable invoices"
+          />
+
+          <MetricsCard
+            title="AP Invoices"
+            value={dashboardData.counts.ap_invoices}
+            change={0}
+            changeType="increase"
+            format="number"
+            icon={FileText}
+            description="Accounts Payable invoices"
           />
 
           <MetricsCard
             title="Total Customers"
-            value={metrics.totalCustomers}
-            change={metrics.customerGrowth}
+            value={dashboardData.counts.customers}
+            change={0}
             changeType="increase"
             format="number"
             icon={Users}
@@ -167,13 +171,13 @@ export const DashboardPage = () => {
           />
 
           <MetricsCard
-            title="FIRS Compliance"
-            value={metrics.complianceRate}
-            change={2.1}
+            title="Pending FIRS"
+            value={dashboardData.counts.pending_firs_submissions}
+            change={0}
             changeType="increase"
-            format="percentage"
+            format="number"
             icon={Shield}
-            description="Compliance rate this month"
+            description="Pending FIRS submissions"
           />
         </div>
 
@@ -188,8 +192,8 @@ export const DashboardPage = () => {
 
           <InvoiceChart
             type="pie"
-            title="Invoice Status Distribution"
-            description="Current invoice status breakdown"
+            title="Data Distribution"
+            description="Current system data breakdown"
             data={statusChartData}
           />
         </div>

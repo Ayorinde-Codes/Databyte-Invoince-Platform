@@ -13,12 +13,13 @@ import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 
 const registerSchema = z.object({
-  name: z.string().min(2, 'Name must be at least 2 characters'),
+  name: z.string().min(2, 'Company name must be at least 2 characters'),
   email: z.string().email('Please enter a valid email address'),
   password: z.string().min(8, 'Password must be at least 8 characters'),
   confirm_password: z.string(),
-  company_name: z.string().min(2, 'Company name must be at least 2 characters'),
-  phone: z.string().optional(),
+  phone: z.string().min(10, 'Phone number is required'),
+  address: z.string().min(5, 'Address is required'),
+  tin: z.string().min(10, 'TIN must be at least 10 characters'),
   terms_accepted: z.boolean().refine(val => val === true, 'You must accept the terms and conditions'),
 }).refine((data) => data.password === data.confirm_password, {
   message: "Passwords don't match",
@@ -32,6 +33,7 @@ export const RegisterPage = () => {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
+  const { register: registerUser } = useAuth();
 
   const {
     register,
@@ -46,8 +48,9 @@ export const RegisterPage = () => {
       email: '',
       password: '',
       confirm_password: '',
-      company_name: '',
       phone: '',
+      address: '',
+      tin: '',
       terms_accepted: false,
     },
   });
@@ -56,15 +59,21 @@ export const RegisterPage = () => {
 
   const onSubmit = async (data: RegisterFormData) => {
     setIsLoading(true);
-    
+
     try {
-      // Mock registration API call
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
+      await registerUser({
+        name: data.name,
+        email: data.email,
+        password: data.password,
+        phone: data.phone,
+        address: data.address,
+        tin: data.tin,
+      });
+
       toast.success('Registration successful! Please check your email to verify your account.');
       navigate('/auth/login');
     } catch (error) {
-      toast.error('Registration failed. Please try again.');
+      toast.error(error instanceof Error ? error.message : 'Registration failed. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -139,11 +148,11 @@ export const RegisterPage = () => {
                   </div>
                   
                   <div className="space-y-2">
-                    <Label htmlFor="name">Full Name</Label>
+                    <Label htmlFor="name">Company Name</Label>
                     <Input
                       id="name"
                       type="text"
-                      placeholder="Enter your full name"
+                      placeholder="Enter your company name"
                       {...register('name')}
                       className={errors.name ? 'border-destructive' : ''}
                     />
@@ -167,11 +176,11 @@ export const RegisterPage = () => {
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="phone">Phone Number (Optional)</Label>
+                    <Label htmlFor="phone">Phone Number</Label>
                     <Input
                       id="phone"
                       type="tel"
-                      placeholder="Enter your phone number"
+                      placeholder="Enter your phone number (e.g., +234-1-123-4567)"
                       {...register('phone')}
                       className={errors.phone ? 'border-destructive' : ''}
                     />
@@ -187,18 +196,32 @@ export const RegisterPage = () => {
                     <Building className="w-4 h-4" />
                     <span>Company Information</span>
                   </div>
-                  
+
                   <div className="space-y-2">
-                    <Label htmlFor="company_name">Company Name</Label>
+                    <Label htmlFor="address">Company Address</Label>
                     <Input
-                      id="company_name"
+                      id="address"
                       type="text"
-                      placeholder="Enter your company name"
-                      {...register('company_name')}
-                      className={errors.company_name ? 'border-destructive' : ''}
+                      placeholder="Enter your company address"
+                      {...register('address')}
+                      className={errors.address ? 'border-destructive' : ''}
                     />
-                    {errors.company_name && (
-                      <p className="text-sm text-destructive">{errors.company_name.message}</p>
+                    {errors.address && (
+                      <p className="text-sm text-destructive">{errors.address.message}</p>
+                    )}
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="tin">Tax Identification Number (TIN)</Label>
+                    <Input
+                      id="tin"
+                      type="text"
+                      placeholder="Enter your company TIN"
+                      {...register('tin')}
+                      className={errors.tin ? 'border-destructive' : ''}
+                    />
+                    {errors.tin && (
+                      <p className="text-sm text-destructive">{errors.tin.message}</p>
                     )}
                   </div>
                 </div>

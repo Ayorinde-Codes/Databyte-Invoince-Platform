@@ -1,22 +1,24 @@
 // Authentication and User Types
 export interface User {
-  id: string;
+  id: number;
   name: string;
   email: string;
-  role: 'admin' | 'user' | 'viewer';
-  company_id: string;
-  avatar?: string;
-  phone?: string;
-  is_active: boolean;
+  avatar?: string | null;
+  roles: string[];
+  company_id?: number;
+  is_active?: boolean;
   last_login_at?: string;
-  created_at: string;
-  updated_at: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface Company {
-  id: string;
+  id: number;
   name: string;
   email: string;
+  api_public_key?: string;
+  subscription_status: string;
+  primary_service?: string;
   phone?: string;
   address?: string;
   city?: string;
@@ -27,11 +29,10 @@ export interface Company {
   tin?: string;
   business_registration_number?: string;
   logo?: string;
-  subscription_status: 'active' | 'suspended' | 'cancelled' | 'trial';
-  subscription_plan: 'basic' | 'professional' | 'enterprise';
+  subscription_plan?: 'basic' | 'professional' | 'enterprise';
   subscription_expires_at?: string;
-  created_at: string;
-  updated_at: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface LoginFormData {
@@ -45,17 +46,17 @@ export interface RegisterFormData {
   email: string;
   password: string;
   confirm_password: string;
-  company_name: string;
-  phone?: string;
+  phone: string;
+  address: string;
+  tin: string;
   terms_accepted: boolean;
 }
 
 export interface AuthResponse {
   token: string;
-  refresh_token: string;
-  user: User;
-  company: Company;
-  expires_in: number;
+  user: User & {
+    company: Company;
+  };
 }
 
 export interface OnboardingData {
