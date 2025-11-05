@@ -26,7 +26,7 @@ export interface Invoice {
   company_id: string;
   batch_id: string;
   erp_configuration_id?: string;
-  
+
   // Basic Invoice Information
   invoice_number: string;
   invoice_type: 'AR' | 'AP';
@@ -34,7 +34,7 @@ export interface Invoice {
   due_date?: string;
   currency: string;
   exchange_rate?: number;
-  
+
   // Customer/Vendor Information
   customer_vendor_id?: string;
   customer_vendor_name?: string;
@@ -42,7 +42,7 @@ export interface Invoice {
   customer_vendor_email?: string;
   customer_vendor_phone?: string;
   customer_vendor_address?: InvoiceAddress;
-  
+
   // Financial Information
   subtotal_amount: number;
   tax_amount: number;
@@ -50,16 +50,33 @@ export interface Invoice {
   total_amount: number;
   paid_amount?: number;
   balance_amount?: number;
-  
+
   // Invoice Status
-  status: 'draft' | 'sent' | 'viewed' | 'paid' | 'overdue' | 'cancelled' | 'refunded';
+  status:
+    | 'draft'
+    | 'sent'
+    | 'viewed'
+    | 'paid'
+    | 'overdue'
+    | 'cancelled'
+    | 'refunded';
   payment_status: 'unpaid' | 'partial' | 'paid' | 'overpaid';
-  
+
   // FIRS Integration
   firs_irn?: string;
   firs_service_id?: string;
-  firs_validation_status: 'pending' | 'valid' | 'invalid' | 'rejected' | 'not_required';
-  firs_submission_status: 'not_submitted' | 'submitted' | 'processing' | 'approved' | 'rejected';
+  firs_validation_status:
+    | 'pending'
+    | 'valid'
+    | 'invalid'
+    | 'rejected'
+    | 'not_required';
+  firs_submission_status:
+    | 'not_submitted'
+    | 'submitted'
+    | 'processing'
+    | 'approved'
+    | 'rejected';
   firs_validation_response?: any;
   firs_submission_response?: any;
   firs_qr_code?: string;
@@ -67,25 +84,25 @@ export interface Invoice {
   firs_submitted_at?: string;
   firs_approved_at?: string;
   firs_rejection_reason?: string;
-  
+
   // UBL and Compliance
   ubl_data?: any;
   digital_signature?: string;
   compliance_score?: number;
-  
+
   // Additional Information
   description?: string;
   reference?: string;
   purchase_order?: string;
   terms_and_conditions?: string;
   notes?: string;
-  
+
   // Line Items
   line_items: InvoiceLineItem[];
-  
+
   // Attachments
   attachments?: InvoiceAttachment[];
-  
+
   // Audit Trail
   created_by: string;
   created_at: string;
@@ -99,7 +116,7 @@ export interface InvoiceLineItem {
   id: string;
   invoice_id: string;
   line_number: number;
-  
+
   // Item Information
   item_code?: string;
   item_name: string;
@@ -109,36 +126,36 @@ export interface InvoiceLineItem {
   product_category?: string;
   sellers_item_identification?: string;
   standard_item_identification?: string;
-  
+
   // Quantity and Pricing
   invoiced_quantity: number;
   unit_of_measure?: string;
   unit_price: number;
   base_quantity: number;
   price_unit?: string;
-  
+
   // Discounts and Charges
   discount_rate?: number;
   discount_amount?: number;
   charge_rate?: number;
   charge_amount?: number;
-  
+
   // Tax Information
   tax_rate?: number;
   tax_amount?: number;
   tax_category?: string;
   tax_scheme?: string;
   tax_exemption_reason?: string;
-  
+
   // Totals
   line_extension_amount: number;
   line_total_amount: number;
-  
+
   // Additional Information
   delivery_date?: string;
   warranty_period?: string;
   notes?: string;
-  
+
   created_at: string;
   updated_at: string;
 }
@@ -189,7 +206,7 @@ export interface InvoiceSummary {
   outstanding_amount: number;
   overdue_amount: number;
   average_invoice_value: number;
-  
+
   // Status Breakdown
   status_breakdown: {
     draft: number;
@@ -199,7 +216,7 @@ export interface InvoiceSummary {
     overdue: number;
     cancelled: number;
   };
-  
+
   // Payment Status Breakdown
   payment_breakdown: {
     unpaid: number;
@@ -207,7 +224,7 @@ export interface InvoiceSummary {
     paid: number;
     overpaid: number;
   };
-  
+
   // FIRS Compliance Breakdown
   firs_breakdown: {
     not_required: number;
@@ -216,7 +233,7 @@ export interface InvoiceSummary {
     invalid: number;
     rejected: number;
   };
-  
+
   // Monthly Trends
   monthly_trends: {
     month: string;
@@ -230,7 +247,7 @@ export interface InvoiceAnalytics {
   period: 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'yearly';
   date_from: string;
   date_to: string;
-  
+
   // Revenue Analytics
   revenue_metrics: {
     total_revenue: number;
@@ -239,7 +256,7 @@ export interface InvoiceAnalytics {
     invoice_count: number;
     invoice_growth: number;
   };
-  
+
   // Customer Analytics
   customer_metrics: {
     total_customers: number;
@@ -251,7 +268,7 @@ export interface InvoiceAnalytics {
       invoice_count: number;
     }[];
   };
-  
+
   // Payment Analytics
   payment_metrics: {
     average_payment_time: number;
@@ -259,7 +276,7 @@ export interface InvoiceAnalytics {
     overdue_rate: number;
     collection_efficiency: number;
   };
-  
+
   // FIRS Compliance Analytics
   compliance_metrics: {
     submission_rate: number;

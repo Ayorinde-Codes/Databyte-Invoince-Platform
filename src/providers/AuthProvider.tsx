@@ -1,8 +1,12 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { User, Company, AuthResponse } from '../types/auth';
+import { User, Company, AuthResponse, AuthApiResponse } from '../types/auth';
 import { AUTH_CONFIG } from '../utils/constants';
-import { getLocalStorage, setLocalStorage, removeLocalStorage } from '../utils/helpers';
-import { authService } from '../services/authService';
+import {
+  getLocalStorage,
+  setLocalStorage,
+  removeLocalStorage,
+} from '../utils/helpers';
+import { apiService } from '../services/api';
 
 interface AuthContextType {
   user: User | null;
@@ -10,9 +14,19 @@ interface AuthContextType {
   token: string | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  login: (credentials: { email: string; password: string }) => Promise<AuthResponse>;
-  register: (userData: { name: string; email: string; password: string; phone: string; address: string; tin: string }) => Promise<void>;
-  logout: () => void;
+  login: (credentials: {
+    email: string;
+    password: string;
+  }) => Promise<AuthResponse>;
+  register: (userData: {
+    name: string;
+    email: string;
+    password: string;
+    phone: string;
+    address: string;
+    tin: string;
+  }) => Promise<AuthResponse>;
+  logout: () => Promise<void>;
   updateUser: (user: Partial<User>) => void;
   updateCompany: (company: Partial<Company>) => void;
   refreshToken: () => Promise<void>;
@@ -65,51 +79,77 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     initializeAuth();
   }, []);
 
-  const login = async (credentials: { email: string; password: string }): Promise<AuthResponse> => {
+  // Real login function
+  const login = async (credentials: {
+    email: string;
+    password: string;
+  }): Promise<AuthResponse> => {
     setIsLoading(true);
 
     try {
-      const response = await authService.login(credentials);
+      const response = await apiService.login(credentials);
 
-      if (!response.status) {
+      if (!response.status || !response.data) {
         throw new Error(response.message || 'Login failed');
       }
 
       const { token, user } = response.data;
+      const company = user.company;
 
       // Store auth data
       setToken(token);
       setUser(user);
-      setCompany(user.company);
+      setCompany(company);
 
       setLocalStorage(AUTH_CONFIG.token_key, token);
       setLocalStorage(AUTH_CONFIG.user_key, user);
-      setLocalStorage(AUTH_CONFIG.company_key, user.company);
+      setLocalStorage(AUTH_CONFIG.company_key, company);
 
-      return {
-        token,
-        user,
-      };
-    } catch (error) {
+      return response.data;
+    } catch (error: any) {
       console.error('Login error:', error);
-      throw new Error(error instanceof Error ? error.message : 'Login failed. Please check your credentials.');
+      const errorMessage = error.message || 'Login failed. Please check your credentials.';
+      throw new Error(errorMessage);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const register = async (userData: { name: string; email: string; password: string; phone: string; address: string; tin: string }): Promise<void> => {
+  // Real register function
+  const register = async (userData: {
+    name: string;
+    email: string;
+    password: string;
+    phone: string;
+    address: string;
+    tin: string;
+  }): Promise<AuthResponse> => {
     setIsLoading(true);
 
     try {
-      const response = await authService.register(userData);
+      const response = await apiService.register(userData);
 
-      if (!response.status) {
+      if (!response.status || !response.data) {
         throw new Error(response.message || 'Registration failed');
       }
-    } catch (error) {
+
+      const { token, user } = response.data;
+      const company = user.company;
+
+      // Store auth data
+      setToken(token);
+      setUser(user);
+      setCompany(company);
+
+      setLocalStorage(AUTH_CONFIG.token_key, token);
+      setLocalStorage(AUTH_CONFIG.user_key, user);
+      setLocalStorage(AUTH_CONFIG.company_key, company);
+
+      return response.data;
+    } catch (error: any) {
       console.error('Registration error:', error);
-      throw new Error(error instanceof Error ? error.message : 'Registration failed. Please try again.');
+      const errorMessage = error.message || 'Registration failed. Please try again.';
+      throw new Error(errorMessage);
     } finally {
       setIsLoading(false);
     }
@@ -117,18 +157,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const logout = async () => {
     try {
-      await authService.logout();
+      await apiService.logout();
     } catch (error) {
       console.error('Logout error:', error);
     } finally {
       setUser(null);
       setCompany(null);
       setToken(null);
-
-      removeLocalStorage(AUTH_CONFIG.token_key);
-      removeLocalStorage(AUTH_CONFIG.refresh_token_key);
-      removeLocalStorage(AUTH_CONFIG.user_key);
-      removeLocalStorage(AUTH_CONFIG.company_key);
     }
   };
 
@@ -150,15 +185,18 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const refreshToken = async () => {
     try {
-      const storedRefreshToken = getLocalStorage(AUTH_CONFIG.refresh_token_key, null);
-      
+      const storedRefreshToken = getLocalStorage(
+        AUTH_CONFIG.refresh_token_key,
+        null
+      );
+
       if (!storedRefreshToken) {
         throw new Error('No refresh token available');
       }
 
       // Mock refresh token API call
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
       const newToken = 'refreshed-jwt-token-' + Date.now();
       setToken(newToken);
       setLocalStorage(AUTH_CONFIG.token_key, newToken);
@@ -193,9 +231,5 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     refreshToken,
   };
 
-  return (
-    <AuthContext.Provider value={value}>
-      {children}
-    </AuthContext.Provider>
-  );
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };

@@ -1,14 +1,20 @@
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { 
-  Shield, 
-  Zap, 
-  Globe, 
-  CheckCircle, 
-  ArrowRight, 
-  BarChart3, 
-  FileText, 
+import { Button } from '@/components/ui/button';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import {
+  Shield,
+  Zap,
+  Globe,
+  CheckCircle,
+  ArrowRight,
+  BarChart3,
+  FileText,
   Users,
   Database,
   Clock,
@@ -17,90 +23,91 @@ import {
   Cloud,
   RefreshCw,
   AlertTriangle,
-  TrendingUp
-} from "lucide-react";
-import { Link } from "react-router-dom";
+  TrendingUp,
+} from 'lucide-react';
+import { Link } from 'react-router-dom';
 
 export const FeaturesPage = () => {
   const features = [
     {
       icon: Zap,
-      title: "ERP Integration",
-      description: "Seamlessly connect with your existing ERP system",
+      title: 'ERP Integration',
+      description: 'Seamlessly connect with your existing ERP system',
       details: [
-        "Support for Sage 300, X3, Evolution",
-        "Microsoft Dynamics 365 & NAV",
-        "QuickBooks Desktop & Online",
-        "Oracle ERP Cloud",
-        "SAP Business One",
-        "Custom API integrations"
-      ]
+        'Support for Sage 300, X3, Evolution',
+        'Microsoft Dynamics 365 & NAV',
+        'QuickBooks Desktop & Online',
+        'Oracle ERP Cloud',
+        'SAP Business One',
+        'Custom API integrations',
+      ],
     },
     {
       icon: Shield,
-      title: "FIRS Compliance",
-      description: "Automated e-invoicing compliance with Nigerian tax authority",
+      title: 'FIRS Compliance',
+      description:
+        'Automated e-invoicing compliance with Nigerian tax authority',
       details: [
-        "Automatic UBL generation",
-        "Digital signature integration",
-        "Real-time FIRS validation",
-        "IRN generation",
-        "QR code creation",
-        "Compliance tracking"
-      ]
+        'Automatic UBL generation',
+        'Digital signature integration',
+        'Real-time FIRS validation',
+        'IRN generation',
+        'QR code creation',
+        'Compliance tracking',
+      ],
     },
     {
       icon: BarChart3,
-      title: "Analytics & Reports",
-      description: "Comprehensive insights into your invoice performance",
+      title: 'Analytics & Reports',
+      description: 'Comprehensive insights into your invoice performance',
       details: [
-        "Real-time dashboards",
-        "Compliance metrics",
-        "Revenue analytics",
-        "Customer insights",
-        "Payment tracking",
-        "Custom reports"
-      ]
+        'Real-time dashboards',
+        'Compliance metrics',
+        'Revenue analytics',
+        'Customer insights',
+        'Payment tracking',
+        'Custom reports',
+      ],
     },
     {
       icon: Globe,
-      title: "Multi-tenant SaaS",
-      description: "Secure, scalable platform for multiple companies",
+      title: 'Multi-tenant SaaS',
+      description: 'Secure, scalable platform for multiple companies',
       details: [
-        "Complete data isolation",
-        "Role-based access control",
-        "Enterprise security",
-        "Scalable infrastructure",
-        "Multi-company support",
-        "White-label options"
-      ]
+        'Complete data isolation',
+        'Role-based access control',
+        'Enterprise security',
+        'Scalable infrastructure',
+        'Multi-company support',
+        'White-label options',
+      ],
     },
     {
       icon: Database,
-      title: "Data Management",
-      description: "Robust data handling and synchronization",
+      title: 'Data Management',
+      description: 'Robust data handling and synchronization',
       details: [
-        "Real-time sync",
-        "Data validation",
-        "Backup & recovery",
-        "Data migration tools",
-        "API access",
-        "Export capabilities"
-      ]
+        'Real-time sync',
+        'Data validation',
+        'Backup & recovery',
+        'Data migration tools',
+        'API access',
+        'Export capabilities',
+      ],
     },
     {
       icon: Users,
-      title: "Team Collaboration",
-      description: "Built for teams with advanced permission controls",
+      title: 'Team Collaboration',
+      description: 'Built for teams with advanced permission controls',
       details: [
-        "User management",
-        "Role-based permissions",
-        "Audit trails",
-        "Workflow automation",
-        "Team notifications",
-        "Activity tracking"
-      ]
-    }
+        'User management',
+        'Role-based permissions',
+        'Audit trails',
+        'Workflow automation',
+        'Team notifications',
+        'Activity tracking',
+      ],
+    },
   ];
 
   return (
@@ -114,18 +121,27 @@ export const FeaturesPage = () => {
             </div>
             <span className="text-xl font-bold">Databyte</span>
           </Link>
-          
+
           <div className="hidden md:flex items-center space-x-6">
             <Link to="/features" className="text-foreground font-medium">
               Features
             </Link>
-            <Link to="/pricing" className="text-muted-foreground hover:text-foreground transition-colors">
+            <Link
+              to="/pricing"
+              className="text-muted-foreground hover:text-foreground transition-colors"
+            >
               Pricing
             </Link>
-            <Link to="/about" className="text-muted-foreground hover:text-foreground transition-colors">
+            <Link
+              to="/about"
+              className="text-muted-foreground hover:text-foreground transition-colors"
+            >
               About
             </Link>
-            <Link to="/docs" className="text-muted-foreground hover:text-foreground transition-colors">
+            <Link
+              to="/docs"
+              className="text-muted-foreground hover:text-foreground transition-colors"
+            >
               Documentation
             </Link>
           </div>
@@ -147,15 +163,16 @@ export const FeaturesPage = () => {
           <Badge variant="secondary" className="mb-6">
             🚀 Comprehensive Feature Set
           </Badge>
-          
+
           <h1 className="text-4xl md:text-6xl font-bold tracking-tight mb-6">
             Everything You Need for
             <span className="text-primary block">Invoice Management</span>
           </h1>
-          
+
           <p className="text-xl text-muted-foreground max-w-3xl mx-auto mb-8 leading-relaxed">
-            From ERP integration to FIRS compliance, our platform provides all the tools 
-            you need to streamline your invoice management process and ensure regulatory compliance.
+            From ERP integration to FIRS compliance, our platform provides all
+            the tools you need to streamline your invoice management process and
+            ensure regulatory compliance.
           </p>
         </div>
       </section>
@@ -178,7 +195,10 @@ export const FeaturesPage = () => {
                 <CardContent>
                   <ul className="space-y-2">
                     {feature.details.map((detail, detailIndex) => (
-                      <li key={detailIndex} className="flex items-center text-sm text-muted-foreground">
+                      <li
+                        key={detailIndex}
+                        className="flex items-center text-sm text-muted-foreground"
+                      >
                         <CheckCircle className="w-4 h-4 text-green-500 mr-2 flex-shrink-0" />
                         {detail}
                       </li>
@@ -199,7 +219,8 @@ export const FeaturesPage = () => {
               Advanced Capabilities
             </h2>
             <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
-              Built with enterprise-grade features to handle your most demanding requirements.
+              Built with enterprise-grade features to handle your most demanding
+              requirements.
             </p>
           </div>
 
@@ -211,21 +232,27 @@ export const FeaturesPage = () => {
                   <Clock className="w-5 h-5 text-primary mt-1" />
                   <div>
                     <h4 className="font-semibold">Instant Synchronization</h4>
-                    <p className="text-muted-foreground">Real-time data sync between your ERP and our platform</p>
+                    <p className="text-muted-foreground">
+                      Real-time data sync between your ERP and our platform
+                    </p>
                   </div>
                 </div>
                 <div className="flex items-start space-x-3">
                   <RefreshCw className="w-5 h-5 text-primary mt-1" />
                   <div>
                     <h4 className="font-semibold">Automated Processing</h4>
-                    <p className="text-muted-foreground">Automatic invoice processing and FIRS submission</p>
+                    <p className="text-muted-foreground">
+                      Automatic invoice processing and FIRS submission
+                    </p>
                   </div>
                 </div>
                 <div className="flex items-start space-x-3">
                   <AlertTriangle className="w-5 h-5 text-primary mt-1" />
                   <div>
                     <h4 className="font-semibold">Error Detection</h4>
-                    <p className="text-muted-foreground">Proactive error detection and resolution</p>
+                    <p className="text-muted-foreground">
+                      Proactive error detection and resolution
+                    </p>
                   </div>
                 </div>
               </div>
@@ -238,21 +265,27 @@ export const FeaturesPage = () => {
                   <Lock className="w-5 h-5 text-primary mt-1" />
                   <div>
                     <h4 className="font-semibold">Enterprise Security</h4>
-                    <p className="text-muted-foreground">Bank-level encryption and security protocols</p>
+                    <p className="text-muted-foreground">
+                      Bank-level encryption and security protocols
+                    </p>
                   </div>
                 </div>
                 <div className="flex items-start space-x-3">
                   <Shield className="w-5 h-5 text-primary mt-1" />
                   <div>
                     <h4 className="font-semibold">FIRS Certified</h4>
-                    <p className="text-muted-foreground">Officially certified for FIRS e-invoicing compliance</p>
+                    <p className="text-muted-foreground">
+                      Officially certified for FIRS e-invoicing compliance
+                    </p>
                   </div>
                 </div>
                 <div className="flex items-start space-x-3">
                   <Cloud className="w-5 h-5 text-primary mt-1" />
                   <div>
                     <h4 className="font-semibold">Cloud Infrastructure</h4>
-                    <p className="text-muted-foreground">Scalable, reliable cloud-based architecture</p>
+                    <p className="text-muted-foreground">
+                      Scalable, reliable cloud-based architecture
+                    </p>
                   </div>
                 </div>
               </div>
@@ -268,9 +301,10 @@ export const FeaturesPage = () => {
             Ready to Experience These Features?
           </h2>
           <p className="text-xl text-muted-foreground mb-8">
-            Start your free trial today and see how our platform can transform your invoice management.
+            Start your free trial today and see how our platform can transform
+            your invoice management.
           </p>
-          
+
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Link to="/auth/login">
               <Button size="lg" className="text-lg px-8 py-6 h-auto">
@@ -278,7 +312,11 @@ export const FeaturesPage = () => {
                 <ArrowRight className="ml-2 w-5 h-5" />
               </Button>
             </Link>
-            <Button variant="outline" size="lg" className="text-lg px-8 py-6 h-auto">
+            <Button
+              variant="outline"
+              size="lg"
+              className="text-lg px-8 py-6 h-auto"
+            >
               Schedule Demo
             </Button>
           </div>
@@ -297,36 +335,86 @@ export const FeaturesPage = () => {
                 <span className="text-xl font-bold">Databyte</span>
               </Link>
               <p className="text-muted-foreground">
-                The leading FIRS e-invoicing compliance platform for Nigerian businesses.
+                The leading FIRS e-invoicing compliance platform for Nigerian
+                businesses.
               </p>
             </div>
-            
+
             <div>
               <h3 className="font-semibold mb-4">Product</h3>
               <ul className="space-y-2 text-muted-foreground">
-                <li><Link to="/features" className="hover:text-foreground transition-colors">Features</Link></li>
-                <li><Link to="/pricing" className="hover:text-foreground transition-colors">Pricing</Link></li>
-                <li><Link to="/docs" className="hover:text-foreground transition-colors">Documentation</Link></li>
+                <li>
+                  <Link
+                    to="/features"
+                    className="hover:text-foreground transition-colors"
+                  >
+                    Features
+                  </Link>
+                </li>
+                <li>
+                  <Link
+                    to="/pricing"
+                    className="hover:text-foreground transition-colors"
+                  >
+                    Pricing
+                  </Link>
+                </li>
+                <li>
+                  <Link
+                    to="/docs"
+                    className="hover:text-foreground transition-colors"
+                  >
+                    Documentation
+                  </Link>
+                </li>
               </ul>
             </div>
-            
+
             <div>
               <h3 className="font-semibold mb-4">Company</h3>
               <ul className="space-y-2 text-muted-foreground">
-                <li><Link to="/about" className="hover:text-foreground transition-colors">About</Link></li>
-                <li><a href="mailto:contact@databyte.com" className="hover:text-foreground transition-colors">Contact</a></li>
+                <li>
+                  <Link
+                    to="/about"
+                    className="hover:text-foreground transition-colors"
+                  >
+                    About
+                  </Link>
+                </li>
+                <li>
+                  <a
+                    href="mailto:contact@databyte.com"
+                    className="hover:text-foreground transition-colors"
+                  >
+                    Contact
+                  </a>
+                </li>
               </ul>
             </div>
-            
+
             <div>
               <h3 className="font-semibold mb-4">Support</h3>
               <ul className="space-y-2 text-muted-foreground">
-                <li><a href="mailto:support@databyte.com" className="hover:text-foreground transition-colors">Help Center</a></li>
-                <li><a href="mailto:support@databyte.com" className="hover:text-foreground transition-colors">Contact Support</a></li>
+                <li>
+                  <a
+                    href="mailto:support@databyte.com"
+                    className="hover:text-foreground transition-colors"
+                  >
+                    Help Center
+                  </a>
+                </li>
+                <li>
+                  <a
+                    href="mailto:support@databyte.com"
+                    className="hover:text-foreground transition-colors"
+                  >
+                    Contact Support
+                  </a>
+                </li>
               </ul>
             </div>
           </div>
-          
+
           <div className="border-t mt-8 pt-8 text-center text-muted-foreground">
             <p>&copy; 2024 Databyte Technologies. All rights reserved.</p>
           </div>

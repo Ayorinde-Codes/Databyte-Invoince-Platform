@@ -1,110 +1,195 @@
-import { API_CONFIG } from '../utils/constants';
+import { API_CONFIG, API_ENDPOINTS } from '../utils/constants';
+import { getLocalStorage, removeLocalStorage } from '../utils/helpers';
+import { AUTH_CONFIG } from '../utils/constants';
+import { AuthApiResponse } from '../types/auth';
+import { DashboardApiResponse } from '../types/dashboard';
 
-// API Response wrapper interface
+// API Response Types
 export interface ApiResponse<T = any> {
   status: boolean;
   message: string;
-  data: T;
+  data?: T;
+  errors?: Record<string, string[]>;
 }
 
-// HTTP Client class
-class HttpClient {
-  private baseURL: string;
+export interface ApiError {
+  status: boolean;
+  message: string;
+  errors?: Record<string, string[]>;
+  statusCode?: number;
+}
+
+// Request Configuration
+interface RequestConfig {
+  method?: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH';
+  headers?: Record<string, string>;
+  body?: any;
+  requiresAuth?: boolean;
+}
+
+class ApiService {
+  private baseUrl: string;
   private timeout: number;
 
-  constructor(baseURL: string, timeout: number = 30000) {
-    this.baseURL = baseURL;
-    this.timeout = timeout;
+  constructor() {
+    this.baseUrl = API_CONFIG.base_url;
+    this.timeout = API_CONFIG.timeout;
   }
 
-  private async request<T>(
-    endpoint: string,
-    options: RequestInit = {}
-  ): Promise<ApiResponse<T>> {
-    const url = `${this.baseURL}${endpoint}`;
-    const token = localStorage.getItem('databyte_auth_token');
+  private getAuthHeaders(): Record<string, string> {
+    const token = getLocalStorage(AUTH_CONFIG.token_key, null);
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  }
 
-    const config: RequestInit = {
-      ...options,
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-        ...(token && { Authorization: `Bearer ${token}` }),
-        ...options.headers,
-      },
+  private async makeRequest<T>(
+    endpoint: string,
+    config: RequestConfig = {}
+  ): Promise<ApiResponse<T>> {
+    const {
+      method = 'GET',
+      headers = {},
+      body,
+      requiresAuth = true,
+    } = config;
+
+    const url = `${this.baseUrl}${endpoint}`;
+    
+    const requestHeaders: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+      ...headers,
     };
 
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), this.timeout);
+    if (requiresAuth) {
+      Object.assign(requestHeaders, this.getAuthHeaders());
+    }
+
+    const requestConfig: RequestInit = {
+      method,
+      headers: requestHeaders,
+      body: body ? JSON.stringify(body) : undefined,
+    };
 
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), this.timeout);
+
       const response = await fetch(url, {
-        ...config,
+        ...requestConfig,
         signal: controller.signal,
       });
 
       clearTimeout(timeoutId);
 
+      const responseData = await response.json();
+
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+        throw {
+          status: false,
+          message: responseData.message || 'Request failed',
+          errors: responseData.errors,
+          statusCode: response.status,
+        } as ApiError;
       }
 
-      const data = await response.json();
-      return data;
+      return responseData as ApiResponse<T>;
     } catch (error) {
-      clearTimeout(timeoutId);
       if (error instanceof Error) {
         if (error.name === 'AbortError') {
-          throw new Error('Request timeout');
+          throw {
+            status: false,
+            message: 'Request timeout',
+            statusCode: 408,
+          } as ApiError;
         }
-        throw error;
+        
+        throw {
+          status: false,
+          message: error.message || 'Network error',
+          statusCode: 0,
+        } as ApiError;
       }
-      throw new Error('An unexpected error occurred');
+      
+      throw error;
     }
   }
 
-  async get<T>(endpoint: string): Promise<ApiResponse<T>> {
-    return this.request<T>(endpoint, { method: 'GET' });
-  }
-
-  async post<T>(endpoint: string, data?: any): Promise<ApiResponse<T>> {
-    return this.request<T>(endpoint, {
+  // Authentication Methods
+  async login(credentials: { email: string; password: string }): Promise<AuthApiResponse> {
+    return this.makeRequest<AuthApiResponse['data']>(API_ENDPOINTS.auth.login, {
       method: 'POST',
-      body: data ? JSON.stringify(data) : undefined,
+      body: credentials,
+      requiresAuth: false,
+    }) as Promise<AuthApiResponse>;
+  }
+
+  async register(userData: {
+    name: string;
+    email: string;
+    password: string;
+    phone: string;
+    address: string;
+    tin: string;
+  }): Promise<AuthApiResponse> {
+    return this.makeRequest<AuthApiResponse['data']>(API_ENDPOINTS.auth.register, {
+      method: 'POST',
+      body: userData,
+      requiresAuth: false,
+    }) as Promise<AuthApiResponse>;
+  }
+
+  async logout() {
+    try {
+      await this.makeRequest(API_ENDPOINTS.auth.logout, {
+        method: 'POST',
+      });
+    } catch (error) {
+      // Even if logout fails on server, clear local storage
+      console.warn('Logout request failed:', error);
+    } finally {
+      // Always clear local storage
+      removeLocalStorage(AUTH_CONFIG.token_key);
+      removeLocalStorage(AUTH_CONFIG.user_key);
+      removeLocalStorage(AUTH_CONFIG.company_key);
+      removeLocalStorage(AUTH_CONFIG.refresh_token_key);
+    }
+  }
+
+  async refreshToken() {
+    const refreshToken = getLocalStorage(AUTH_CONFIG.refresh_token_key, null);
+    if (!refreshToken) {
+      throw new Error('No refresh token available');
+    }
+
+    return this.makeRequest(API_ENDPOINTS.auth.refresh, {
+      method: 'POST',
+      body: { refresh_token: refreshToken },
+      requiresAuth: false,
     });
   }
 
-  async put<T>(endpoint: string, data?: any): Promise<ApiResponse<T>> {
-    return this.request<T>(endpoint, {
-      method: 'PUT',
-      body: data ? JSON.stringify(data) : undefined,
-    });
+  // Dashboard Methods
+  async getDashboardOverview(): Promise<DashboardApiResponse> {
+    return this.makeRequest<DashboardApiResponse['data']>(API_ENDPOINTS.dashboard.overview) as Promise<DashboardApiResponse>;
   }
 
-  async delete<T>(endpoint: string): Promise<ApiResponse<T>> {
-    return this.request<T>(endpoint, { method: 'DELETE' });
+  async getDashboardCustomers() {
+    return this.makeRequest(API_ENDPOINTS.dashboard.customers);
+  }
+
+  async getDashboardVendors() {
+    return this.makeRequest(API_ENDPOINTS.dashboard.vendors);
+  }
+
+  async getDashboardProducts() {
+    return this.makeRequest(API_ENDPOINTS.dashboard.products);
+  }
+
+  async getDashboardBatches() {
+    return this.makeRequest(API_ENDPOINTS.dashboard.batches);
   }
 }
 
-// Create HTTP client instance
-export const httpClient = new HttpClient(API_CONFIG.base_url, API_CONFIG.timeout);
-
-// API endpoints
-export const API_ENDPOINTS = {
-  // Authentication
-  LOGIN: '/api/auth/login',
-  REGISTER: '/api/auth/register',
-  LOGOUT: '/api/auth/logout',
-  REFRESH_TOKEN: '/api/auth/refresh',
-  
-  // Dashboard
-  DASHBOARD_OVERVIEW: '/api/dashboard/overview',
-  DASHBOARD_CUSTOMERS: '/api/dashboard/customers',
-  DASHBOARD_VENDORS: '/api/dashboard/vendors',
-  
-  // Profile
-  PROFILE: '/api/profile',
-  UPDATE_PROFILE: '/api/profile',
-  CHANGE_PASSWORD: '/api/profile/password',
-} as const;
+// Export singleton instance
+export const apiService = new ApiService();
+export default apiService;
