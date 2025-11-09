@@ -200,7 +200,7 @@ export const ProfilePage = () => {
                         {user?.email}
                       </p>
                       <Badge variant="secondary" className="mt-2">
-                        {user?.role}
+                        {user?.roles?.[0] || 'No role'}
                       </Badge>
                     </div>
 
