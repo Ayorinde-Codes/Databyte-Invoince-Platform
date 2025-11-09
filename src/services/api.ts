@@ -5,7 +5,7 @@ import { AuthApiResponse } from '../types/auth';
 import { DashboardApiResponse } from '../types/dashboard';
 
 // API Response Types
-export interface ApiResponse<T = any> {
+export interface ApiResponse<T = unknown> {
   status: boolean;
   message: string;
   data?: T;
@@ -23,7 +23,7 @@ export interface ApiError {
 interface RequestConfig {
   method?: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH';
   headers?: Record<string, string>;
-  body?: any;
+  body?: unknown;
   requiresAuth?: boolean;
 }
 

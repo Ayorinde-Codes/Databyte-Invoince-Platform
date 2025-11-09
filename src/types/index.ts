@@ -6,7 +6,7 @@ export * from './invoice';
 export * from './dashboard';
 
 // Common utility types
-export interface ApiResponse<T = any> {
+export interface ApiResponse<T = unknown> {
   success: boolean;
   data?: T;
   message?: string;
@@ -29,7 +29,7 @@ export interface PaginationParams {
 
 export interface SearchParams {
   query?: string;
-  filters?: Record<string, any>;
+  filters?: Record<string, unknown>;
 }
 
 export interface TableColumn {
@@ -39,7 +39,7 @@ export interface TableColumn {
   filterable?: boolean;
   width?: string;
   align?: 'left' | 'center' | 'right';
-  render?: (value: any, row: any) => React.ReactNode;
+  render?: (value: unknown, row: unknown) => React.ReactNode;
 }
 
 export interface FormField {
@@ -58,7 +58,7 @@ export interface FormField {
     | 'file';
   placeholder?: string;
   required?: boolean;
-  validation?: any;
+  validation?: unknown;
   options?: { value: string; label: string }[];
   disabled?: boolean;
   description?: string;
@@ -145,7 +145,7 @@ export interface Permission {
   description: string;
   resource: string;
   action: string;
-  conditions?: Record<string, any>;
+  conditions?: Record<string, unknown>;
 }
 
 export interface Role {
@@ -166,24 +166,24 @@ export interface AuditLog {
   resource_type: string;
   resource_id: string;
   resource_name?: string;
-  changes?: Record<string, { old: any; new: any }>;
+  changes?: Record<string, { old: unknown; new: unknown }>;
   ip_address: string;
   user_agent: string;
   timestamp: string;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }
 
 export interface SystemSettings {
   id: string;
   key: string;
-  value: any;
+  value: unknown;
   type: 'string' | 'number' | 'boolean' | 'json' | 'array';
   description: string;
   category: string;
   is_public: boolean;
   is_editable: boolean;
-  validation_rules?: any;
-  default_value?: any;
+  validation_rules?: unknown;
+  default_value?: unknown;
   updated_by: string;
   updated_at: string;
 }
@@ -210,7 +210,7 @@ export interface WebhookDelivery {
   id: string;
   webhook_endpoint_id: string;
   event_type: string;
-  payload: any;
+  payload: unknown;
   response_status?: number;
   response_body?: string;
   response_headers?: Record<string, string>;
@@ -230,10 +230,10 @@ export interface BaseComponentProps {
 export interface LoadingState {
   isLoading: boolean;
   error?: string;
-  data?: any;
+  data?: unknown;
 }
 
-export interface FormState<T = any> {
+export interface FormState<T = unknown> {
   values: T;
   errors: Record<string, string>;
   touched: Record<string, boolean>;

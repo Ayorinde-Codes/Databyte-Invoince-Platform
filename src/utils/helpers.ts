@@ -188,8 +188,8 @@ export const isValidEmail = (email: string): boolean => {
 };
 
 export const isValidPhone = (phone: string): boolean => {
-  const phoneRegex = /^[\+]?[1-9][\d]{0,15}$/;
-  return phoneRegex.test(phone.replace(/[\s\-\(\)]/g, ''));
+  const phoneRegex = /^[+]?[1-9][\d]{0,15}$/;
+  return phoneRegex.test(phone.replace(/[\s\-()]/g, ''));
 };
 
 export const isValidTIN = (tin: string): boolean => {
@@ -231,23 +231,23 @@ export const isImageFile = (filename: string): boolean => {
 // Status Badge Utilities
 export const getStatusBadge = (
   status: string,
-  statusConfig: Record<string, any>
+  statusConfig: Record<string, Partial<StatusBadge>>
 ): StatusBadge => {
   const config = statusConfig[status] || {
     label: status,
-    color: 'gray',
+    color: 'gray' as const,
     icon: 'Circle',
   };
   return {
     status,
-    label: config.label,
-    color: config.color,
+    label: config.label || status,
+    color: config.color || 'gray',
     icon: config.icon,
   };
 };
 
 // Local Storage Utilities
-export const setLocalStorage = (key: string, value: any): void => {
+export const setLocalStorage = (key: string, value: unknown): void => {
   try {
     localStorage.setItem(key, JSON.stringify(value));
   } catch (error) {
@@ -274,7 +274,7 @@ export const removeLocalStorage = (key: string): void => {
 };
 
 // URL and Query Utilities
-export const buildQueryString = (params: Record<string, any>): string => {
+export const buildQueryString = (params: Record<string, unknown>): string => {
   const searchParams = new URLSearchParams();
 
   Object.entries(params).forEach(([key, value]) => {
@@ -290,16 +290,17 @@ export const buildQueryString = (params: Record<string, any>): string => {
   return searchParams.toString();
 };
 
-export const parseQueryString = (queryString: string): Record<string, any> => {
+export const parseQueryString = (queryString: string): Record<string, string | string[]> => {
   const params = new URLSearchParams(queryString);
-  const result: Record<string, any> = {};
+  const result: Record<string, string | string[]> = {};
 
   for (const [key, value] of params.entries()) {
-    if (result[key]) {
-      if (Array.isArray(result[key])) {
-        result[key].push(value);
+    const existing = result[key];
+    if (existing) {
+      if (Array.isArray(existing)) {
+        existing.push(value);
       } else {
-        result[key] = [result[key], value];
+        result[key] = [existing, value];
       }
     } else {
       result[key] = value;
@@ -310,7 +311,7 @@ export const parseQueryString = (queryString: string): Record<string, any> => {
 };
 
 // Debounce and Throttle
-export const debounce = <T extends (...args: any[]) => any>(
+export const debounce = <T extends (...args: unknown[]) => unknown>(
   func: T,
   wait: number
 ): ((...args: Parameters<T>) => void) => {
@@ -322,7 +323,7 @@ export const debounce = <T extends (...args: any[]) => any>(
   };
 };
 
-export const throttle = <T extends (...args: any[]) => any>(
+export const throttle = <T extends (...args: unknown[]) => unknown>(
   func: T,
   limit: number
 ): ((...args: Parameters<T>) => void) => {

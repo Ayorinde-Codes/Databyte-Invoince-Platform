@@ -26,9 +26,10 @@ export const useDashboard = (): UseDashboardReturn => {
       } else {
         throw new Error(response.message || 'Failed to fetch dashboard data');
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Dashboard fetch error:', err);
-      setError(err.message || 'Failed to load dashboard data');
+      const errorMessage = err instanceof Error ? err.message : 'Failed to load dashboard data';
+      setError(errorMessage);
     } finally {
       setIsLoading(false);
     }

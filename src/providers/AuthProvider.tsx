@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { User, Company, AuthResponse, AuthApiResponse } from '../types/auth';
 import { AUTH_CONFIG } from '../utils/constants';
 import {
@@ -34,6 +34,7 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (context === undefined) {
@@ -106,9 +107,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setLocalStorage(AUTH_CONFIG.company_key, company);
 
       return response.data;
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Login error:', error);
-      const errorMessage = error.message || 'Login failed. Please check your credentials.';
+      const errorMessage = error instanceof Error ? error.message : 'Login failed. Please check your credentials.';
       throw new Error(errorMessage);
     } finally {
       setIsLoading(false);
@@ -146,16 +147,16 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setLocalStorage(AUTH_CONFIG.company_key, company);
 
       return response.data;
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Registration error:', error);
-      const errorMessage = error.message || 'Registration failed. Please try again.';
+      const errorMessage = error instanceof Error ? error.message : 'Registration failed. Please try again.';
       throw new Error(errorMessage);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const logout = async () => {
+  const logout = useCallback(async () => {
     try {
       await apiService.logout();
     } catch (error) {
@@ -165,7 +166,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setCompany(null);
       setToken(null);
     }
-  };
+  }, []);
 
   const updateUser = (userData: Partial<User>) => {
     if (user) {
@@ -183,7 +184,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
-  const refreshToken = async () => {
+  const refreshToken = useCallback(async () => {
     try {
       const storedRefreshToken = getLocalStorage(
         AUTH_CONFIG.refresh_token_key,
@@ -204,7 +205,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       console.error('Token refresh failed:', error);
       logout();
     }
-  };
+  }, [logout]);
 
   // Auto-refresh token before expiry
   useEffect(() => {
@@ -215,7 +216,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }, AUTH_CONFIG.refresh_threshold);
 
     return () => clearInterval(refreshInterval);
-  }, [token]);
+  }, [token, refreshToken]);
 
   const value: AuthContextType = {
     user,

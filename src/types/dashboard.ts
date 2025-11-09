@@ -176,7 +176,7 @@ export interface RecentActivity {
   amount?: number;
   status?: string;
   timestamp: string;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }
 
 export interface SystemAlert {
@@ -218,7 +218,7 @@ export interface DashboardWidget {
     width: number;
     height: number;
   };
-  data: any;
+  data: unknown;
   settings: {
     refresh_interval?: number;
     auto_refresh?: boolean;
