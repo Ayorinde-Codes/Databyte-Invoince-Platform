@@ -47,7 +47,7 @@ export interface Vendor extends Customer {
   vendor_id?: number;
 }
 
-export interface Invoice {
+export interface DashboardInvoice {
   id: number;
   company_id: number;
   batch_number: string;
@@ -85,8 +85,8 @@ export interface Invoice {
 }
 
 export interface DashboardRecentInvoices {
-  ar_invoices: Invoice[];
-  ap_invoices: Invoice[];
+  ar_invoices: DashboardInvoice[];
+  ap_invoices: DashboardInvoice[];
 }
 
 export interface DashboardOverview {
