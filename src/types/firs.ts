@@ -45,7 +45,7 @@ export interface FIRSValidationResponse {
 
 export interface FIRSSubmissionRequest {
   invoice_id: string;
-  ubl_data: any;
+  ubl_data: unknown;
   digital_signature?: string;
   submission_type: 'new' | 'update' | 'cancel';
 }
@@ -217,7 +217,7 @@ export interface UBLTaxTotal {
   }[];
 }
 
-export interface FIRSAPIResponse<T = any> {
+export interface FIRSAPIResponse<T = unknown> {
   success: boolean;
   data?: T;
   message?: string;

@@ -115,7 +115,7 @@ export interface ERPInvoiceData {
   reference?: string;
   status: string;
   line_items: ERPInvoiceLineItem[];
-  custom_fields?: Record<string, any>;
+  custom_fields?: Record<string, unknown>;
 }
 
 export interface ERPInvoiceLineItem {
@@ -157,7 +157,7 @@ export interface ERPFieldMapping {
   platform_field: string;
   field_type: 'string' | 'number' | 'date' | 'boolean';
   is_required: boolean;
-  default_value?: any;
+  default_value?: unknown;
   transformation_rule?: string;
 }
 

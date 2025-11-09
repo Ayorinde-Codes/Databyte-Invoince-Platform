@@ -10,7 +10,7 @@ export const APP_CONFIG = {
 
 // API Configuration
 export const API_CONFIG = {
-  base_url: import.meta.env.VITE_API_BASE_URL || 'http://192.168.191.230:8000',
+  base_url: import.meta.env.VITE_API_BASE_URL || 'http://192.168.191.230:8000/api',
   timeout: 30000,
   retry_attempts: 3,
   retry_delay: 1000,
@@ -19,18 +19,18 @@ export const API_CONFIG = {
 // API Endpoints
 export const API_ENDPOINTS = {
   auth: {
-    login: '/api/auth/login',
-    register: '/api/auth/register',
-    logout: '/api/auth/logout',
-    refresh: '/api/auth/refresh',
-    profile: '/api/auth/profile',
+    login: '/auth/login',
+    register: '/auth/register',
+    logout: '/auth/logout',
+    refresh: '/auth/refresh',
+    profile: '/auth/profile',
   },
   dashboard: {
-    overview: '/api/dashboard/overview',
-    customers: '/api/dashboard/customers',
-    vendors: '/api/dashboard/vendors',
-    products: '/api/dashboard/products',
-    batches: '/api/dashboard/batches',
+    overview: '/dashboard/overview',
+    customers: '/dashboard/customers',
+    vendors: '/dashboard/vendors',
+    products: '/dashboard/products',
+    batches: '/dashboard/batches',
   },
 } as const;
 

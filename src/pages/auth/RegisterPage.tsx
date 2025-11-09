@@ -74,8 +74,9 @@ export const RegisterPage = () => {
 
       toast.success('Registration successful! Welcome to Databyte.');
       navigate('/dashboard');
-    } catch (error: any) {
-      toast.error(error.message || 'Registration failed. Please try again.');
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Registration failed. Please try again.';
+      toast.error(errorMessage);
     } finally {
       setIsLoading(false);
     }

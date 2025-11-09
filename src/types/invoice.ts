@@ -77,8 +77,8 @@ export interface Invoice {
     | 'processing'
     | 'approved'
     | 'rejected';
-  firs_validation_response?: any;
-  firs_submission_response?: any;
+  firs_validation_response?: unknown;
+  firs_submission_response?: unknown;
   firs_qr_code?: string;
   firs_encrypted_data?: string;
   firs_submitted_at?: string;
@@ -86,7 +86,7 @@ export interface Invoice {
   firs_rejection_reason?: string;
 
   // UBL and Compliance
-  ubl_data?: any;
+  ubl_data?: unknown;
   digital_signature?: string;
   compliance_score?: number;
 
