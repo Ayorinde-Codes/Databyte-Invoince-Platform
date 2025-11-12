@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import {
   BarChart3,
   TrendingUp,
@@ -16,6 +17,7 @@ import {
   Activity,
   Target,
   Zap,
+  RefreshCw,
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -35,49 +37,295 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { InvoiceChart } from '../../components/dashboard/InvoiceChart';
 import { MetricsCard } from '../../components/dashboard/MetricsCard';
 import { formatCurrency, formatPercentage } from '../../utils/helpers';
 import { DashboardLayout } from '../../components/layout/DashboardLayout';
+import { apiService } from '../../services/api';
+import { usePermissions } from '../../hooks/usePermissions';
+
+interface InvoiceRecord {
+  id: number;
+  invoice_number: string;
+  invoice_date: string;
+  due_date?: string;
+  total_amount: string | number;
+  status: string;
+  firs_status?: string | null;
+  customer?: { id: number; party_name: string; email?: string } | null;
+  vendor?: { id: number; party_name: string; email?: string } | null;
+}
 
 export const ReportsPage = () => {
   const [dateRange, setDateRange] = useState('last_30_days');
   const [reportType, setReportType] = useState('overview');
+  const { isSuperAdmin: isUserSuperAdmin } = usePermissions();
 
-  // Mock data for reports
-  const overviewMetrics = {
-    totalRevenue: 15750000,
-    revenueGrowth: 18.5,
-    totalInvoices: 342,
-    invoiceGrowth: 12.3,
-    avgInvoiceValue: 46052,
-    avgGrowth: 5.2,
-    complianceRate: 97.8,
-    complianceGrowth: 2.1,
-  };
+  // Fetch dashboard overview
+  const { 
+    data: dashboardResponse, 
+    isLoading: isLoadingDashboard, 
+    error: dashboardError, 
+    refetch: refetchDashboard 
+  } = useQuery({
+    queryKey: ['dashboard', 'overview', 'reports'],
+    queryFn: () => apiService.getDashboardOverview(),
+  });
 
-  const monthlyRevenueData = [
-    { name: 'Jan', value: 12500000 },
-    { name: 'Feb', value: 13200000 },
-    { name: 'Mar', value: 14100000 },
-    { name: 'Apr', value: 13800000 },
-    { name: 'May', value: 15200000 },
-    { name: 'Jun', value: 15750000 },
-  ];
+  const dashboardData = dashboardResponse?.data;
+  const isLoading = isLoadingDashboard;
+  const isSuperAdmin = isUserSuperAdmin() || dashboardData?.is_super_admin || dashboardData?.is_aggregated || false;
 
-  const invoiceStatusData = [
-    { name: 'Paid', value: 12600000, color: '#10B981' },
-    { name: 'Sent', value: 2100000, color: '#3B82F6' },
-    { name: 'Overdue', value: 850000, color: '#EF4444' },
-    { name: 'Draft', value: 200000, color: '#6B7280' },
-  ];
+  // Fetch AR invoices for calculations
+  const { data: arInvoicesResponse, error: arInvoicesError } = useQuery({
+    queryKey: ['invoices', 'ar', 'reports'],
+    queryFn: () => apiService.getARInvoices({ per_page: 1000 }),
+    enabled: !isUserSuperAdmin() && !!dashboardData,
+  });
 
-  const firsComplianceData = [
-    { name: 'Approved', value: 315, color: '#10B981' },
-    { name: 'Pending', value: 18, color: '#F59E0B' },
-    { name: 'Rejected', value: 9, color: '#EF4444' },
-  ];
+  // Fetch AP invoices for calculations
+  const { data: apInvoicesResponse, error: apInvoicesError } = useQuery({
+    queryKey: ['invoices', 'ap', 'reports'],
+    queryFn: () => apiService.getAPInvoices({ per_page: 1000 }),
+    enabled: !isUserSuperAdmin() && !!dashboardData,
+  });
 
+  const error = dashboardError || dashboardResponse?.error || arInvoicesError || apInvoicesError;
+
+  // Calculate Total Revenue from real invoice data
+  const totalRevenue = useMemo(() => {
+    if (isSuperAdmin && dashboardData?.metrics?.total_revenue) {
+      return dashboardData.metrics.total_revenue;
+    }
+    
+    if (!arInvoicesResponse?.data?.data) return 0;
+    
+    const arInvoices = arInvoicesResponse.data.data as InvoiceRecord[];
+    const total = arInvoices.reduce((sum: number, invoice: InvoiceRecord) => {
+      return sum + parseFloat(String(invoice.total_amount || '0'));
+    }, 0);
+    
+    return total;
+  }, [arInvoicesResponse, isSuperAdmin, dashboardData]);
+
+  // Calculate Revenue Trend (last 6 months) from real data
+  const monthlyRevenueData = useMemo(() => {
+    if (isSuperAdmin && dashboardData?.revenue_chart_data) {
+      return dashboardData.revenue_chart_data.map(item => ({
+        name: item.month,
+        value: item.revenue,
+      }));
+    }
+    
+    if (!arInvoicesResponse?.data?.data) {
+      return [
+        { name: 'Jan', value: 0 },
+        { name: 'Feb', value: 0 },
+        { name: 'Mar', value: 0 },
+        { name: 'Apr', value: 0 },
+        { name: 'May', value: 0 },
+        { name: 'Jun', value: 0 },
+      ];
+    }
+
+    const invoices = arInvoicesResponse.data.data as InvoiceRecord[];
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'];
+    const monthlyRevenue: Record<string, number> = {};
+    
+    invoices.forEach((invoice: InvoiceRecord) => {
+      if (!invoice.invoice_date) return;
+      
+      const invoiceDate = new Date(invoice.invoice_date);
+      const monthIndex = invoiceDate.getMonth();
+      const monthName = months[monthIndex];
+      
+      if (!monthlyRevenue[monthName]) {
+        monthlyRevenue[monthName] = 0;
+      }
+      
+      monthlyRevenue[monthName] += parseFloat(invoice.total_amount || '0');
+    });
+
+    return months.map(month => ({
+      name: month,
+      value: monthlyRevenue[month] || 0,
+    }));
+  }, [arInvoicesResponse, isSuperAdmin, dashboardData]);
+
+  // Calculate Invoice Status Distribution from real data
+  const invoiceStatusData = useMemo(() => {
+    if (!arInvoicesResponse?.data?.data && !apInvoicesResponse?.data?.data) {
+      return [
+        { name: 'Paid', value: 0, color: '#10B981' },
+        { name: 'Sent', value: 0, color: '#3B82F6' },
+        { name: 'Overdue', value: 0, color: '#EF4444' },
+        { name: 'Draft', value: 0, color: '#6B7280' },
+      ];
+    }
+
+    const allInvoices = [
+      ...((arInvoicesResponse?.data?.data || []) as InvoiceRecord[]),
+      ...((apInvoicesResponse?.data?.data || []) as InvoiceRecord[]),
+    ];
+
+    // Define all possible invoice statuses
+    const allPossibleStatuses = ['draft', 'pending', 'approved', 'paid', 'cancelled', 'overdue'];
+    
+    const statusColors: Record<string, string> = {
+      draft: '#6B7280',
+      pending: '#F59E0B',      // Yellow
+      approved: '#3B82F6',      // Blue
+      paid: '#10B981',         // Green
+      cancelled: '#EF4444',     // Red
+      overdue: '#EF4444',       // Red
+    };
+
+    // Initialize all statuses with 0
+    const statusCounts: Record<string, { count: number; total: number }> = {};
+    allPossibleStatuses.forEach(status => {
+      statusCounts[status] = { count: 0, total: 0 };
+    });
+
+    // Populate status counts from actual invoice data
+    allInvoices.forEach((invoice: InvoiceRecord) => {
+      // Handle status - could be string or enum object
+      let status = invoice.status || 'draft';
+      if (typeof status === 'object' && status !== null && 'value' in status) {
+        status = status.value;
+      }
+      status = String(status).toLowerCase();
+      
+      if (statusCounts[status]) {
+        statusCounts[status].count += 1;
+        statusCounts[status].total += parseFloat(String(invoice.total_amount || '0'));
+      }
+    });
+
+    // Create chart data for ALL statuses (including those with 0)
+    const chartData = allPossibleStatuses.map(status => ({
+      name: status.charAt(0).toUpperCase() + status.slice(1),
+      value: statusCounts[status].total > 0 ? statusCounts[status].total : 0,
+      color: statusColors[status] || '#6B7280',
+      count: statusCounts[status].count,
+    }));
+
+    return chartData;
+  }, [arInvoicesResponse, apInvoicesResponse]);
+
+  // Calculate FIRS Compliance Data
+  const firsComplianceData = useMemo(() => {
+    if (!arInvoicesResponse?.data?.data) {
+      return [
+        { name: 'Approved', value: 0, color: '#10B981' },
+        { name: 'Pending', value: 0, color: '#F59E0B' },
+        { name: 'Rejected', value: 0, color: '#EF4444' },
+      ];
+    }
+
+    const invoices = arInvoicesResponse.data.data as InvoiceRecord[];
+    const complianceCounts: Record<string, number> = {
+      approved: 0,
+      pending: 0,
+      rejected: 0,
+    };
+
+    invoices.forEach((invoice: InvoiceRecord) => {
+      const firsStatus = invoice.firs_status || 'pending';
+      if (firsStatus === 'approved' || firsStatus === 'submitted') {
+        complianceCounts.approved += 1;
+      } else if (firsStatus === 'rejected') {
+        complianceCounts.rejected += 1;
+      } else {
+        complianceCounts.pending += 1;
+      }
+    });
+
+    return [
+      { name: 'Approved', value: complianceCounts.approved, color: '#10B981' },
+      { name: 'Pending', value: complianceCounts.pending, color: '#F59E0B' },
+      { name: 'Rejected', value: complianceCounts.rejected, color: '#EF4444' },
+    ];
+  }, [arInvoicesResponse]);
+
+  // Calculate revenue growth
+  const revenueGrowth = useMemo(() => {
+    if (monthlyRevenueData.length < 2) return 0;
+    
+    const current = monthlyRevenueData[monthlyRevenueData.length - 1]?.value || 0;
+    const previous = monthlyRevenueData[monthlyRevenueData.length - 2]?.value || 0;
+    
+    if (previous === 0) return current > 0 ? 100 : 0;
+    return ((current - previous) / previous) * 100;
+  }, [monthlyRevenueData]);
+
+  // Calculate compliance rate
+  const complianceRate = useMemo(() => {
+    if (!arInvoicesResponse?.data?.data) return 0;
+    
+    const invoices = arInvoicesResponse.data.data as InvoiceRecord[];
+    const total = invoices.length;
+    if (total === 0) return 0;
+    
+    const approved = invoices.filter((inv: InvoiceRecord) => 
+      inv.firs_status === 'approved' || inv.firs_status === 'submitted'
+    ).length;
+    
+    return total > 0 ? (approved / total) * 100 : 0;
+  }, [arInvoicesResponse]);
+
+  // Calculate metrics from real data
+  const overviewMetrics = useMemo(() => {
+    const totalInvoices = (dashboardData?.counts?.ar_invoices || 0) + (dashboardData?.counts?.ap_invoices || 0);
+    const avgInvoiceValue = totalInvoices > 0 ? totalRevenue / totalInvoices : 0;
+
+    return {
+      totalRevenue,
+      revenueGrowth,
+      totalInvoices,
+      invoiceGrowth: 0, // Would need historical data
+      avgInvoiceValue,
+      avgGrowth: 0, // Would need historical data
+      complianceRate,
+      complianceGrowth: 0, // Would need historical data
+    };
+  }, [totalRevenue, revenueGrowth, dashboardData, complianceRate]);
+
+  // Calculate top customers from real data
+  const topCustomers = useMemo(() => {
+    if (!arInvoicesResponse?.data?.data) return [];
+
+    const invoices = arInvoicesResponse.data.data as InvoiceRecord[];
+    const customerRevenue: Record<string, { name: string; revenue: number; invoices: number }> = {};
+
+    invoices.forEach((invoice: InvoiceRecord) => {
+      const customerId = invoice.customer?.id || 'unknown';
+      const customerName = invoice.customer?.party_name || 'Unknown Customer';
+      const amount = parseFloat(invoice.total_amount || '0');
+
+      if (!customerRevenue[customerId]) {
+        customerRevenue[customerId] = {
+          name: customerName,
+          revenue: 0,
+          invoices: 0,
+        };
+      }
+
+      customerRevenue[customerId].revenue += amount;
+      customerRevenue[customerId].invoices += 1;
+    });
+
+    return Object.values(customerRevenue)
+      .sort((a, b) => b.revenue - a.revenue)
+      .slice(0, 5)
+      .map(customer => ({
+        ...customer,
+        growth: 0, // Would need historical data
+      }));
+  }, [arInvoicesResponse]);
+
+  // Mock data for features that need historical data (customer analytics, performance metrics)
   const customerAnalyticsData = [
     { name: 'New Customers', value: 45 },
     { name: 'Returning', value: 128 },
@@ -95,8 +343,8 @@ export const ReportsPage = () => {
     },
     {
       title: 'FIRS Approval Rate',
-      value: '97.8%',
-      change: 2.1,
+      value: `${overviewMetrics.complianceRate.toFixed(1)}%`,
+      change: overviewMetrics.complianceGrowth,
       changeType: 'increase' as const,
       description: 'First-time approval rate',
     },
@@ -116,18 +364,49 @@ export const ReportsPage = () => {
     },
   ];
 
-  const topCustomers = [
-    { name: 'Acme Corporation', revenue: 2500000, invoices: 15, growth: 25.3 },
-    {
-      name: 'Tech Solutions Ltd',
-      revenue: 1850000,
-      invoices: 12,
-      growth: 18.7,
-    },
-    { name: 'Global Industries', revenue: 1650000, invoices: 8, growth: -5.2 },
-    { name: 'Digital Agency', revenue: 1420000, invoices: 18, growth: 32.1 },
-    { name: 'Manufacturing Corp', revenue: 1280000, invoices: 6, growth: 12.8 },
-  ];
+  // Loading state
+  if (isLoading) {
+    return (
+      <DashboardLayout>
+        <div className="space-y-6">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+            <div>
+              <Skeleton className="h-8 w-48 mb-2" />
+              <Skeleton className="h-4 w-64" />
+            </div>
+            <Skeleton className="h-10 w-32" />
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            {[1, 2, 3, 4].map((i) => (
+              <Skeleton key={i} className="h-32" />
+            ))}
+          </div>
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <DashboardLayout>
+        <Alert variant="destructive">
+          <AlertDescription>
+            Failed to load reports data. Please try again.
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="ml-4"
+              onClick={() => refetchDashboard()}
+            >
+              <RefreshCw className="w-4 h-4 mr-2" />
+              Retry
+            </Button>
+          </AlertDescription>
+        </Alert>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout>
@@ -157,6 +436,11 @@ export const ReportsPage = () => {
                 <SelectItem value="custom">Custom range</SelectItem>
               </SelectContent>
             </Select>
+
+            <Button variant="outline" size="sm" onClick={() => refetchDashboard()}>
+              <RefreshCw className="w-4 h-4 mr-2" />
+              Refresh
+            </Button>
 
             <Button variant="outline" size="sm">
               <Download className="w-4 h-4 mr-2" />
@@ -400,7 +684,7 @@ export const ReportsPage = () => {
                 type="pie"
                 title="Invoice Status Breakdown"
                 description="Current status of all invoices"
-                data={invoiceStatusData}
+                data={invoiceStatusData || []}
               />
             </div>
 

@@ -22,6 +22,8 @@ import { RegisterPage } from './pages/auth/RegisterPage';
 // Dashboard Pages
 import { DashboardPage } from './pages/dashboard/DashboardPage';
 import { InvoicesPage } from './pages/dashboard/InvoicesPage';
+import { PartiesPage } from './pages/dashboard/PartiesPage';
+import { ProductsPage } from './pages/dashboard/ProductsPage';
 import { SettingsPage } from './pages/dashboard/SettingsPage';
 import { ReportsPage } from './pages/dashboard/ReportsPage';
 import { ProfilePage } from './pages/dashboard/ProfilePage';
@@ -29,6 +31,9 @@ import { ERPConfigPage } from './pages/dashboard/ERPConfigPage';
 
 // Providers
 import { AuthProvider, useAuth } from './providers/AuthProvider';
+
+// Auth Components
+import { ProtectedRoute } from './components/auth/ProtectedRoute';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -40,25 +45,6 @@ const queryClient = new QueryClient({
     },
   },
 });
-
-// Protected Route Component
-const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
-  const { isAuthenticated, isLoading } = useAuth();
-
-  if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary"></div>
-      </div>
-    );
-  }
-
-  if (!isAuthenticated) {
-    return <Navigate to="/auth/login" replace />;
-  }
-
-  return <>{children}</>;
-};
 
 // Public Route Component (redirect if authenticated)
 const PublicRoute = ({ children }: { children: React.ReactNode }) => {
@@ -120,7 +106,7 @@ const App = () => (
                 <Route
                   path="/dashboard"
                   element={
-                    <ProtectedRoute>
+                    <ProtectedRoute allowedPermissions={['dashboard.view']}>
                       <DashboardPage />
                     </ProtectedRoute>
                   }
@@ -128,15 +114,31 @@ const App = () => (
                 <Route
                   path="/dashboard/invoices"
                   element={
-                    <ProtectedRoute>
+                    <ProtectedRoute allowedPermissions={['invoices.view']}>
                       <InvoicesPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/dashboard/parties"
+                  element={
+                    <ProtectedRoute allowedPermissions={['parties.view']}>
+                      <PartiesPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/dashboard/products"
+                  element={
+                    <ProtectedRoute allowedPermissions={['products.view']}>
+                      <ProductsPage />
                     </ProtectedRoute>
                   }
                 />
                 <Route
                   path="/dashboard/reports"
                   element={
-                    <ProtectedRoute>
+                    <ProtectedRoute allowedPermissions={['reports.view']}>
                       <ReportsPage />
                     </ProtectedRoute>
                   }
@@ -144,7 +146,7 @@ const App = () => (
                 <Route
                   path="/dashboard/erp-config"
                   element={
-                    <ProtectedRoute>
+                    <ProtectedRoute allowedPermissions={['erp.view']}>
                       <ERPConfigPage />
                     </ProtectedRoute>
                   }
@@ -152,7 +154,7 @@ const App = () => (
                 <Route
                   path="/dashboard/settings"
                   element={
-                    <ProtectedRoute>
+                    <ProtectedRoute allowedPermissions={['settings.view']}>
                       <SettingsPage />
                     </ProtectedRoute>
                   }

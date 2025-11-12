@@ -90,9 +90,70 @@ export interface DashboardRecentInvoices {
 }
 
 export interface DashboardOverview {
-  service: DashboardService;
-  counts: DashboardCounts;
-  recent_invoices: DashboardRecentInvoices;
+  service?: DashboardService;
+  company?: {
+    id: number;
+    name: string;
+  } | null;
+  is_aggregated?: boolean;
+  is_super_admin?: boolean;
+  counts?: DashboardCounts;
+  metrics?: {
+    total_companies: number;
+    active_companies: number;
+    inactive_companies: number;
+    total_services: number;
+    total_invoices: number;
+    total_revenue: number;
+    total_users: number;
+    firs_compliance_rate: number;
+  };
+  companies_registered?: {
+    today: number;
+    this_week: number;
+    this_month: number;
+    this_year: number;
+  };
+  latest_companies?: Array<{
+    id: number;
+    name: string;
+    email: string;
+    registered_at: string;
+    registered_date: string;
+  }>;
+  service_usage?: Array<{
+    id: number;
+    name: string;
+    code: string;
+    companies_count: number;
+  }>;
+  companies_chart_data?: Array<{
+    day: string;
+    date: string;
+    count: number;
+  }>;
+  revenue_chart_data?: Array<{
+    month: string;
+    date: string;
+    revenue: number;
+  }>;
+  invoices_by_service?: Array<{
+    service_id: number;
+    service_name: string;
+    ar_invoices: number;
+    ap_invoices: number;
+    total_invoices: number;
+  }>;
+  recent_invoices?: DashboardRecentInvoices | Array<{
+    id: number;
+    invoice_number: string;
+    company_name: string;
+    customer_name: string;
+    total_amount: number;
+    invoice_date: string;
+    status: string;
+    created_at: string;
+  }>;
 }
 
 export interface DashboardApiResponse {
