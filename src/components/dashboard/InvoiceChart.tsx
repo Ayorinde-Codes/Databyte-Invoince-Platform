@@ -78,36 +78,65 @@ export const InvoiceChart: React.FC<InvoiceChartProps> = ({
     </ResponsiveContainer>
   );
 
-  const renderPieChart = () => (
-    <ResponsiveContainer width="100%" height={300}>
-      <PieChart>
-        <Pie
-          data={data}
-          cx="50%"
-          cy="50%"
-          labelLine={false}
-          label={({ name, percent }) =>
-            `${name} ${(percent * 100).toFixed(0)}%`
-          }
-          outerRadius={80}
-          fill="#8884d8"
-          dataKey="value"
-        >
-          {data.map((entry, index) => (
-            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-          ))}
-        </Pie>
-        <Tooltip
-          formatter={(value: number) => [formatCurrency(value), 'Amount']}
-          contentStyle={{
-            backgroundColor: '#fff',
-            border: '1px solid #e5e7eb',
-            borderRadius: '6px',
-          }}
-        />
-      </PieChart>
-    </ResponsiveContainer>
-  );
+  const renderPieChart = () => {
+    // Filter out zero values for the pie chart (they won't render anyway)
+    // But keep all data for the legend below
+    const chartData = data.filter(item => item.value > 0);
+    
+    return (
+      <ResponsiveContainer width="100%" height={300}>
+        <PieChart>
+          {chartData.length > 0 ? (
+            <Pie
+              data={chartData}
+              cx="50%"
+              cy="50%"
+              labelLine={false}
+              label={({ name, percent }) =>
+                `${name} ${(percent * 100).toFixed(0)}%`
+              }
+              outerRadius={80}
+              innerRadius={0}
+              fill="#8884d8"
+              dataKey="value"
+              startAngle={90}
+              endAngle={-270}
+              animationBegin={0}
+              animationDuration={800}
+            >
+              {chartData.map((entry, index) => (
+                <Cell 
+                  key={`cell-${index}`} 
+                  fill={entry.color || COLORS[index % COLORS.length]} 
+                />
+              ))}
+            </Pie>
+          ) : (
+            // Show empty circle when all values are 0
+            <Pie
+              data={[{ name: 'No Data', value: 1 }]}
+              cx="50%"
+              cy="50%"
+              outerRadius={80}
+              innerRadius={0}
+              fill="#e5e7eb"
+              dataKey="value"
+            >
+              <Cell fill="#e5e7eb" />
+            </Pie>
+          )}
+          <Tooltip
+            formatter={(value: number) => [formatCurrency(value), 'Amount']}
+            contentStyle={{
+              backgroundColor: '#fff',
+              border: '1px solid #e5e7eb',
+              borderRadius: '6px',
+            }}
+          />
+        </PieChart>
+      </ResponsiveContainer>
+    );
+  };
 
   const renderLineChart = () => (
     <ResponsiveContainer width="100%" height={300}>
@@ -154,7 +183,31 @@ export const InvoiceChart: React.FC<InvoiceChartProps> = ({
     }
   };
 
+  // Handle empty data first
+  if (!data || data.length === 0) {
+    return (
+      <Card className={className}>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="text-lg">{title}</CardTitle>
+              {description && (
+                <CardDescription className="mt-1">{description}</CardDescription>
+              )}
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center justify-center h-[300px] text-muted-foreground">
+            No data available
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
   const getTotalValue = () => {
+    if (!data || data.length === 0) return 0;
     return data.reduce((sum, item) => sum + item.value, 0);
   };
 
@@ -184,7 +237,7 @@ export const InvoiceChart: React.FC<InvoiceChartProps> = ({
               <div key={item.name} className="flex items-center space-x-2">
                 <div
                   className="w-3 h-3 rounded-full"
-                  style={{ backgroundColor: COLORS[index % COLORS.length] }}
+                  style={{ backgroundColor: item.color || COLORS[index % COLORS.length] }}
                 />
                 <span className="text-sm text-muted-foreground">
                   {item.name}

@@ -128,7 +128,17 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     setIsLoading(true);
 
     try {
-      const response = await apiService.register(userData);
+      // Transform userData to match API signature
+      const apiData = {
+        company_name: userData.name,
+        company_email: userData.email,
+        company_password: userData.password,
+        company_password_confirmation: userData.password,
+        phone: userData.phone,
+        address: userData.address,
+        tin: userData.tin,
+      };
+      const response = await apiService.register(apiData);
 
       if (!response.status || !response.data) {
         throw new Error(response.message || 'Registration failed');

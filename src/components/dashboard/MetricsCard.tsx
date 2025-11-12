@@ -6,6 +6,7 @@ import {
   formatNumber,
   formatPercentage,
 } from '../../utils/helpers';
+import { CURRENCIES } from '../../utils/constants';
 
 interface MetricsCardProps {
   title: string;
@@ -33,36 +34,63 @@ export const MetricsCard: React.FC<MetricsCardProps> = ({
     if (typeof val === 'string') return val;
 
     switch (format) {
-      case 'currency':
-        return formatCurrency(val);
-      case 'percentage':
-        return formatPercentage(val / 100);
-      case 'number':
-        return formatNumber(val);
-      default:
+      case 'currency': {
+        // Abbreviate large currency values for better display
+        const absVal = Math.abs(val as number);
+        const currencyInfo = CURRENCIES.NGN || { symbol: '₦', decimal_places: 2 };
+        const symbol = currencyInfo.symbol;
+
+        if (absVal >= 1000000000) {
+          const abbreviated = ((val as number) / 1000000000).toFixed(1);
+          return `${symbol}${abbreviated}B`;
+        }
+        if (absVal >= 1000000) {
+          const abbreviated = ((val as number) / 1000000).toFixed(1);
+          return `${symbol}${abbreviated}M`;
+        }
+        if (absVal >= 1000) {
+          const abbreviated = ((val as number) / 1000).toFixed(1);
+          return `${symbol}${abbreviated}K`;
+        }
+        return formatCurrency(val as number);
+      }
+      case 'percentage': {
+        return formatPercentage((val as number) / 100);
+      }
+      case 'number': {
+        return formatNumber(val as number);
+      }
+      default: {
         return val.toString();
+      }
     }
   };
 
   const getChangeIcon = () => {
     switch (changeType) {
-      case 'increase':
+      case 'increase': {
         return <TrendingUp className="h-3 w-3 text-green-500" />;
-      case 'decrease':
+      }
+      case 'decrease': {
         return <TrendingDown className="h-3 w-3 text-red-500" />;
-      default:
+      }
+      default: {
         return <Minus className="h-3 w-3 text-gray-500" />;
+      }
     }
   };
 
   const getChangeColor = () => {
     switch (changeType) {
-      case 'increase':
+      case 'increase': {
         return 'text-green-600';
-      case 'decrease':
+      }
+      case 'decrease': {
         return 'text-red-600';
-      default:
+      }
+      default: {
         return 'text-gray-600';
+      }
     }
   };
 
@@ -75,7 +103,9 @@ export const MetricsCard: React.FC<MetricsCardProps> = ({
         {Icon && <Icon className="h-4 w-4 text-muted-foreground" />}
       </CardHeader>
       <CardContent>
-        <div className="text-2xl font-bold mb-1">{formatValue(value)}</div>
+        <div className="text-2xl font-bold mb-1 break-words overflow-hidden text-ellipsis line-clamp-2" title={typeof value === 'number' && format === 'currency' ? formatCurrency(value) : String(value)}>
+          {formatValue(value)}
+        </div>
 
         {change !== undefined && (
           <div className={`flex items-center text-xs ${getChangeColor()}`}>

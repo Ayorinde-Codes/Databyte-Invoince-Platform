@@ -236,10 +236,10 @@ export const LoginPage = () => {
                 </p>
                 <div className="text-sm text-muted-foreground space-y-1">
                   <p>
-                    <strong>Email:</strong> demo@databyte.com
+                    <strong>Email:</strong> admin@abcmanufacturing.com
                   </p>
                   <p>
-                    <strong>Password:</strong> demo123
+                    <strong>Password:</strong> password123
                   </p>
                 </div>
               </div>

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Settings,
   Building,
@@ -57,31 +57,77 @@ import {
 import { DashboardLayout } from '../../components/layout/DashboardLayout';
 import { formatDate } from '../../utils/helpers';
 import { useAuth } from '../../hooks/useAuth';
+import {
+  useCompanyProfile,
+  useUpdateCompanyProfile,
+  useRegenerateApiKeys,
+  useChangePassword,
+} from '../../hooks/useCompany';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Loader2 } from 'lucide-react';
+import { toast } from 'sonner';
 
 export const SettingsPage = () => {
   const { user } = useAuth();
   const [showApiKey, setShowApiKey] = useState(false);
   const [activeTab, setActiveTab] = useState('company');
+  
+  // Company profile hooks
+  const { data: companyProfileResponse, isLoading: isLoadingProfile } = useCompanyProfile();
+  const updateProfile = useUpdateCompanyProfile();
+  const regenerateApiKeys = useRegenerateApiKeys();
+  const changePassword = useChangePassword();
+  
+  const company = companyProfileResponse?.data?.company;
+  
+  // Security settings state
+  const [sessionTimeout, setSessionTimeout] = useState('30');
+  const [loginAlerts, setLoginAlerts] = useState(true);
+  const [passwordForm, setPasswordForm] = useState({
+    current_password: '',
+    password: '',
+    password_confirmation: '',
+  });
+  
+  // Form state for company information
+  const [companyForm, setCompanyForm] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    address: '',
+    city: '',
+    state: '',
+    country: 'Nigeria',
+    tin: '',
+  });
+  
+  // Initialize form when company data loads
+  useEffect(() => {
+    if (company) {
+      setCompanyForm({
+        name: company.name || '',
+        email: company.email || '',
+        phone: company.phone || '',
+        address: company.address || '',
+        city: company.city || '',
+        state: company.state || '',
+        country: company.country || 'Nigeria',
+        tin: company.tin || '',
+      });
+    }
+  }, [company]);
 
-  // Mock data
-  const apiKeys = [
+  // API Keys - using real company data
+  const apiKeys = company?.api_public_key ? [
     {
       id: '1',
-      name: 'Production API Key',
-      key: 'sk_live_51H7...',
-      created: '2024-01-15',
-      lastUsed: '2024-01-20',
+      name: 'API Public Key',
+      key: company.api_public_key,
+      created: company.created_at ? formatDate(company.created_at) : 'N/A',
+      lastUsed: 'N/A',
       status: 'active',
     },
-    {
-      id: '2',
-      name: 'Development API Key',
-      key: 'sk_test_51H7...',
-      created: '2024-01-10',
-      lastUsed: '2024-01-19',
-      status: 'active',
-    },
-  ];
+  ] : [];
 
   const teamMembers = [
     {
@@ -165,64 +211,103 @@ export const SettingsPage = () => {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="space-y-2">
-                    <Label htmlFor="company-name">Company Name</Label>
-                    <Input
-                      id="company-name"
-                      defaultValue="Databyte Technologies"
-                    />
+                {isLoadingProfile ? (
+                  <div className="space-y-4">
+                    <Skeleton className="h-10 w-full" />
+                    <Skeleton className="h-10 w-full" />
+                    <Skeleton className="h-20 w-full" />
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="tax-id">Tax ID / RC Number</Label>
-                    <Input id="tax-id" defaultValue="RC123456789" />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="email">Business Email</Label>
-                    <Input
-                      id="email"
-                      type="email"
-                      defaultValue="contact@databyte.com"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="phone">Phone Number</Label>
-                    <Input id="phone" defaultValue="+234 801 234 5678" />
-                  </div>
-                </div>
+                ) : (
+                  <>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div className="space-y-2">
+                        <Label htmlFor="company-name">Company Name</Label>
+                        <Input
+                          id="company-name"
+                          value={companyForm.name}
+                          onChange={(e) => setCompanyForm({ ...companyForm, name: e.target.value })}
+                          placeholder="Enter company name"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="tax-id">Tax ID / RC Number</Label>
+                        <Input
+                          id="tax-id"
+                          value={companyForm.tin}
+                          onChange={(e) => setCompanyForm({ ...companyForm, tin: e.target.value })}
+                          placeholder="Enter TIN/RC Number"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="email">Business Email</Label>
+                        <Input
+                          id="email"
+                          type="email"
+                          value={companyForm.email}
+                          onChange={(e) => setCompanyForm({ ...companyForm, email: e.target.value })}
+                          placeholder="Enter business email"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="phone">Phone Number</Label>
+                        <Input
+                          id="phone"
+                          value={companyForm.phone}
+                          onChange={(e) => setCompanyForm({ ...companyForm, phone: e.target.value })}
+                          placeholder="Enter phone number"
+                        />
+                      </div>
+                    </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="address">Business Address</Label>
-                  <Textarea
-                    id="address"
-                    defaultValue="123 Business District, Victoria Island, Lagos, Nigeria"
-                    rows={3}
-                  />
-                </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="address">Business Address</Label>
+                      <Textarea
+                        id="address"
+                        value={companyForm.address}
+                        onChange={(e) => setCompanyForm({ ...companyForm, address: e.target.value })}
+                        placeholder="Enter business address"
+                        rows={3}
+                      />
+                    </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  <div className="space-y-2">
-                    <Label htmlFor="city">City</Label>
-                    <Input id="city" defaultValue="Lagos" />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="state">State</Label>
-                    <Input id="state" defaultValue="Lagos" />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="country">Country</Label>
-                    <Select defaultValue="nigeria">
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="nigeria">Nigeria</SelectItem>
-                        <SelectItem value="ghana">Ghana</SelectItem>
-                        <SelectItem value="kenya">Kenya</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                      <div className="space-y-2">
+                        <Label htmlFor="city">City</Label>
+                        <Input
+                          id="city"
+                          value={companyForm.city}
+                          onChange={(e) => setCompanyForm({ ...companyForm, city: e.target.value })}
+                          placeholder="Enter city"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="state">State</Label>
+                        <Input
+                          id="state"
+                          value={companyForm.state}
+                          onChange={(e) => setCompanyForm({ ...companyForm, state: e.target.value })}
+                          placeholder="Enter state"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="country">Country</Label>
+                        <Select
+                          value={companyForm.country.toLowerCase()}
+                          onValueChange={(value) => setCompanyForm({ ...companyForm, country: value })}
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="nigeria">Nigeria</SelectItem>
+                            <SelectItem value="ghana">Ghana</SelectItem>
+                            <SelectItem value="kenya">Kenya</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                  </>
+                )}
 
                 <Separator />
 
@@ -267,9 +352,23 @@ export const SettingsPage = () => {
                 </div>
 
                 <div className="flex justify-end">
-                  <Button>
-                    <Save className="w-4 h-4 mr-2" />
-                    Save Changes
+                  <Button
+                    onClick={() => {
+                      updateProfile.mutate(companyForm);
+                    }}
+                    disabled={updateProfile.isPending || isLoadingProfile}
+                  >
+                    {updateProfile.isPending ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Saving...
+                      </>
+                    ) : (
+                      <>
+                        <Save className="w-4 h-4 mr-2" />
+                        Save Changes
+                      </>
+                    )}
                   </Button>
                 </div>
               </CardContent>
@@ -376,9 +475,25 @@ export const SettingsPage = () => {
                       Manage your API keys for integrations
                     </CardDescription>
                   </div>
-                  <Button>
-                    <Plus className="w-4 h-4 mr-2" />
-                    Generate New Key
+                  <Button
+                    onClick={() => {
+                      if (confirm('Are you sure you want to regenerate your API keys? This will invalidate your current keys.')) {
+                        regenerateApiKeys.mutate();
+                      }
+                    }}
+                    disabled={regenerateApiKeys.isPending}
+                  >
+                    {regenerateApiKeys.isPending ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Regenerating...
+                      </>
+                    ) : (
+                      <>
+                        <RefreshCw className="w-4 h-4 mr-2" />
+                        Regenerate Keys
+                      </>
+                    )}
                   </Button>
                 </div>
               </CardHeader>
@@ -396,53 +511,61 @@ export const SettingsPage = () => {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {apiKeys.map((key) => (
-                        <TableRow key={key.id}>
-                          <TableCell className="font-medium">
-                            {key.name}
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex items-center space-x-2">
-                              <code className="text-sm bg-muted px-2 py-1 rounded">
-                                {showApiKey ? key.key : '••••••••••••••••'}
-                              </code>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => setShowApiKey(!showApiKey)}
-                              >
-                                {showApiKey ? (
-                                  <EyeOff className="w-4 h-4" />
-                                ) : (
-                                  <Eye className="w-4 h-4" />
-                                )}
-                              </Button>
-                              <Button variant="ghost" size="sm">
-                                <Copy className="w-4 h-4" />
-                              </Button>
-                            </div>
-                          </TableCell>
-                          <TableCell>{key.created}</TableCell>
-                          <TableCell>{key.lastUsed}</TableCell>
-                          <TableCell>
-                            <Badge variant="default">{key.status}</Badge>
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <div className="flex justify-end space-x-2">
-                              <Button variant="ghost" size="sm">
-                                <RefreshCw className="w-4 h-4" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="text-red-600"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </Button>
-                            </div>
+                      {apiKeys.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={6} className="text-center text-muted-foreground">
+                            No API keys found
                           </TableCell>
                         </TableRow>
-                      ))}
+                      ) : (
+                        apiKeys.map((key) => (
+                          <TableRow key={key.id}>
+                            <TableCell className="font-medium">
+                              {key.name}
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center space-x-2">
+                                <code className="text-sm bg-muted px-2 py-1 rounded">
+                                  {showApiKey ? key.key : '••••••••••••••••'}
+                                </code>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => setShowApiKey(!showApiKey)}
+                                >
+                                  {showApiKey ? (
+                                    <EyeOff className="w-4 h-4" />
+                                  ) : (
+                                    <Eye className="w-4 h-4" />
+                                  )}
+                                </Button>
+                                <Button variant="ghost" size="sm">
+                                  <Copy className="w-4 h-4" />
+                                </Button>
+                              </div>
+                            </TableCell>
+                            <TableCell>{key.created}</TableCell>
+                            <TableCell>{key.lastUsed}</TableCell>
+                            <TableCell>
+                              <Badge variant="default">{key.status}</Badge>
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <div className="flex justify-end space-x-2">
+                                <Button variant="ghost" size="sm">
+                                  <RefreshCw className="w-4 h-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="text-red-600"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      )}
                     </TableBody>
                   </Table>
                 </div>
@@ -638,7 +761,7 @@ export const SettingsPage = () => {
                         Automatically log out after inactivity
                       </p>
                     </div>
-                    <Select defaultValue="30">
+                    <Select value={sessionTimeout} onValueChange={setSessionTimeout}>
                       <SelectTrigger className="w-[180px]">
                         <SelectValue />
                       </SelectTrigger>
@@ -658,7 +781,7 @@ export const SettingsPage = () => {
                         Get notified of new login attempts
                       </p>
                     </div>
-                    <Switch defaultChecked />
+                    <Switch checked={loginAlerts} onCheckedChange={setLoginAlerts} />
                   </div>
                 </div>
 
@@ -669,20 +792,70 @@ export const SettingsPage = () => {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="current-password">Current Password</Label>
-                      <Input id="current-password" type="password" />
+                      <Input
+                        id="current-password"
+                        type="password"
+                        value={passwordForm.current_password}
+                        onChange={(e) => setPasswordForm({ ...passwordForm, current_password: e.target.value })}
+                        placeholder="Enter current password"
+                      />
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="new-password">New Password</Label>
-                      <Input id="new-password" type="password" />
+                      <Input
+                        id="new-password"
+                        type="password"
+                        value={passwordForm.password}
+                        onChange={(e) => setPasswordForm({ ...passwordForm, password: e.target.value })}
+                        placeholder="Enter new password"
+                      />
                     </div>
                   </div>
-                  <Button variant="outline">Update Password</Button>
-                </div>
-
-                <div className="flex justify-end">
-                  <Button>
-                    <Save className="w-4 h-4 mr-2" />
-                    Save Security Settings
+                  <div className="space-y-2">
+                    <Label htmlFor="confirm-password">Confirm New Password</Label>
+                    <Input
+                      id="confirm-password"
+                      type="password"
+                      value={passwordForm.password_confirmation}
+                      onChange={(e) => setPasswordForm({ ...passwordForm, password_confirmation: e.target.value })}
+                      placeholder="Confirm new password"
+                    />
+                  </div>
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      if (!passwordForm.current_password || !passwordForm.password || !passwordForm.password_confirmation) {
+                        toast.error('Please fill in all password fields');
+                        return;
+                      }
+                      if (passwordForm.password !== passwordForm.password_confirmation) {
+                        toast.error('New password and confirmation do not match');
+                        return;
+                      }
+                      if (passwordForm.password.length < 8) {
+                        toast.error('Password must be at least 8 characters long');
+                        return;
+                      }
+                      changePassword.mutate(passwordForm, {
+                        onSuccess: () => {
+                          setPasswordForm({
+                            current_password: '',
+                            password: '',
+                            password_confirmation: '',
+                          });
+                        },
+                      });
+                    }}
+                    disabled={changePassword.isPending}
+                  >
+                    {changePassword.isPending ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Updating...
+                      </>
+                    ) : (
+                      'Update Password'
+                    )}
                   </Button>
                 </div>
               </CardContent>
