@@ -215,7 +215,7 @@ export const ProductsPage = () => {
     if (!editingProductId || !productDetails?.data) return;
 
     const formData = new FormData(e.currentTarget);
-    const updateData: Partial<Product> = {};
+    const updateData: Record<string, unknown> = {};
 
     // Only include fields that have values
     const fields: Array<keyof Product> = [

@@ -78,7 +78,23 @@ export const SettingsPage = () => {
   const regenerateApiKeys = useRegenerateApiKeys();
   const changePassword = useChangePassword();
   
-  const company = companyProfileResponse?.data?.company;
+  interface CompanyProfile {
+    name?: string;
+    email?: string;
+    phone?: string;
+    address?: string;
+    city?: string;
+    state?: string;
+    country?: string;
+    tin?: string;
+    api_public_key?: string;
+    created_at?: string;
+  }
+
+  const companyData = companyProfileResponse?.data;
+  const company = (companyData && typeof companyData === 'object' && 'company' in companyData)
+    ? (companyData as { company?: CompanyProfile }).company
+    : undefined;
   
   // Security settings state
   const [sessionTimeout, setSessionTimeout] = useState('30');

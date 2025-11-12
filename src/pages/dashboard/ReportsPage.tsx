@@ -52,11 +52,29 @@ interface InvoiceRecord {
   invoice_date: string;
   due_date?: string;
   total_amount: string | number;
-  status: string;
+  status: string | { value?: string | null } | null;
   firs_status?: string | null;
   customer?: { id: number; party_name: string; email?: string } | null;
   vendor?: { id: number; party_name: string; email?: string } | null;
 }
+
+// Helper to safely extract invoice data from response
+const extractInvoiceData = (response: unknown): InvoiceRecord[] => {
+  if (!response || typeof response !== 'object') {
+    return [];
+  }
+  const responseObj = response as Record<string, unknown>;
+  const data = responseObj.data;
+  if (!data || typeof data !== 'object') {
+    return [];
+  }
+  const dataObj = data as Record<string, unknown>;
+  const invoices = dataObj.data;
+  if (Array.isArray(invoices)) {
+    return invoices as InvoiceRecord[];
+  }
+  return [];
+};
 
 export const ReportsPage = () => {
   const [dateRange, setDateRange] = useState('last_30_days');
@@ -92,7 +110,7 @@ export const ReportsPage = () => {
     enabled: !isUserSuperAdmin() && !!dashboardData,
   });
 
-  const error = dashboardError || dashboardResponse?.error || arInvoicesError || apInvoicesError;
+  const error = dashboardError || arInvoicesError || apInvoicesError;
 
   // Calculate Total Revenue from real invoice data
   const totalRevenue = useMemo(() => {
@@ -100,9 +118,8 @@ export const ReportsPage = () => {
       return dashboardData.metrics.total_revenue;
     }
     
-    if (!arInvoicesResponse?.data?.data) return 0;
-    
-    const arInvoices = arInvoicesResponse.data.data as InvoiceRecord[];
+    const arInvoices = extractInvoiceData(arInvoicesResponse);
+    if (arInvoices.length === 0) return 0;
     const total = arInvoices.reduce((sum: number, invoice: InvoiceRecord) => {
       return sum + parseFloat(String(invoice.total_amount || '0'));
     }, 0);
@@ -119,7 +136,8 @@ export const ReportsPage = () => {
       }));
     }
     
-    if (!arInvoicesResponse?.data?.data) {
+    const arInvoices = extractInvoiceData(arInvoicesResponse);
+    if (arInvoices.length === 0) {
       return [
         { name: 'Jan', value: 0 },
         { name: 'Feb', value: 0 },
@@ -130,7 +148,7 @@ export const ReportsPage = () => {
       ];
     }
 
-    const invoices = arInvoicesResponse.data.data as InvoiceRecord[];
+    const invoices = extractInvoiceData(arInvoicesResponse);
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'];
     const monthlyRevenue: Record<string, number> = {};
     
@@ -145,7 +163,7 @@ export const ReportsPage = () => {
         monthlyRevenue[monthName] = 0;
       }
       
-      monthlyRevenue[monthName] += parseFloat(invoice.total_amount || '0');
+      monthlyRevenue[monthName] += parseFloat(String(invoice.total_amount || '0'));
     });
 
     return months.map(month => ({
@@ -156,7 +174,9 @@ export const ReportsPage = () => {
 
   // Calculate Invoice Status Distribution from real data
   const invoiceStatusData = useMemo(() => {
-    if (!arInvoicesResponse?.data?.data && !apInvoicesResponse?.data?.data) {
+    const arInvoices = extractInvoiceData(arInvoicesResponse);
+    const apInvoices = extractInvoiceData(apInvoicesResponse);
+    if (arInvoices.length === 0 && apInvoices.length === 0) {
       return [
         { name: 'Paid', value: 0, color: '#10B981' },
         { name: 'Sent', value: 0, color: '#3B82F6' },
@@ -166,8 +186,8 @@ export const ReportsPage = () => {
     }
 
     const allInvoices = [
-      ...((arInvoicesResponse?.data?.data || []) as InvoiceRecord[]),
-      ...((apInvoicesResponse?.data?.data || []) as InvoiceRecord[]),
+      ...extractInvoiceData(arInvoicesResponse),
+      ...extractInvoiceData(apInvoicesResponse),
     ];
 
     // Define all possible invoice statuses
@@ -191,9 +211,14 @@ export const ReportsPage = () => {
     // Populate status counts from actual invoice data
     allInvoices.forEach((invoice: InvoiceRecord) => {
       // Handle status - could be string or enum object
-      let status = invoice.status || 'draft';
-      if (typeof status === 'object' && status !== null && 'value' in status) {
-        status = status.value;
+      let status: string = 'draft';
+      if (invoice.status) {
+        if (typeof invoice.status === 'string') {
+          status = invoice.status;
+        } else if (typeof invoice.status === 'object' && 'value' in invoice.status) {
+          const statusValue = (invoice.status as { value?: string | null }).value;
+          status = statusValue && typeof statusValue === 'string' ? statusValue : 'draft';
+        }
       }
       status = String(status).toLowerCase();
       
@@ -216,7 +241,8 @@ export const ReportsPage = () => {
 
   // Calculate FIRS Compliance Data
   const firsComplianceData = useMemo(() => {
-    if (!arInvoicesResponse?.data?.data) {
+    const arInvoices = extractInvoiceData(arInvoicesResponse);
+    if (arInvoices.length === 0) {
       return [
         { name: 'Approved', value: 0, color: '#10B981' },
         { name: 'Pending', value: 0, color: '#F59E0B' },
@@ -224,7 +250,7 @@ export const ReportsPage = () => {
       ];
     }
 
-    const invoices = arInvoicesResponse.data.data as InvoiceRecord[];
+    const invoices = extractInvoiceData(arInvoicesResponse);
     const complianceCounts: Record<string, number> = {
       approved: 0,
       pending: 0,
@@ -262,9 +288,8 @@ export const ReportsPage = () => {
 
   // Calculate compliance rate
   const complianceRate = useMemo(() => {
-    if (!arInvoicesResponse?.data?.data) return 0;
-    
-    const invoices = arInvoicesResponse.data.data as InvoiceRecord[];
+    const invoices = extractInvoiceData(arInvoicesResponse);
+    if (invoices.length === 0) return 0;
     const total = invoices.length;
     if (total === 0) return 0;
     
@@ -294,15 +319,14 @@ export const ReportsPage = () => {
 
   // Calculate top customers from real data
   const topCustomers = useMemo(() => {
-    if (!arInvoicesResponse?.data?.data) return [];
-
-    const invoices = arInvoicesResponse.data.data as InvoiceRecord[];
+    const invoices = extractInvoiceData(arInvoicesResponse);
+    if (invoices.length === 0) return [];
     const customerRevenue: Record<string, { name: string; revenue: number; invoices: number }> = {};
 
     invoices.forEach((invoice: InvoiceRecord) => {
       const customerId = invoice.customer?.id || 'unknown';
       const customerName = invoice.customer?.party_name || 'Unknown Customer';
-      const amount = parseFloat(invoice.total_amount || '0');
+      const amount = parseFloat(String(invoice.total_amount || '0'));
 
       if (!customerRevenue[customerId]) {
         customerRevenue[customerId] = {

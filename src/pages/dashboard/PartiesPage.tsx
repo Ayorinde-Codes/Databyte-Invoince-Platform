@@ -235,7 +235,7 @@ export const PartiesPage = () => {
     if (!editingPartyId || !partyDetails?.data) return;
 
     const formData = new FormData(e.currentTarget);
-    const updateData: Partial<Party> = {};
+    const updateData: Record<string, unknown> = {};
 
     // Only include fields that have values
     const fields: Array<keyof Party> = [
