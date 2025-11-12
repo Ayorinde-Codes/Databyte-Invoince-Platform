@@ -36,10 +36,11 @@ export type Permission =
   | 'users.delete'
   | 'reports.view'
   | 'reports.export'
-  | 'services.manage'; // super_admin only
+  | 'services.manage' // super_admin only
+  | '*'; // Wildcard for all permissions
 
 // Role-based permissions mapping
-const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
+const ROLE_PERMISSIONS: Record<Role, (Permission | '*')[]> = {
   super_admin: [
     '*', // All permissions
   ],

@@ -1152,7 +1152,7 @@ class ApiService {
     });
   }
 
-  async testFIRSConnection() {
+  async testFIRSConnectionGeneral() {
     return this.makeRequest(API_ENDPOINTS.firs.testConnection);
   }
 

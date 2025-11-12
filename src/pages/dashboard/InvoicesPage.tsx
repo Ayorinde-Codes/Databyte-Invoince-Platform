@@ -235,9 +235,14 @@ export const InvoicesPage = () => {
   const isLoading = activeTab === 'ar' ? arLoading : apLoading;
   
   // Extract invoices - Laravel pagination returns data in data.data
-  const invoices = currentData?.data?.data || [];
+  const currentDataObj = currentData?.data;
+  const invoices = (currentDataObj && typeof currentDataObj === 'object' && 'data' in currentDataObj && Array.isArray(currentDataObj.data))
+    ? currentDataObj.data
+    : [];
   // Pagination structure: Laravel returns pagination at the root level of data
-  const pagination = currentData?.data || {};
+  const pagination = (currentDataObj && typeof currentDataObj === 'object')
+    ? currentDataObj as Record<string, unknown>
+    : {};
 
   // Mutations
   const deleteAR = useDeleteARInvoice();
@@ -246,7 +251,7 @@ export const InvoicesPage = () => {
   const approveAP = useApproveAPInvoice();
 
   // Calculate summary stats
-  const totalInvoices = pagination.total || 0;
+  const totalInvoices = (typeof pagination.total === 'number') ? pagination.total : 0;
   const totalAmount = invoices.reduce(
     (sum: number, inv: Invoice) =>
       sum + (parseFloat(String(inv.total_amount)) || 0),

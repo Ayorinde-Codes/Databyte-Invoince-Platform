@@ -18,13 +18,6 @@ export const API_CONFIG = {
 
 // API Endpoints
 export const API_ENDPOINTS = {
-  auth: {
-    login: '/auth/login',
-    register: '/auth/register',
-    logout: '/auth/logout',
-    refresh: '/auth/refresh',
-    profile: '/auth/profile',
-  },
   dashboard: {
     overview: '/dashboard/overview',
     customers: '/dashboard/customers',
@@ -128,6 +121,16 @@ export const API_ENDPOINTS = {
     profile: '/company/profile',
     updateProfile: '/company/profile',
     regenerateApiKeys: '/company/regenerate-api-keys',
+  },
+  auth: {
+    login: '/auth/login',
+    register: '/auth/register',
+    logout: '/auth/logout',
+    refresh: '/auth/refresh',
+    profile: '/auth/profile',
+    changePassword: '/auth/change-password',
+    forgotPassword: '/auth/forgot-password',
+    resetPassword: '/auth/reset-password',
   },
 } as const;
 
