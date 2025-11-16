@@ -185,6 +185,7 @@ export const InvoicesPage = () => {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [showDetailsDialog, setShowDetailsDialog] = useState(false);
   const [isValidating, setIsValidating] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [showQRCodeDialog, setShowQRCodeDialog] = useState(false);
   const [selectedQRCode, setSelectedQRCode] = useState<string | null>(null);
   const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
@@ -202,6 +203,7 @@ export const InvoicesPage = () => {
   const canDelete = hasPermission('invoices.delete');
   const canApprove = hasPermission('invoices.approve');
   const canValidateFIRS = hasPermission('firs.validate');
+  const canSubmitFIRS = hasPermission('firs.submit');
 
   // Query parameters
   // Note: Backend doesn't support 'search' parameter for invoices endpoint
@@ -366,6 +368,11 @@ export const InvoicesPage = () => {
         className: 'bg-green-100 text-green-800 border-green-200',
         icon: CheckCircle,
       },
+      validated: {
+        label: 'FIRS Validated',
+        className: 'bg-blue-100 text-blue-800 border-blue-200',
+        icon: Shield,
+      },
       pending: {
         label: 'FIRS Pending',
         className: 'bg-yellow-100 text-yellow-800 border-yellow-200',
@@ -502,6 +509,37 @@ export const InvoicesPage = () => {
       }
     } finally {
       setIsValidating(false);
+    }
+  };
+
+  const handleSubmitInvoice = async (invoice: Invoice) => {
+    setIsSubmitting(true);
+    try {
+      const response = await apiService.submitInvoice({
+        invoice_id: invoice.id,
+        invoice_type: activeTab,
+        validate_with_hoptool: true,
+      });
+
+      if (response.status) {
+        toast.success('Invoice submitted to FIRS successfully');
+        // Invalidate and refetch invoices to get updated data
+        if (activeTab === 'ar') {
+          queryClient.invalidateQueries({ queryKey: ['invoices', 'ar'] });
+          await refetchAR();
+        } else {
+          queryClient.invalidateQueries({ queryKey: ['invoices', 'ap'] });
+          await refetchAP();
+        }
+        // Also invalidate dashboard to refresh counts
+        queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+      } else {
+        toast.error(response.message || 'Failed to submit invoice');
+      }
+    } catch (error: unknown) {
+      toast.error(extractErrorMessage(error, 'Failed to submit invoice'));
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -833,8 +871,8 @@ export const InvoicesPage = () => {
                   <RefreshCw
                     className={`w-4 h-4 mr-2 ${isLoading ? 'animate-spin' : ''}`}
                   />
-                  Refresh
-                </Button>
+                Refresh
+              </Button>
 
                 <Button
                   variant="outline"
@@ -1127,32 +1165,36 @@ export const InvoicesPage = () => {
                               Download PDF
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
-                                      {canValidateFIRS &&
-                                        (!invoice.firs_status ||
-                                          invoice.firs_status === 'pending') && (
-                                          <DropdownMenuItem
-                                            onClick={() =>
-                                              handleValidateFIRS(invoice)
-                                            }
-                                            disabled={isValidating}
-                                          >
-                                            <Shield className="mr-2 h-4 w-4" />
-                                            {isValidating
-                                              ? 'Validating...'
-                                              : 'Validate FIRS'}
-                              </DropdownMenuItem>
-                            )}
-                                      {canApprove &&
-                                        invoice.status !== 'approved' && (
-                                          <DropdownMenuItem
-                                            onClick={() =>
-                                              handleApprove(invoice)
-                                            }
-                                          >
-                                            <CheckCircle className="mr-2 h-4 w-4" />
-                                            Approve Invoice
-                              </DropdownMenuItem>
-                            )}
+                            <DropdownMenuItem
+                              onClick={() => handleValidateFIRS(invoice)}
+                              disabled={
+                                !canValidateFIRS ||
+                                isValidating ||
+                                ['validated', 'submitted', 'approved'].includes(invoice.firs_status || '')
+                              }
+                            >
+                              <Shield className="mr-2 h-4 w-4" />
+                              {isValidating ? 'Validating...' : 'Validate FIRS'}
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => handleSubmitInvoice(invoice)}
+                              disabled={
+                                !canSubmitFIRS ||
+                                !invoice.firs_irn ||
+                                isSubmitting ||
+                                ['submitted', 'approved'].includes(invoice.firs_status || '')
+                              }
+                            >
+                              <Send className="mr-2 h-4 w-4" />
+                              {isSubmitting ? 'Submitting...' : 'Submit to FIRS'}
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => handleApprove(invoice)}
+                              disabled={!canApprove || invoice.status === 'approved'}
+                            >
+                              <CheckCircle className="mr-2 h-4 w-4" />
+                              Approve Invoice
+                            </DropdownMenuItem>
                                       {canDelete && (
                                         <>
                                           <DropdownMenuSeparator />

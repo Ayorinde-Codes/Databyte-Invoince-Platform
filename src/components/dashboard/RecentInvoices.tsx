@@ -17,6 +17,7 @@ import {
   Clock,
   AlertTriangle,
   XCircle,
+  Shield,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -32,7 +33,7 @@ interface Invoice {
   customerAvatar?: string;
   amount: number;
   status: 'paid' | 'sent' | 'overdue' | 'draft' | 'cancelled';
-  firsStatus: 'approved' | 'pending' | 'rejected' | 'not_required';
+  firsStatus: 'approved' | 'validated' | 'submitted' | 'pending' | 'rejected' | 'not_required' | null;
   date: string;
   dueDate?: string;
 }
@@ -87,12 +88,32 @@ export const RecentInvoices: React.FC<RecentInvoicesProps> = ({
     );
   };
 
-  const getFirsStatusBadge = (status: string) => {
+  const getFirsStatusBadge = (status: string | null) => {
+    // Handle null/empty status - show "Not Submitted" like InvoicesPage
+    if (!status) {
+      return (
+        <Badge variant="outline" className="bg-gray-100 text-gray-800 border-gray-200 text-xs">
+          <Clock className="w-3 h-3 mr-1" />
+          Not Submitted
+        </Badge>
+      );
+    }
+
     const statusConfig = {
       approved: {
         label: 'FIRS Approved',
         className: 'bg-green-100 text-green-800 border-green-200',
         icon: CheckCircle,
+      },
+      validated: {
+        label: 'FIRS Validated',
+        className: 'bg-blue-100 text-blue-800 border-blue-200',
+        icon: Shield,
+      },
+      submitted: {
+        label: 'FIRS Submitted',
+        className: 'bg-blue-100 text-blue-800 border-blue-200',
+        icon: Send,
       },
       pending: {
         label: 'FIRS Pending',
