@@ -15,6 +15,8 @@ import {
   TrendingUp,
   Shield,
   HelpCircle,
+  Users,
+  Package,
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -30,6 +32,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { useAuth } from '../../hooks/useAuth';
+import { usePermissions } from '../../hooks/usePermissions';
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -41,6 +44,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const { user, company, logout } = useAuth();
+  const { canManageERP, canManageSettings, hasPermission } = usePermissions();
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -50,32 +54,71 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
       href: '/dashboard',
       icon: Home,
       current: location.pathname === '/dashboard',
+      permission: 'dashboard.view' as const,
     },
     {
       name: 'Invoices',
       href: '/dashboard/invoices',
       icon: FileText,
       current: location.pathname === '/dashboard/invoices',
+      permission: 'invoices.view' as const,
+    },
+    {
+      name: 'Parties',
+      href: '/dashboard/parties',
+      icon: Users,
+      current: location.pathname === '/dashboard/parties',
+      permission: 'parties.view' as const,
+    },
+    {
+      name: 'Products',
+      href: '/dashboard/products',
+      icon: Package,
+      current: location.pathname === '/dashboard/products',
+      permission: 'products.view' as const,
     },
     {
       name: 'Reports',
       href: '/dashboard/reports',
       icon: BarChart3,
       current: location.pathname === '/dashboard/reports',
+      permission: 'reports.view' as const,
     },
     {
       name: 'ERP Config',
       href: '/dashboard/erp-config',
       icon: Database,
       current: location.pathname === '/dashboard/erp-config',
+      permission: 'erp.view' as const,
+      requiresManage: true,
     },
     {
       name: 'Settings',
       href: '/dashboard/settings',
       icon: Settings,
       current: location.pathname === '/dashboard/settings',
+      permission: 'settings.view' as const,
+      requiresManage: true,
     },
   ];
+
+  // Filter navigation based on permissions
+  const filteredNavigation = navigation.filter((item) => {
+    // Check basic permission
+    if (!hasPermission(item.permission)) {
+      return false;
+    }
+    // Check if item requires manage permission
+    if (item.requiresManage) {
+      if (item.href === '/dashboard/erp-config' && !canManageERP()) {
+        return false;
+      }
+      if (item.href === '/dashboard/settings' && !canManageSettings()) {
+        return false;
+      }
+    }
+    return true;
+  });
 
   const handleLogout = () => {
     logout();
@@ -109,7 +152,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
             </Button>
           </div>
           <nav className="flex-1 space-y-1 px-2 py-4">
-            {navigation.map((item) => (
+            {filteredNavigation.map((item) => (
               <Link
                 key={item.name}
                 to={item.href}
@@ -158,7 +201,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
             </Button>
           </div>
           <nav className="flex-1 space-y-1 px-2 py-4">
-            {navigation.map((item) => (
+            {filteredNavigation.map((item) => (
               <Link
                 key={item.name}
                 to={item.href}
