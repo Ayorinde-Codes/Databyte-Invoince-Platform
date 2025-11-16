@@ -150,13 +150,43 @@ class ApiService {
 
       clearTimeout(timeoutId);
 
-      const responseData = await response.json();
+      // Check content type before parsing JSON
+      const contentType = response.headers.get('content-type') || '';
+      let responseData: unknown;
+      
+      try {
+        if (contentType.includes('application/json')) {
+          responseData = await response.json();
+        } else {
+          // If not JSON, read as text
+          const text = await response.text();
+          responseData = { message: text || 'Request failed' };
+        }
+      } catch (parseError) {
+        // If JSON parsing fails, create a basic error response
+        responseData = {
+          message: `Request failed with status ${response.status}`,
+        };
+      }
 
       if (!response.ok) {
+        // Handle 401 Unauthorized - token expired or invalid
+        if (response.status === 401) {
+          // Clear auth data and trigger logout
+          removeLocalStorage(AUTH_CONFIG.token_key);
+          removeLocalStorage(AUTH_CONFIG.user_key);
+          removeLocalStorage(AUTH_CONFIG.company_key);
+          removeLocalStorage(AUTH_CONFIG.refresh_token_key);
+          
+          // Dispatch a custom event that AuthProvider can listen to
+          window.dispatchEvent(new CustomEvent('auth:unauthorized'));
+        }
+        
+        const errorData = responseData as { message?: string; errors?: Record<string, string[]> };
         throw {
           status: false,
-          message: responseData.message || 'Request failed',
-          errors: responseData.errors,
+          message: errorData.message || 'Request failed',
+          errors: errorData.errors,
           statusCode: response.status,
         } as ApiError;
       }
@@ -1094,6 +1124,7 @@ class ApiService {
   async submitInvoice(data: {
     invoice_id: number;
     invoice_type: 'ar' | 'ap';
+    validate_with_hoptool?: boolean;
   }) {
     return this.makeRequest(API_ENDPOINTS.firs.submit, {
       method: 'POST',

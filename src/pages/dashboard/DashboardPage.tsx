@@ -64,40 +64,41 @@ const getNumericValue = (value: number | string | undefined): number => {
   return 0;
 };
 
-const normalizeInvoiceStatus = (
-  status: InvoiceRecord['status']
-): 'paid' | 'sent' | 'overdue' | 'draft' => {
-  const raw =
-    typeof status === 'string'
-      ? status
-      : status && typeof status === 'object' && 'value' in status
-        ? String((status as { value?: unknown }).value ?? '')
-        : '';
-
-  switch (raw.toLowerCase()) {
-    case 'paid':
-      return 'paid';
-    case 'sent':
-      return 'sent';
-    case 'overdue':
-      return 'overdue';
-    default:
-      return 'draft';
+const normalizeInvoiceStatus = (status: InvoiceRecord['status']): string => {
+  // Handle status - could be string or enum object
+  let normalizedStatus: string = 'draft';
+  if (status) {
+    if (typeof status === 'string') {
+      normalizedStatus = status;
+    } else if (typeof status === 'object' && 'value' in status) {
+      const statusValue = (status as { value?: string | null }).value;
+      normalizedStatus = statusValue && typeof statusValue === 'string' ? statusValue : 'draft';
+    }
   }
+  return String(normalizedStatus).toLowerCase();
 };
 
 const normalizeFirsStatus = (
   status: InvoiceRecord['firs_status']
-): 'approved' | 'pending' | 'rejected' | 'not_required' => {
-  switch ((status ?? '').toLowerCase()) {
+): 'approved' | 'validated' | 'submitted' | 'pending' | 'rejected' | 'not_required' | null => {
+  if (!status) {
+    return null; // Return null for empty status, not 'pending'
+  }
+  switch (String(status).toLowerCase()) {
     case 'approved':
       return 'approved';
+    case 'validated':
+      return 'validated';
+    case 'submitted':
+      return 'submitted';
     case 'rejected':
       return 'rejected';
     case 'not_required':
       return 'not_required';
-    default:
+    case 'pending':
       return 'pending';
+    default:
+      return null; // Return null for unknown statuses
   }
 };
 
@@ -376,12 +377,22 @@ export const DashboardPage = () => {
       return [];
     }
 
+    const mapStatus = (status: string): 'draft' | 'paid' | 'cancelled' | 'overdue' | 'sent' => {
+      const normalized = status.toLowerCase();
+      // Map actual statuses to expected union type
+      if (normalized === 'pending' || normalized === 'approved') return 'sent';
+      if (['draft', 'paid', 'cancelled', 'overdue', 'sent'].includes(normalized)) {
+        return normalized as 'draft' | 'paid' | 'cancelled' | 'overdue' | 'sent';
+      }
+      return 'draft'; // Default fallback
+    };
+
     return [
       ...(recentInvoicesData.ar_invoices ?? []).slice(0, 3).map((invoice: DashboardInvoice) => ({
         id: invoice.invoice_number?.trim() || `AR-${invoice.id}`,
         customer: extractPartyName(invoice.customer, 'Unknown Customer'),
         amount: getNumericValue(invoice.total_amount),
-        status: normalizeInvoiceStatus(invoice.status),
+        status: mapStatus(normalizeInvoiceStatus(invoice.status)),
         firsStatus: normalizeFirsStatus(invoice.firs_status),
         date: extractDate(invoice.invoice_date),
         dueDate: extractDate(invoice.due_date),
@@ -390,7 +401,7 @@ export const DashboardPage = () => {
         id: invoice.invoice_number?.trim() || `AP-${invoice.id}`,
         customer: extractPartyName(invoice.vendor, 'Unknown Vendor'),
         amount: getNumericValue(invoice.total_amount),
-        status: normalizeInvoiceStatus(invoice.status),
+        status: mapStatus(normalizeInvoiceStatus(invoice.status)),
         firsStatus: normalizeFirsStatus(invoice.firs_status),
         date: extractDate(invoice.invoice_date),
         dueDate: extractDate(invoice.due_date),

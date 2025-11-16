@@ -80,6 +80,30 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     initializeAuth();
   }, []);
 
+  // Listen for 401 unauthorized events from API service
+  useEffect(() => {
+    const handleUnauthorized = () => {
+      // Clear auth state when API returns 401
+      setUser(null);
+      setCompany(null);
+      setToken(null);
+      removeLocalStorage(AUTH_CONFIG.token_key);
+      removeLocalStorage(AUTH_CONFIG.user_key);
+      removeLocalStorage(AUTH_CONFIG.company_key);
+      removeLocalStorage(AUTH_CONFIG.refresh_token_key);
+      
+      // Redirect to login if not already there
+      if (window.location.pathname !== '/login') {
+        window.location.href = '/login';
+      }
+    };
+
+    window.addEventListener('auth:unauthorized', handleUnauthorized);
+    return () => {
+      window.removeEventListener('auth:unauthorized', handleUnauthorized);
+    };
+  }, []);
+
   // Real login function
   const login = async (credentials: {
     email: string;
@@ -201,32 +225,50 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         null
       );
 
+      // If no refresh token exists, don't attempt refresh (Sanctum tokens don't expire by default)
+      // Only refresh if we have a refresh token mechanism implemented
       if (!storedRefreshToken) {
-        throw new Error('No refresh token available');
+        // Sanctum tokens don't expire by default, so we don't need to refresh
+        // Just return without doing anything
+        return;
       }
 
-      // Mock refresh token API call
-      await new Promise((resolve) => setTimeout(resolve, 500));
-
-      const newToken = 'refreshed-jwt-token-' + Date.now();
-      setToken(newToken);
-      setLocalStorage(AUTH_CONFIG.token_key, newToken);
+      // If refresh token exists, attempt to refresh
+      const response = await apiService.refreshToken();
+      
+      if (response.status && response.data && typeof response.data === 'object' && 'token' in response.data) {
+        const newToken = (response.data as { token: string }).token;
+        setToken(newToken);
+        setLocalStorage(AUTH_CONFIG.token_key, newToken);
+      }
     } catch (error) {
-      console.error('Token refresh failed:', error);
-      logout();
+      // Only logout if we actually had a refresh token and it failed
+      // Don't logout if refresh token simply doesn't exist (normal for Sanctum)
+      const storedRefreshToken = getLocalStorage(
+        AUTH_CONFIG.refresh_token_key,
+        null
+      );
+      
+      if (storedRefreshToken) {
+        console.error('Token refresh failed:', error);
+        // Only logout if we had a refresh token and it failed
+        logout();
+      }
+      // Otherwise, silently ignore (Sanctum tokens don't need refresh)
     }
   }, [logout]);
 
-  // Auto-refresh token before expiry
-  useEffect(() => {
-    if (!token) return;
-
-    const refreshInterval = setInterval(() => {
-      refreshToken();
-    }, AUTH_CONFIG.refresh_threshold);
-
-    return () => clearInterval(refreshInterval);
-  }, [token, refreshToken]);
+  // Disable auto-refresh for now since Sanctum tokens don't expire by default
+  // Uncomment this if you implement a refresh token mechanism
+  // useEffect(() => {
+  //   if (!token) return;
+  //
+  //   const refreshInterval = setInterval(() => {
+  //     refreshToken();
+  //   }, AUTH_CONFIG.refresh_threshold);
+  //
+  //   return () => clearInterval(refreshInterval);
+  // }, [token, refreshToken]);
 
   const value: AuthContextType = {
     user,
