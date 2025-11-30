@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import {
@@ -93,6 +93,14 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover';
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '@/components/ui/command';
 import { formatCurrency, formatDate, isOverdue } from '../../utils/helpers';
 import { DashboardLayout } from '../../components/layout/DashboardLayout';
 import {
@@ -100,13 +108,16 @@ import {
   useAPInvoices,
   useDeleteARInvoice,
   useDeleteAPInvoice,
-  useApproveARInvoice,
-  useApproveAPInvoice,
 } from '@/hooks/useInvoices';
 import { usePermissions } from '@/hooks/usePermissions';
-import { apiService } from '@/services/api';
+import { apiService, ApiError } from '@/services/api';
 import { toast } from 'sonner';
 import { extractErrorMessage } from '@/utils/error';
+import { useHsnCodes, useInvoiceTypes } from '@/hooks/useFIRS';
+import {
+  useUpdateARInvoiceFirsFields,
+  useUpdateAPInvoiceFirsFields,
+} from '@/hooks/useInvoices';
 
 type InvoiceType = 'ar' | 'ap';
 
@@ -136,6 +147,9 @@ interface Invoice {
   firs_status: string | null;
   firs_irn: string | null;
   firs_qr_code: string | null;
+  firs_invoice_type_code?: string | null;
+  firs_note?: string | null;
+  previous_invoice_irn?: string | null;
   customer?: { id: number; party_name: string; email?: string };
   vendor?: { id: number; party_name: string; email?: string };
   items?: InvoiceItem[];
@@ -196,14 +210,85 @@ export const InvoicesPage = () => {
     suggestions?: string[];
     message?: string;
   } | null>(null);
+  const [editingItemId, setEditingItemId] = useState<number | null>(null);
+  const [editingHsnCode, setEditingHsnCode] = useState<string>('');
+  const [isUpdatingItem, setIsUpdatingItem] = useState(false);
+  const [hsnCodePopoverOpen, setHsnCodePopoverOpen] = useState<number | null>(null);
+
+  // FIRS fields state
+  const [firsInvoiceTypeCode, setFirsInvoiceTypeCode] = useState<string>('');
+  const [firsNote, setFirsNote] = useState<string>('');
+  const [previousInvoiceIrn, setPreviousInvoiceIrn] = useState<string>('');
+  const [isUpdatingFirsFields, setIsUpdatingFirsFields] = useState(false);
+  const [invoiceTypePopoverOpen, setInvoiceTypePopoverOpen] = useState(false);
+  const [showFirsFieldsDialog, setShowFirsFieldsDialog] = useState(false);
+  const [editingInvoiceForFirs, setEditingInvoiceForFirs] = useState<Invoice | null>(null);
+
+  // FIRS fields update mutations
+  const updateARFirsFields = useUpdateARInvoiceFirsFields();
+  const updateAPFirsFields = useUpdateAPInvoiceFirsFields();
+
+  // Fetch HSN codes for dropdown
+  const { data: hsnCodesData, isLoading: isLoadingHsnCodes } = useHsnCodes();
+  
+  // Fetch invoice types for dropdown
+  const { data: invoiceTypesData, isLoading: isLoadingInvoiceTypes } = useInvoiceTypes();
+  
+  // Extract HSN codes array (handle different response structures)
+  const hsnCodes = useMemo(() => {
+    if (!hsnCodesData) return [];
+    if (Array.isArray(hsnCodesData)) return hsnCodesData;
+    // Handle object with codes/data array
+    const codes = hsnCodesData.codes || hsnCodesData.data || [];
+    return Array.isArray(codes) ? codes : [];
+  }, [hsnCodesData]);
+  
+  // Extract invoice types array (handle different response structures)
+  const invoiceTypes = useMemo(() => {
+    if (!invoiceTypesData) return [];
+    if (Array.isArray(invoiceTypesData)) return invoiceTypesData;
+    // Handle object with codes/data array
+    const types = invoiceTypesData.codes || invoiceTypesData.data || [];
+    return Array.isArray(types) ? types : [];
+  }, [invoiceTypesData]);
+  
+  const getInvoiceTypeLabel = useCallback(
+    (invoiceTypeCode: string | null | undefined): string => {
+      if (!invoiceTypeCode) return '';
+      const type = invoiceTypes.find((t: { code?: string; value?: string }) => t.code === invoiceTypeCode);
+      return type?.value || '';
+    },
+    [invoiceTypes]
+  );
+
+  // Check if invoice type requires previous invoice IRN
+  const requiresPreviousIrn = useCallback((invoiceTypeCode: string | null | undefined): boolean => {
+    if (!invoiceTypeCode) return false;
+    const typeLabel = getInvoiceTypeLabel(invoiceTypeCode);
+    if (!typeLabel) return false;
+    const value = typeLabel.toLowerCase();
+    return value.includes('credit note') || value.includes('debit note');
+  }, [getInvoiceTypeLabel]);
+  
+  // Extract HSN code values for display (handle objects with hscode/description or simple strings)
+  const getHsnCodeValue = (code: string | { hscode?: string; code?: string; value?: string; name?: string }): string => {
+    if (typeof code === 'string') return code;
+    return code.hscode || code.code || code.value || code.name || '';
+  };
+  
+  const getHsnCodeDisplay = (code: string | { hscode?: string; description?: string; code?: string; value?: string; name?: string }): string => {
+    if (typeof code === 'string') return code;
+    const codeValue = code.hscode || code.code || code.value || code.name || '';
+    const description = code.description ? ` - ${code.description}` : '';
+    return codeValue + description;
+  };
 
   const { canWrite, hasPermission } = usePermissions();
   const canCreate = hasPermission('invoices.create');
   const canUpdate = hasPermission('invoices.update');
   const canDelete = hasPermission('invoices.delete');
-  const canApprove = hasPermission('invoices.approve');
   const canValidateFIRS = hasPermission('firs.validate');
-  const canSubmitFIRS = hasPermission('firs.submit');
+  const canSignFIRS = hasPermission('firs.submit'); // Permission name may still be 'firs.submit' in backend
 
   // Query parameters
   // Note: Backend doesn't support 'search' parameter for invoices endpoint
@@ -249,8 +334,6 @@ export const InvoicesPage = () => {
   // Mutations
   const deleteAR = useDeleteARInvoice();
   const deleteAP = useDeleteAPInvoice();
-  const approveAR = useApproveARInvoice();
-  const approveAP = useApproveAPInvoice();
 
   // Calculate summary stats
   const totalInvoices = (typeof pagination.total === 'number') ? pagination.total : 0;
@@ -275,7 +358,12 @@ export const InvoicesPage = () => {
     const matchesFirs =
       firsFilter === 'all' ||
       (firsFilter === 'not_submitted' && !invoice.firs_status) ||
-      invoice.firs_status === firsFilter;
+      (firsFilter === 'signed' && invoice.firs_status === 'signed') ||
+      (firsFilter === 'cancelled' &&
+        (invoice.firs_status === 'cancelled' || invoice.firs_status === 'rejected')) ||
+      (firsFilter !== 'signed' &&
+        firsFilter !== 'cancelled' &&
+        invoice.firs_status === firsFilter);
 
     // Search is already handled server-side, but we keep this for client-side search if needed
     const matchesSearch =
@@ -333,6 +421,11 @@ export const InvoicesPage = () => {
         className: 'bg-purple-100 text-purple-800 border-purple-200',
         icon: CheckCircle,
       },
+      cancelled: {
+        label: 'Cancelled',
+        className: 'bg-gray-100 text-gray-800 border-gray-200',
+        icon: XCircle,
+      },
     };
 
     const config = statusConfig[status] || statusConfig.draft;
@@ -378,10 +471,15 @@ export const InvoicesPage = () => {
         className: 'bg-yellow-100 text-yellow-800 border-yellow-200',
         icon: Clock,
       },
-      submitted: {
-        label: 'FIRS Submitted',
-        className: 'bg-blue-100 text-blue-800 border-blue-200',
+      signed: {
+        label: 'FIRS Signed',
+        className: 'bg-purple-100 text-purple-800 border-purple-200',
         icon: Send,
+      },
+      cancelled: {
+        label: 'FIRS Cancelled',
+        className: 'bg-gray-100 text-gray-800 border-gray-200',
+        icon: XCircle,
       },
       rejected: {
         label: 'FIRS Rejected',
@@ -426,17 +524,6 @@ export const InvoicesPage = () => {
     }
   };
 
-  const handleApprove = async (invoice: Invoice) => {
-    try {
-      if (activeTab === 'ar') {
-        await approveAR.mutateAsync(invoice.id);
-      } else {
-        await approveAP.mutateAsync(invoice.id);
-      }
-    } catch (error) {
-      // Error handled by mutation
-    }
-  };
 
   const handleValidateFIRS = async (invoice: Invoice) => {
     setIsValidating(true);
@@ -460,36 +547,61 @@ export const InvoicesPage = () => {
         queryClient.invalidateQueries({ queryKey: ['dashboard'] });
       } else {
         // Check if response has validation details
-        const responseData =
-          response.data && typeof response.data === 'object'
+        // Backend returns: { status: false, message: "...", data: { errors: [...], warnings: [...], suggestions: [...] } }
+        const validationData = 
+          response.data && typeof response.data === 'object' && 'data' in response.data
+            ? (response.data.data as ValidationDetails)
+            : response.data && typeof response.data === 'object' && ('errors' in response.data || 'warnings' in response.data)
             ? (response.data as ValidationDetails)
             : undefined;
 
         if (
-          responseData &&
-          (responseData.errors?.length ||
-            responseData.warnings?.length ||
-            responseData.suggestions?.length)
+          validationData &&
+          (validationData.errors?.length ||
+            validationData.warnings?.length ||
+            validationData.suggestions?.length)
         ) {
           setValidationResult({
-            errors: responseData.errors ?? [],
-            warnings: responseData.warnings ?? [],
-            suggestions: responseData.suggestions ?? [],
+            errors: validationData.errors ?? [],
+            warnings: validationData.warnings ?? [],
+            suggestions: validationData.suggestions ?? [],
             message: response.message || 'Validation failed',
           });
           setShowValidationDialog(true);
+          
+          // Also show errors in toast for visibility
+          if (validationData.errors && validationData.errors.length > 0) {
+            const errorMessages = validationData.errors.slice(0, 3).join('; ');
+            const moreCount = validationData.errors.length > 3 ? ` (+${validationData.errors.length - 3} more)` : '';
+            toast.error(`${response.message || 'Validation failed'}: ${errorMessages}${moreCount}`, {
+              duration: 8000,
+            });
+          }
         } else {
-          toast.error(response.message || 'Validation failed');
+          // If no structured errors, show the message and try to extract any error info
+          const errorMessage = response.message || 'Validation failed';
+          toast.error(errorMessage);
         }
       }
     } catch (error: unknown) {
-      // Check if error response has validation details
-      const maybeAxiosError = error as AxiosErrorLike;
-      const errorData =
-        maybeAxiosError.response?.data && typeof maybeAxiosError.response.data === 'object'
-          ? (maybeAxiosError.response.data as ValidationErrorResponse)
-          : undefined;
-      const validationData = errorData?.data;
+
+      const apiError = error as ApiError & { 
+        data?: ValidationDetails; 
+        response?: { status?: boolean; message?: string; data?: ValidationDetails };
+      };
+      
+      let validationData: ValidationDetails | undefined;
+      let errorMessage = apiError.message || 'Validation failed';
+      
+      if (apiError.data && typeof apiError.data === 'object' && ('errors' in apiError.data || 'warnings' in apiError.data)) {
+        validationData = apiError.data as ValidationDetails;
+      } else if (apiError.response && typeof apiError.response === 'object') {
+        const response = apiError.response as { data?: ValidationDetails; message?: string };
+        if (response.data && typeof response.data === 'object' && ('errors' in response.data || 'warnings' in response.data)) {
+          validationData = response.data;
+          errorMessage = response.message || errorMessage;
+        }
+      }
 
       if (
         validationData &&
@@ -499,30 +611,39 @@ export const InvoicesPage = () => {
           errors: validationData.errors ?? [],
           warnings: validationData.warnings ?? [],
           suggestions: validationData.suggestions ?? [],
-          message:
-            errorData?.message ||
-            (error instanceof Error ? error.message : 'Validation failed'),
+          message: errorMessage,
         });
         setShowValidationDialog(true);
+        
+        // Also show errors in toast for visibility
+        if (validationData.errors && validationData.errors.length > 0) {
+          const errorMessages = validationData.errors.slice(0, 3).join('; ');
+          const moreCount = validationData.errors.length > 3 ? ` (+${validationData.errors.length - 3} more)` : '';
+          toast.error(`${errorMessage}: ${errorMessages}${moreCount}`, {
+            duration: 8000,
+          });
+        }
       } else {
-        toast.error(extractErrorMessage(error, 'Failed to validate invoice'));
+        // Try to extract any error message from the response
+        const fallbackMessage = apiError.message || extractErrorMessage(error, 'Failed to validate invoice');
+        toast.error(fallbackMessage);
       }
     } finally {
       setIsValidating(false);
     }
   };
 
-  const handleSubmitInvoice = async (invoice: Invoice) => {
+  const handleSignInvoice = async (invoice: Invoice) => {
     setIsSubmitting(true);
     try {
-      const response = await apiService.submitInvoice({
+      const response = await apiService.signInvoice({
         invoice_id: invoice.id,
         invoice_type: activeTab,
         validate_with_hoptool: true,
       });
 
       if (response.status) {
-        toast.success('Invoice submitted to FIRS successfully');
+        toast.success('Invoice signed successfully');
         // Invalidate and refetch invoices to get updated data
         if (activeTab === 'ar') {
           queryClient.invalidateQueries({ queryKey: ['invoices', 'ar'] });
@@ -534,12 +655,45 @@ export const InvoicesPage = () => {
         // Also invalidate dashboard to refresh counts
         queryClient.invalidateQueries({ queryKey: ['dashboard'] });
       } else {
-        toast.error(response.message || 'Failed to submit invoice');
+        toast.error(response.message || 'Failed to sign invoice');
       }
     } catch (error: unknown) {
-      toast.error(extractErrorMessage(error, 'Failed to submit invoice'));
+      toast.error(extractErrorMessage(error, 'Failed to sign invoice'));
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleUpdatePayment = async (
+    invoice: Invoice,
+    paymentStatus: 'PENDING' | 'PAID' | 'REJECTED'
+  ) => {
+    try {
+      const response = await apiService.updatePayment({
+        invoice_id: invoice.id,
+        invoice_type: activeTab,
+        payment_status: paymentStatus,
+      });
+
+      if (response.status) {
+        toast.success(`Payment status updated to ${paymentStatus} successfully`);
+        // Invalidate and refetch invoices to get updated data
+        if (activeTab === 'ar') {
+          queryClient.invalidateQueries({ queryKey: ['invoices', 'ar'] });
+          await refetchAR();
+        } else {
+          queryClient.invalidateQueries({ queryKey: ['invoices', 'ap'] });
+          await refetchAP();
+        }
+        // Also invalidate dashboard to refresh counts
+        queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+      } else {
+        toast.error(response.message || `Failed to update payment status to ${paymentStatus}`);
+      }
+    } catch (error: unknown) {
+      toast.error(
+        extractErrorMessage(error, `Failed to update payment status to ${paymentStatus}`)
+      );
     }
   };
 
@@ -624,9 +778,143 @@ export const InvoicesPage = () => {
     setShowDetailsDialog(true);
   };
 
+  const handleStartEditHsn = (item: InvoiceItem) => {
+    setEditingItemId(item.id);
+    setEditingHsnCode(item.hsn_code || '');
+  };
+
+  const handleCancelEditHsn = () => {
+    setEditingItemId(null);
+    setEditingHsnCode('');
+    setHsnCodePopoverOpen(null);
+  };
+
+  const handleSaveHsnCode = async (invoice: Invoice, item: InvoiceItem) => {
+    if (!editingHsnCode.trim()) {
+      toast.error('HSN code cannot be empty');
+      return;
+    }
+
+    setIsUpdatingItem(true);
+    try {
+      if (activeTab === 'ar') {
+        await apiService.updateARInvoiceItemHsnCode(invoice.id, item.id, editingHsnCode.trim());
+      } else {
+        await apiService.updateAPInvoiceItemHsnCode(invoice.id, item.id, editingHsnCode.trim());
+      }
+
+      toast.success('HSN code updated successfully');
+      
+      // Invalidate and refetch invoices to get updated data
+      if (activeTab === 'ar') {
+        queryClient.invalidateQueries({ queryKey: ['invoices', 'ar'] });
+        await refetchAR();
+      } else {
+        queryClient.invalidateQueries({ queryKey: ['invoices', 'ap'] });
+        await refetchAP();
+      }
+
+      // Update selected invoice if it's the same one
+      if (selectedInvoice && selectedInvoice.id === invoice.id) {
+        const updatedItems = selectedInvoice.items?.map(i => 
+          i.id === item.id ? { ...i, hsn_code: editingHsnCode.trim() } : i
+        );
+        setSelectedInvoice({ ...selectedInvoice, items: updatedItems });
+      }
+
+      setEditingItemId(null);
+      setEditingHsnCode('');
+      setHsnCodePopoverOpen(null);
+    } catch (error: unknown) {
+      toast.error(extractErrorMessage(error, 'Failed to update HSN code'));
+    } finally {
+      setIsUpdatingItem(false);
+    }
+  };
+
   const handleViewQRCode = (qrCode: string) => {
     setSelectedQRCode(qrCode);
     setShowQRCodeDialog(true);
+  };
+
+  const handleOpenFirsFieldsDialog = (invoice: Invoice) => {
+    setEditingInvoiceForFirs(invoice);
+    setFirsInvoiceTypeCode(invoice.firs_invoice_type_code || '');
+    setFirsNote(invoice.firs_note || '');
+    setPreviousInvoiceIrn(invoice.previous_invoice_irn || '');
+    setShowFirsFieldsDialog(true);
+  };
+
+  const handleCloseFirsFieldsDialog = () => {
+    setShowFirsFieldsDialog(false);
+    setEditingInvoiceForFirs(null);
+    setFirsInvoiceTypeCode('');
+    setFirsNote('');
+    setPreviousInvoiceIrn('');
+    setInvoiceTypePopoverOpen(false);
+  };
+
+  const handleSaveFirsFields = async () => {
+    if (!editingInvoiceForFirs) return;
+
+    if (!firsInvoiceTypeCode.trim()) {
+      toast.error('Invoice type code is required');
+      return;
+    }
+
+    if (!firsNote.trim()) {
+      toast.error('FIRS note is required');
+      return;
+    }
+
+    const needsPreviousIrn = requiresPreviousIrn(firsInvoiceTypeCode);
+    if (needsPreviousIrn && !previousInvoiceIrn.trim()) {
+      toast.error('Previous invoice IRN is required for credit note or debit note invoices');
+      return;
+    }
+
+    setIsUpdatingFirsFields(true);
+    try {
+      const updateData: {
+        firs_invoice_type_code: string;
+        firs_note: string;
+        previous_invoice_irn?: string;
+      } = {
+        firs_invoice_type_code: firsInvoiceTypeCode.trim(),
+        firs_note: firsNote.trim(),
+      };
+
+      if (needsPreviousIrn && previousInvoiceIrn.trim()) {
+        updateData.previous_invoice_irn = previousInvoiceIrn.trim();
+      }
+
+      if (activeTab === 'ar') {
+        await updateARFirsFields.mutateAsync({
+          invoiceId: editingInvoiceForFirs.id,
+          ...updateData,
+        });
+      } else {
+        await updateAPFirsFields.mutateAsync({
+          invoiceId: editingInvoiceForFirs.id,
+          ...updateData,
+        });
+      }
+
+      // Invalidate and refetch invoices
+      if (activeTab === 'ar') {
+        queryClient.invalidateQueries({ queryKey: ['invoices', 'ar'] });
+        await refetchAR();
+      } else {
+        queryClient.invalidateQueries({ queryKey: ['invoices', 'ap'] });
+        await refetchAP();
+      }
+
+      handleCloseFirsFieldsDialog();
+    } catch (error: unknown) {
+      toast.error(extractErrorMessage(error, 'Failed to update FIRS fields'));
+    } finally {
+      setIsUpdatingFirsFields(false);
+    }
   };
 
   const toggleRowExpansion = (invoiceId: number, event?: React.MouseEvent) => {
@@ -856,7 +1144,8 @@ export const InvoicesPage = () => {
                   <SelectItem value="all">All FIRS Status</SelectItem>
                   <SelectItem value="approved">Approved</SelectItem>
                   <SelectItem value="pending">Pending</SelectItem>
-                    <SelectItem value="submitted">Submitted</SelectItem>
+                    <SelectItem value="signed">Signed</SelectItem>
+                    <SelectItem value="cancelled">Cancelled</SelectItem>
                   <SelectItem value="rejected">Rejected</SelectItem>
                   <SelectItem value="not_submitted">Not Submitted</SelectItem>
                 </SelectContent>
@@ -1021,6 +1310,7 @@ export const InvoicesPage = () => {
                     <TableHead>Amount</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>FIRS Status</TableHead>
+                    <TableHead>FIRS Type</TableHead>
                     <TableHead>Date</TableHead>
                     <TableHead>Due Date</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
@@ -1115,6 +1405,22 @@ export const InvoicesPage = () => {
                         </div>
                       </TableCell>
                       <TableCell>
+                        {invoice.firs_invoice_type_code ? (
+                          <div>
+                            <p className="text-sm font-medium">
+                              {invoice.firs_invoice_type_code}
+                            </p>
+                            {getInvoiceTypeLabel(invoice.firs_invoice_type_code) && (
+                              <p className="text-xs text-muted-foreground">
+                                {getInvoiceTypeLabel(invoice.firs_invoice_type_code)}
+                              </p>
+                            )}
+                          </div>
+                        ) : (
+                          <p className="text-sm text-muted-foreground">Not set</p>
+                        )}
+                      </TableCell>
+                      <TableCell>
                         <div className="text-sm">
                                     {formatDate(invoice.invoice_date)}
                         </div>
@@ -1166,35 +1472,84 @@ export const InvoicesPage = () => {
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
                             <DropdownMenuItem
+                              onClick={() => handleOpenFirsFieldsDialog(invoice)}
+                              disabled={
+                                !canUpdate ||
+                                ['cancelled', 'rejected'].includes(invoice.firs_status || '') ||
+                                invoice.status === 'cancelled' ||
+                                ['signed', 'approved'].includes(invoice.firs_status || '')
+                              }
+                            >
+                              <Edit className="mr-2 h-4 w-4" />
+                              Edit FIRS Fields
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
                               onClick={() => handleValidateFIRS(invoice)}
                               disabled={
                                 !canValidateFIRS ||
                                 isValidating ||
-                                ['validated', 'submitted', 'approved'].includes(invoice.firs_status || '')
+                                ['cancelled', 'rejected'].includes(invoice.firs_status || '') ||
+                                invoice.status === 'cancelled' ||
+                                ['validated', 'signed', 'approved'].includes(invoice.firs_status || '')
                               }
                             >
                               <Shield className="mr-2 h-4 w-4" />
                               {isValidating ? 'Validating...' : 'Validate FIRS'}
                             </DropdownMenuItem>
                             <DropdownMenuItem
-                              onClick={() => handleSubmitInvoice(invoice)}
+                              onClick={() => handleSignInvoice(invoice)}
                               disabled={
-                                !canSubmitFIRS ||
+                                !canSignFIRS ||
                                 !invoice.firs_irn ||
                                 isSubmitting ||
-                                ['submitted', 'approved'].includes(invoice.firs_status || '')
+                                ['cancelled', 'rejected'].includes(invoice.firs_status || '') ||
+                                invoice.status === 'cancelled' ||
+                                invoice.firs_status === 'signed' ||
+                                ['approved'].includes(invoice.firs_status || '')
                               }
                             >
                               <Send className="mr-2 h-4 w-4" />
-                              {isSubmitting ? 'Submitting...' : 'Submit to FIRS'}
+                              {isSubmitting ? 'Signing...' : 'Sign Invoice'}
                             </DropdownMenuItem>
-                            <DropdownMenuItem
-                              onClick={() => handleApprove(invoice)}
-                              disabled={!canApprove || invoice.status === 'approved'}
-                            >
-                              <CheckCircle className="mr-2 h-4 w-4" />
-                              Approve Invoice
-                            </DropdownMenuItem>
+                            {invoice.firs_status === 'signed' && (
+                              <>
+                                <DropdownMenuItem
+                                  onClick={() => handleUpdatePayment(invoice, 'PAID')}
+                                  disabled={
+                                    !canSignFIRS ||
+                                    invoice.status === 'paid' ||
+                                    invoice.status === 'cancelled' ||
+                                    ['cancelled', 'rejected'].includes(invoice.firs_status || '')
+                                  }
+                                >
+                                  <CheckCircle className="mr-2 h-4 w-4" />
+                                  Mark as Paid
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() => handleUpdatePayment(invoice, 'PENDING')}
+                                  disabled={
+                                    !canSignFIRS ||
+                                    invoice.status === 'approved' ||
+                                    ['cancelled', 'rejected'].includes(invoice.firs_status || '') ||
+                                    invoice.status === 'cancelled'
+                                  }
+                                >
+                                  <Clock className="mr-2 h-4 w-4" />
+                                  Mark as Pending
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() => handleUpdatePayment(invoice, 'REJECTED')}
+                                  disabled={
+                                    !canSignFIRS ||
+                                    invoice.status === 'cancelled' ||
+                                    ['cancelled', 'rejected'].includes(invoice.firs_status || '')
+                                  }
+                                >
+                                  <XCircle className="mr-2 h-4 w-4" />
+                                  Reject Payment
+                                </DropdownMenuItem>
+                              </>
+                            )}
                                       {canDelete && (
                                         <>
                                           <DropdownMenuSeparator />
@@ -1238,6 +1593,7 @@ export const InvoicesPage = () => {
                                               <TableHead className="w-[50px]">#</TableHead>
                                               <TableHead>Item Code</TableHead>
                                               <TableHead>Description</TableHead>
+                                              <TableHead>HSN Code</TableHead>
                                               <TableHead className="text-right">Qty</TableHead>
                                               <TableHead className="text-right">Unit Price</TableHead>
                                               <TableHead className="text-right">Tax</TableHead>
@@ -1251,15 +1607,8 @@ export const InvoicesPage = () => {
                                                   {index + 1}
                                                 </TableCell>
                                                 <TableCell>
-                                                  <div>
-                                                    <div className="font-medium">
-                                                      {item.item_code || 'N/A'}
-                                                    </div>
-                                                    {item.hsn_code && (
-                                                      <div className="text-xs text-muted-foreground">
-                                                        HSN: {item.hsn_code}
-                                                      </div>
-                                                    )}
+                                                  <div className="font-medium">
+                                                    {item.item_code || 'N/A'}
                                                   </div>
                                                 </TableCell>
                                                 <TableCell>
@@ -1273,6 +1622,111 @@ export const InvoicesPage = () => {
                                                       </div>
                                                     )}
                                                   </div>
+                                                </TableCell>
+                                                <TableCell>
+                                                  {editingItemId === item.id ? (
+                                                    <div className="flex items-center gap-2">
+                                                      <Popover
+                                                        open={hsnCodePopoverOpen === item.id}
+                                                        onOpenChange={(open) => setHsnCodePopoverOpen(open ? item.id : null)}
+                                                      >
+                                                        <PopoverTrigger asChild>
+                                                          <Button
+                                                            variant="outline"
+                                                            role="combobox"
+                                                            className="h-7 w-32 justify-between text-xs"
+                                                            disabled={isUpdatingItem}
+                                                          >
+                                                            {editingHsnCode || 'Select HSN code...'}
+                                                            <ChevronDown className="ml-2 h-3 w-3 shrink-0 opacity-50" />
+                                                          </Button>
+                                                        </PopoverTrigger>
+                                                        <PopoverContent className="w-64 p-0" align="start">
+                                                          <Command>
+                                                            <CommandInput
+                                                              placeholder="Search HSN codes..."
+                                                              className="h-9"
+                                                            />
+                                                            <CommandList>
+                                                              <CommandEmpty>
+                                                                <div className="py-2 text-center text-sm">
+                                                                  <div>No HSN code found.</div>
+                                                                  <div className="text-xs text-muted-foreground mt-1">
+                                                                    Type to enter custom code
+                                                                  </div>
+                                                                </div>
+                                                              </CommandEmpty>
+                                                              <CommandGroup>
+                                                                {isLoadingHsnCodes ? (
+                                                                  <div className="py-2 text-center text-sm text-muted-foreground">
+                                                                    Loading HSN codes...
+                                                                  </div>
+                                                                ) : (
+                                                                  hsnCodes.map((code: string | { hscode?: string; description?: string; code?: string; value?: string; name?: string }) => {
+                                                                    const codeValue = getHsnCodeValue(code);
+                                                                    const displayText = getHsnCodeDisplay(code);
+                                                                    return (
+                                                                      <CommandItem
+                                                                        key={codeValue}
+                                                                        value={codeValue}
+                                                                        onSelect={() => {
+                                                                          setEditingHsnCode(codeValue);
+                                                                          setHsnCodePopoverOpen(null);
+                                                                        }}
+                                                                      >
+                                                                        {displayText}
+                                                                      </CommandItem>
+                                                                    );
+                                                                  })
+                                                                )}
+                                                              </CommandGroup>
+                                                            </CommandList>
+                                                          </Command>
+                                                        </PopoverContent>
+                                                      </Popover>
+                                                      <Input
+                                                        value={editingHsnCode}
+                                                        onChange={(e) => setEditingHsnCode(e.target.value)}
+                                                        placeholder="Or type custom code"
+                                                        className="h-7 text-xs w-32"
+                                                        disabled={isUpdatingItem}
+                                                      />
+                                                      <Button
+                                                        size="sm"
+                                                        variant="ghost"
+                                                        className="h-7 w-7 p-0"
+                                                        onClick={() => handleSaveHsnCode(invoice, item)}
+                                                        disabled={isUpdatingItem}
+                                                      >
+                                                        <CheckCircle className="h-3 w-3 text-green-600" />
+                                                      </Button>
+                                                      <Button
+                                                        size="sm"
+                                                        variant="ghost"
+                                                        className="h-7 w-7 p-0"
+                                                        onClick={handleCancelEditHsn}
+                                                        disabled={isUpdatingItem}
+                                                      >
+                                                        <X className="h-3 w-3 text-red-600" />
+                                                      </Button>
+                                                    </div>
+                                                  ) : (
+                                                    <div className="flex items-center gap-2">
+                                                      <span className="text-sm">
+                                                        {item.hsn_code || 'Not set'}
+                                                      </span>
+                                                      {canUpdate && (
+                                                        <Button
+                                                          size="sm"
+                                                          variant="ghost"
+                                                          className="h-5 w-5 p-0"
+                                                          onClick={() => handleStartEditHsn(item)}
+                                                        >
+                                                          <Edit className="h-3 w-3" />
+                                                        </Button>
+                                                      )}
+                                                    </div>
+                                                  )}
                                                 </TableCell>
                                                 <TableCell className="text-right">
                                                   <div>
@@ -1480,6 +1934,43 @@ export const InvoicesPage = () => {
                     </p>
                   </div>
                 )}
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">
+                    FIRS Invoice Type
+                  </p>
+                  {selectedInvoice.firs_invoice_type_code ? (
+                    <p className="text-sm">
+                      {selectedInvoice.firs_invoice_type_code}
+                      {getInvoiceTypeLabel(selectedInvoice.firs_invoice_type_code) && (
+                        <span className="text-muted-foreground text-xs ml-2">
+                          ({getInvoiceTypeLabel(selectedInvoice.firs_invoice_type_code)})
+                        </span>
+                      )}
+                    </p>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">Not set</p>
+                  )}
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">
+                    FIRS Note
+                  </p>
+                  <p className="text-sm">
+                    {selectedInvoice.firs_note || (
+                      <span className="text-muted-foreground">Not set</span>
+                    )}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">
+                    Previous Invoice IRN
+                  </p>
+                  <p className="text-sm">
+                    {selectedInvoice.previous_invoice_irn || (
+                      <span className="text-muted-foreground">Not required</span>
+                    )}
+                  </p>
+                </div>
               </div>
               <div>
                 <p className="text-sm font-medium text-muted-foreground mb-2">
@@ -1500,12 +1991,176 @@ export const InvoicesPage = () => {
                   </p>
                 )}
               </div>
+              
+              {/* Invoice Items */}
+              {selectedInvoice.items && selectedInvoice.items.length > 0 && (
+                <div className="mt-6">
+                  <h3 className="text-sm font-semibold mb-3">Invoice Items ({selectedInvoice.items.length})</h3>
+                  <div className="rounded-md border">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="w-[50px]">#</TableHead>
+                          <TableHead>Item Code</TableHead>
+                          <TableHead>Description</TableHead>
+                          <TableHead>HSN Code</TableHead>
+                          <TableHead className="text-right">Qty</TableHead>
+                          <TableHead className="text-right">Unit Price</TableHead>
+                          <TableHead className="text-right">Total</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {selectedInvoice.items.map((item: InvoiceItem, index: number) => (
+                          <TableRow key={item.id}>
+                            <TableCell className="font-medium">{index + 1}</TableCell>
+                            <TableCell>{item.item_code || 'N/A'}</TableCell>
+                            <TableCell>
+                              <div className="max-w-md">
+                                <div className="line-clamp-2">{item.description}</div>
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              {editingItemId === item.id ? (
+                                <div className="flex items-center gap-2">
+                                  <Popover
+                                    open={hsnCodePopoverOpen === item.id}
+                                    onOpenChange={(open) => setHsnCodePopoverOpen(open ? item.id : null)}
+                                  >
+                                    <PopoverTrigger asChild>
+                                      <Button
+                                        variant="outline"
+                                        role="combobox"
+                                        className="h-8 w-40 justify-between text-xs"
+                                        disabled={isUpdatingItem}
+                                      >
+                                        {editingHsnCode || 'Select HSN code...'}
+                                        <ChevronDown className="ml-2 h-3 w-3 shrink-0 opacity-50" />
+                                      </Button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-64 p-0" align="start">
+                                      <Command>
+                                        <CommandInput
+                                          placeholder="Search HSN codes..."
+                                          className="h-9"
+                                        />
+                                        <CommandList>
+                                          <CommandEmpty>
+                                            <div className="py-2 text-center text-sm">
+                                              <div>No HSN code found.</div>
+                                              <div className="text-xs text-muted-foreground mt-1">
+                                                Type to enter custom code
+                                              </div>
+                                            </div>
+                                          </CommandEmpty>
+                                          <CommandGroup>
+                                            {isLoadingHsnCodes ? (
+                                              <div className="py-2 text-center text-sm text-muted-foreground">
+                                                Loading HSN codes...
+                                              </div>
+                                            ) : (
+                                              hsnCodes.map((code: string | { hscode?: string; description?: string; code?: string; value?: string; name?: string }) => {
+                                                const codeValue = getHsnCodeValue(code);
+                                                const displayText = getHsnCodeDisplay(code);
+                                                return (
+                                                  <CommandItem
+                                                    key={codeValue}
+                                                    value={codeValue}
+                                                    onSelect={() => {
+                                                      setEditingHsnCode(codeValue);
+                                                      setHsnCodePopoverOpen(null);
+                                                    }}
+                                                  >
+                                                    {displayText}
+                                                  </CommandItem>
+                                                );
+                                              })
+                                            )}
+                                          </CommandGroup>
+                                        </CommandList>
+                                      </Command>
+                                    </PopoverContent>
+                                  </Popover>
+                                  <Input
+                                    value={editingHsnCode}
+                                    onChange={(e) => setEditingHsnCode(e.target.value)}
+                                    placeholder="Or type custom code"
+                                    className="h-8 text-xs w-32"
+                                    disabled={isUpdatingItem}
+                                  />
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-8 w-8 p-0"
+                                    onClick={() => handleSaveHsnCode(selectedInvoice, item)}
+                                    disabled={isUpdatingItem}
+                                  >
+                                    <CheckCircle className="h-4 w-4 text-green-600" />
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-8 w-8 p-0"
+                                    onClick={handleCancelEditHsn}
+                                    disabled={isUpdatingItem}
+                                  >
+                                    <X className="h-4 w-4 text-red-600" />
+                                  </Button>
+                                </div>
+                              ) : (
+                                <div className="flex items-center gap-2">
+                                  <span className="text-sm">
+                                    {item.hsn_code || 'Not set'}
+                                  </span>
+                                  {canUpdate && (
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      className="h-6 w-6 p-0"
+                                      onClick={() => handleStartEditHsn(item)}
+                                    >
+                                      <Edit className="h-3 w-3" />
+                                    </Button>
+                                  )}
+                                </div>
+                              )}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              {typeof item.quantity === 'number'
+                                ? item.quantity.toLocaleString('en-US', {
+                                    minimumFractionDigits: 0,
+                                    maximumFractionDigits: 3,
+                                  })
+                                : item.quantity}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              {formatCurrency(
+                                item.unit_price || 0,
+                                selectedInvoice.currency || 'NGN'
+                              )}
+                            </TableCell>
+                            <TableCell className="text-right font-medium">
+                              {formatCurrency(
+                                item.total_amount || 0,
+                                selectedInvoice.currency || 'NGN'
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </div>
+              )}
             </div>
           )}
           <DialogFooter>
             <Button
               variant="outline"
-              onClick={() => setShowDetailsDialog(false)}
+              onClick={() => {
+                setShowDetailsDialog(false);
+                setEditingItemId(null);
+                setEditingHsnCode('');
+              }}
             >
               Close
             </Button>
@@ -1632,6 +2287,121 @@ export const InvoicesPage = () => {
               }}
             >
               Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* FIRS Fields Dialog */}
+      <Dialog open={showFirsFieldsDialog} onOpenChange={setShowFirsFieldsDialog}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Edit FIRS Fields</DialogTitle>
+            <DialogDescription>
+              Configure invoice type, note, and previous invoice reference for FIRS submission
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 mt-4">
+            {/* Invoice Type Code */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Invoice Type Code *</label>
+              <Popover open={invoiceTypePopoverOpen} onOpenChange={setInvoiceTypePopoverOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    className="w-full justify-between"
+                    disabled={isUpdatingFirsFields || isLoadingInvoiceTypes}
+                  >
+                    {firsInvoiceTypeCode
+                      ? invoiceTypes.find(
+                          (t: { code?: string }) => t.code === firsInvoiceTypeCode
+                        )?.value || firsInvoiceTypeCode
+                      : 'Select invoice type...'}
+                    <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-full p-0" align="start">
+                  <Command>
+                    <CommandInput placeholder="Search invoice types..." className="h-9" />
+                    <CommandList>
+                      <CommandEmpty>
+                        <div className="py-2 text-center text-sm">
+                          <div>No invoice type found.</div>
+                        </div>
+                      </CommandEmpty>
+                      <CommandGroup>
+                        {isLoadingInvoiceTypes ? (
+                          <div className="py-2 text-center text-sm text-muted-foreground">
+                            Loading invoice types...
+                          </div>
+                        ) : (
+                          invoiceTypes.map((type: { code?: string; value?: string }) => (
+                            <CommandItem
+                              key={type.code}
+                              value={type.code || ''}
+                              onSelect={() => {
+                                setFirsInvoiceTypeCode(type.code || '');
+                                setInvoiceTypePopoverOpen(false);
+                                // Clear previous IRN if type doesn't require it
+                                if (!requiresPreviousIrn(type.code)) {
+                                  setPreviousInvoiceIrn('');
+                                }
+                              }}
+                            >
+                              {type.code} - {type.value || type.code}
+                            </CommandItem>
+                          ))
+                        )}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+            </div>
+
+            {/* FIRS Note */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">FIRS Note *</label>
+              <Input
+                value={firsNote}
+                onChange={(e) => setFirsNote(e.target.value)}
+                placeholder="Enter FIRS note..."
+                disabled={isUpdatingFirsFields}
+                className="w-full"
+              />
+            </div>
+
+            {/* Previous Invoice IRN (conditional) */}
+            {requiresPreviousIrn(firsInvoiceTypeCode) && (
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Previous Invoice IRN *</label>
+                <Input
+                  value={previousInvoiceIrn}
+                  onChange={(e) => setPreviousInvoiceIrn(e.target.value)}
+                  placeholder="Enter previous invoice IRN..."
+                  disabled={isUpdatingFirsFields}
+                  className="w-full"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Required for credit note or debit note invoices
+                </p>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={handleCloseFirsFieldsDialog}
+              disabled={isUpdatingFirsFields}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSaveFirsFields}
+              disabled={isUpdatingFirsFields || !firsInvoiceTypeCode.trim() || !firsNote.trim()}
+            >
+              {isUpdatingFirsFields ? 'Saving...' : 'Save'}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -75,10 +75,7 @@ export interface OnboardingData {
   };
   firs_config?: {
     business_id: string;
-    api_key: string;
-    api_secret: string;
     service_id: string;
-    environment: 'sandbox' | 'production';
   };
   permissions?: {
     can_read_invoices: boolean;

@@ -45,6 +45,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 
 import {
   Table,
@@ -62,6 +70,11 @@ import {
   useUpdateCompanyProfile,
   useRegenerateApiKeys,
   useChangePassword,
+  useCompanyUsers,
+  useCreateUser,
+  useAssignUserRole,
+  useCompanyPreferences,
+  useUpdateCompanyPreferences,
 } from '../../hooks/useCompany';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Loader2 } from 'lucide-react';
@@ -71,12 +84,54 @@ export const SettingsPage = () => {
   const { user } = useAuth();
   const [showApiKey, setShowApiKey] = useState(false);
   const [activeTab, setActiveTab] = useState('company');
+  const [showInviteDialog, setShowInviteDialog] = useState(false);
+  const [showEditDialog, setShowEditDialog] = useState<number | null>(null);
+  const [inviteForm, setInviteForm] = useState({
+    name: '',
+    email: '',
+    password: '',
+    password_confirmation: '',
+    role: 'company_user' as 'company_admin' | 'company_user',
+  });
+  const [editForm, setEditForm] = useState({
+    role: 'company_user' as 'company_admin' | 'company_user',
+  });
   
   // Company profile hooks
   const { data: companyProfileResponse, isLoading: isLoadingProfile } = useCompanyProfile();
   const updateProfile = useUpdateCompanyProfile();
   const regenerateApiKeys = useRegenerateApiKeys();
   const changePassword = useChangePassword();
+  
+  // Team members hooks
+  const { data: usersResponse, isLoading: isLoadingUsers } = useCompanyUsers();
+  const createUser = useCreateUser();
+  const assignRole = useAssignUserRole();
+  
+  // Preferences hooks
+  const { data: preferencesResponse, isLoading: isLoadingPreferences } = useCompanyPreferences();
+  const updatePreferences = useUpdateCompanyPreferences();
+  
+  const teamMembers = usersResponse?.data?.users || [];
+  
+  // Extract preferences data
+  const preferencesData = preferencesResponse?.data?.preferences;
+  const preferences = preferencesData || {
+    email_notifications: true,
+    invoice_status_updates: true,
+    firs_compliance_alerts: true,
+    system_maintenance: true,
+  };
+  
+  // Preferences state
+  const [preferencesState, setPreferencesState] = useState(preferences);
+  
+  // Update preferences state when data loads
+  useEffect(() => {
+    if (preferencesData) {
+      setPreferencesState(preferencesData);
+    }
+  }, [preferencesData]);
   
   interface CompanyProfile {
     name?: string;
@@ -145,32 +200,72 @@ export const SettingsPage = () => {
     },
   ] : [];
 
-  const teamMembers = [
-    {
-      id: '1',
-      name: 'John Doe',
-      email: 'john@company.com',
-      role: 'Admin',
-      status: 'active',
-      lastLogin: '2024-01-20',
-    },
-    {
-      id: '2',
-      name: 'Jane Smith',
-      email: 'jane@company.com',
-      role: 'Manager',
-      status: 'active',
-      lastLogin: '2024-01-19',
-    },
-    {
-      id: '3',
-      name: 'Mike Johnson',
-      email: 'mike@company.com',
-      role: 'User',
-      status: 'inactive',
-      lastLogin: '2024-01-15',
-    },
-  ];
+  // Handle invite member
+  const handleInviteMember = () => {
+    if (!inviteForm.name || !inviteForm.email || !inviteForm.password || !inviteForm.password_confirmation) {
+      toast.error('Please fill in all fields');
+      return;
+    }
+    if (inviteForm.password !== inviteForm.password_confirmation) {
+      toast.error('Passwords do not match');
+      return;
+    }
+    if (inviteForm.password.length < 8) {
+      toast.error('Password must be at least 8 characters');
+      return;
+    }
+    createUser.mutate(inviteForm, {
+      onSuccess: () => {
+        setShowInviteDialog(false);
+        setInviteForm({
+          name: '',
+          email: '',
+          password: '',
+          password_confirmation: '',
+          role: 'company_user',
+        });
+      },
+    });
+  };
+
+  // Handle edit user
+  const handleEditUser = (userId: number) => {
+    const member = teamMembers.find((m: any) => m.id === userId);
+    if (member) {
+      setEditForm({ role: member.role || 'company_user' });
+      setShowEditDialog(userId);
+    }
+  };
+
+  // Handle update user role
+  const handleUpdateRole = () => {
+    if (showEditDialog) {
+      assignRole.mutate(
+        { user_id: showEditDialog, role: editForm.role },
+        {
+          onSuccess: () => {
+            setShowEditDialog(null);
+          },
+        }
+      );
+    }
+  };
+
+  // Get role display name
+  const getRoleDisplayName = (role: string) => {
+    if (role === 'company_admin') return 'Admin';
+    if (role === 'company_user') return 'User';
+    return role;
+  };
+
+  // Get status display
+  const getStatusDisplay = (user: any) => {
+    if (user.is_blocked) return { label: 'Blocked', variant: 'destructive' as const };
+    if (user.status === 'active') return { label: 'Active', variant: 'default' as const };
+    if (user.status === 'inactive') return { label: 'Inactive', variant: 'secondary' as const };
+    if (user.approval_status === 'pending') return { label: 'Pending', variant: 'secondary' as const };
+    return { label: user.status || 'Unknown', variant: 'secondary' as const };
+  };
 
   const webhooks = [
     {
@@ -405,74 +500,88 @@ export const SettingsPage = () => {
                       Manage your team members and their permissions
                     </CardDescription>
                   </div>
-                  <Button>
+                  <Button onClick={() => setShowInviteDialog(true)}>
                     <Plus className="w-4 h-4 mr-2" />
                     Invite Member
                   </Button>
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="rounded-md border">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Name</TableHead>
-                        <TableHead>Email</TableHead>
-                        <TableHead>Role</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead>Last Login</TableHead>
-                        <TableHead className="text-right">Actions</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {teamMembers.map((member) => (
-                        <TableRow key={member.id}>
-                          <TableCell className="font-medium">
-                            {member.name}
-                          </TableCell>
-                          <TableCell>{member.email}</TableCell>
-                          <TableCell>
-                            <Badge
-                              variant={
-                                member.role === 'Admin'
-                                  ? 'default'
-                                  : 'secondary'
-                              }
-                            >
-                              {member.role}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
-                            <Badge
-                              variant={
-                                member.status === 'active'
-                                  ? 'default'
-                                  : 'secondary'
-                              }
-                            >
-                              {member.status}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>{member.lastLogin}</TableCell>
-                          <TableCell className="text-right">
-                            <div className="flex justify-end space-x-2">
-                              <Button variant="ghost" size="sm">
-                                <Edit className="w-4 h-4" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="text-red-600"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </Button>
-                            </div>
-                          </TableCell>
+                {isLoadingUsers ? (
+                  <div className="space-y-4">
+                    <Skeleton className="h-12 w-full" />
+                    <Skeleton className="h-12 w-full" />
+                    <Skeleton className="h-12 w-full" />
+                  </div>
+                ) : (
+                  <div className="rounded-md border">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Name</TableHead>
+                          <TableHead>Email</TableHead>
+                          <TableHead>Role</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead>Last Login</TableHead>
+                          <TableHead className="text-right">Actions</TableHead>
                         </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
+                      </TableHeader>
+                      <TableBody>
+                        {teamMembers.length === 0 ? (
+                          <TableRow>
+                            <TableCell colSpan={6} className="text-center text-muted-foreground">
+                              No team members found
+                            </TableCell>
+                          </TableRow>
+                        ) : (
+                          teamMembers.map((member: any) => {
+                            const statusDisplay = getStatusDisplay(member);
+                            return (
+                              <TableRow key={member.id}>
+                                <TableCell className="font-medium">
+                                  {member.name}
+                                </TableCell>
+                                <TableCell>{member.email}</TableCell>
+                                <TableCell>
+                                  <Badge
+                                    variant={
+                                      member.role === 'company_admin'
+                                        ? 'default'
+                                        : 'secondary'
+                                    }
+                                  >
+                                    {getRoleDisplayName(member.role)}
+                                  </Badge>
+                                </TableCell>
+                                <TableCell>
+                                  <Badge variant={statusDisplay.variant}>
+                                    {statusDisplay.label}
+                                  </Badge>
+                                </TableCell>
+                                <TableCell>
+                                  {member.last_login_at
+                                    ? formatDate(member.last_login_at)
+                                    : 'Never'}
+                                </TableCell>
+                                <TableCell className="text-right">
+                                  <div className="flex justify-end space-x-2">
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => handleEditUser(member.id)}
+                                    >
+                                      <Edit className="w-4 h-4" />
+                                    </Button>
+                                  </div>
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })
+                        )}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
@@ -684,64 +793,112 @@ export const SettingsPage = () => {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-0.5">
-                      <Label>Email Notifications</Label>
-                      <p className="text-sm text-muted-foreground">
-                        Receive notifications via email
-                      </p>
-                    </div>
-                    <Switch defaultChecked />
+                {isLoadingPreferences ? (
+                  <div className="space-y-4">
+                    <Skeleton className="h-12 w-full" />
+                    <Skeleton className="h-12 w-full" />
+                    <Skeleton className="h-12 w-full" />
+                    <Skeleton className="h-12 w-full" />
+                    <Skeleton className="h-12 w-full" />
                   </div>
+                ) : (
+                  <>
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between">
+                        <div className="space-y-0.5">
+                          <Label>Email Notifications</Label>
+                          <p className="text-sm text-muted-foreground">
+                            Receive notifications via email
+                          </p>
+                        </div>
+                        <Switch
+                          checked={preferencesState.email_notifications}
+                          onCheckedChange={(checked) =>
+                            setPreferencesState({
+                              ...preferencesState,
+                              email_notifications: checked,
+                            })
+                          }
+                        />
+                      </div>
 
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-0.5">
-                      <Label>Invoice Status Updates</Label>
-                      <p className="text-sm text-muted-foreground">
-                        Get notified when invoice status changes
-                      </p>
+                      <div className="flex items-center justify-between">
+                        <div className="space-y-0.5">
+                          <Label>Invoice Status Updates</Label>
+                          <p className="text-sm text-muted-foreground">
+                            Get notified when invoice status changes
+                          </p>
+                        </div>
+                        <Switch
+                          checked={preferencesState.invoice_status_updates}
+                          onCheckedChange={(checked) =>
+                            setPreferencesState({
+                              ...preferencesState,
+                              invoice_status_updates: checked,
+                            })
+                          }
+                        />
+                      </div>
+
+                      <div className="flex items-center justify-between">
+                        <div className="space-y-0.5">
+                          <Label>FIRS Compliance Alerts</Label>
+                          <p className="text-sm text-muted-foreground">
+                            Alerts for FIRS submission status
+                          </p>
+                        </div>
+                        <Switch
+                          checked={preferencesState.firs_compliance_alerts}
+                          onCheckedChange={(checked) =>
+                            setPreferencesState({
+                              ...preferencesState,
+                              firs_compliance_alerts: checked,
+                            })
+                          }
+                        />
+                      </div>
+
+                      <div className="flex items-center justify-between">
+                        <div className="space-y-0.5">
+                          <Label>System Maintenance</Label>
+                          <p className="text-sm text-muted-foreground">
+                            Notifications about system updates
+                          </p>
+                        </div>
+                        <Switch
+                          checked={preferencesState.system_maintenance}
+                          onCheckedChange={(checked) =>
+                            setPreferencesState({
+                              ...preferencesState,
+                              system_maintenance: checked,
+                            })
+                          }
+                        />
+                      </div>
                     </div>
-                    <Switch defaultChecked />
-                  </div>
 
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-0.5">
-                      <Label>FIRS Compliance Alerts</Label>
-                      <p className="text-sm text-muted-foreground">
-                        Alerts for FIRS submission status
-                      </p>
+                    <div className="flex justify-end">
+                      <Button
+                        onClick={() => {
+                          updatePreferences.mutate(preferencesState);
+                        }}
+                        disabled={updatePreferences.isPending}
+                      >
+                        {updatePreferences.isPending ? (
+                          <>
+                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                            Saving...
+                          </>
+                        ) : (
+                          <>
+                            <Save className="w-4 h-4 mr-2" />
+                            Save Preferences
+                          </>
+                        )}
+                      </Button>
                     </div>
-                    <Switch defaultChecked />
-                  </div>
-
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-0.5">
-                      <Label>Payment Reminders</Label>
-                      <p className="text-sm text-muted-foreground">
-                        Reminders for overdue payments
-                      </p>
-                    </div>
-                    <Switch defaultChecked />
-                  </div>
-
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-0.5">
-                      <Label>System Maintenance</Label>
-                      <p className="text-sm text-muted-foreground">
-                        Notifications about system updates
-                      </p>
-                    </div>
-                    <Switch />
-                  </div>
-                </div>
-
-                <div className="flex justify-end">
-                  <Button>
-                    <Save className="w-4 h-4 mr-2" />
-                    Save Preferences
-                  </Button>
-                </div>
+                  </>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
@@ -878,6 +1035,173 @@ export const SettingsPage = () => {
             </Card>
           </TabsContent>
         </Tabs>
+
+        {/* Invite Member Dialog */}
+        <Dialog open={showInviteDialog} onOpenChange={setShowInviteDialog}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Invite Team Member</DialogTitle>
+              <DialogDescription>
+                Add a new team member to your company
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label htmlFor="invite-name">Name *</Label>
+                <Input
+                  id="invite-name"
+                  value={inviteForm.name}
+                  onChange={(e) => setInviteForm({ ...inviteForm, name: e.target.value })}
+                  placeholder="Enter full name"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="invite-email">Email *</Label>
+                <Input
+                  id="invite-email"
+                  type="email"
+                  value={inviteForm.email}
+                  onChange={(e) => setInviteForm({ ...inviteForm, email: e.target.value })}
+                  placeholder="Enter email address"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="invite-password">Password *</Label>
+                <Input
+                  id="invite-password"
+                  type="password"
+                  value={inviteForm.password}
+                  onChange={(e) => setInviteForm({ ...inviteForm, password: e.target.value })}
+                  placeholder="Enter password (min 8 characters)"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="invite-password-confirm">Confirm Password *</Label>
+                <Input
+                  id="invite-password-confirm"
+                  type="password"
+                  value={inviteForm.password_confirmation}
+                  onChange={(e) => setInviteForm({ ...inviteForm, password_confirmation: e.target.value })}
+                  placeholder="Confirm password"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="invite-role">Role *</Label>
+                <Select
+                  value={inviteForm.role}
+                  onValueChange={(value: 'company_admin' | 'company_user') =>
+                    setInviteForm({ ...inviteForm, role: value })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="company_user">User</SelectItem>
+                    <SelectItem value="company_admin">Admin</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setShowInviteDialog(false);
+                  setInviteForm({
+                    name: '',
+                    email: '',
+                    password: '',
+                    password_confirmation: '',
+                    role: 'company_user',
+                  });
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleInviteMember}
+                disabled={createUser.isPending}
+              >
+                {createUser.isPending ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Inviting...
+                  </>
+                ) : (
+                  'Invite Member'
+                )}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Edit User Dialog */}
+        <Dialog open={showEditDialog !== null} onOpenChange={(open) => !open && setShowEditDialog(null)}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Edit Team Member</DialogTitle>
+              <DialogDescription>
+                Update the role for this team member
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              {showEditDialog && (() => {
+                const member = teamMembers.find((m: any) => m.id === showEditDialog);
+                return member ? (
+                  <>
+                    <div className="space-y-2">
+                      <Label>Name</Label>
+                      <Input value={member.name} disabled className="bg-muted" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Email</Label>
+                      <Input value={member.email} disabled className="bg-muted" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="edit-role">Role *</Label>
+                      <Select
+                        value={editForm.role}
+                        onValueChange={(value: 'company_admin' | 'company_user') =>
+                          setEditForm({ ...editForm, role: value })
+                        }
+                      >
+                        <SelectTrigger id="edit-role">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="company_user">User</SelectItem>
+                          <SelectItem value="company_admin">Admin</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </>
+                ) : null;
+              })()}
+            </div>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setShowEditDialog(null)}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleUpdateRole}
+                disabled={assignRole.isPending}
+              >
+                {assignRole.isPending ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Updating...
+                  </>
+                ) : (
+                  'Update Role'
+                )}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </DashboardLayout>
   );

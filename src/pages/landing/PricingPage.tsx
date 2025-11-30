@@ -247,7 +247,7 @@ export const PricingPage = () => {
                     )}
                   </div>
 
-                  <Link to="/auth/login">
+                  <Link to="/auth/register">
                     <Button
                       className={`w-full ${plan.popular ? 'bg-primary' : ''}`}
                       variant={plan.popular ? 'default' : 'outline'}
@@ -365,7 +365,7 @@ export const PricingPage = () => {
           </p>
 
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Link to="/auth/login">
+            <Link to="/auth/register">
               <Button size="lg" className="text-lg px-8 py-6 h-auto">
                 Start Free Trial
                 <ArrowRight className="ml-2 w-5 h-5" />
