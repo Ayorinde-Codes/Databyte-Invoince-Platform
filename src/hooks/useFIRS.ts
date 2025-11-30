@@ -88,3 +88,54 @@ export const useTestFIRSConnection = () => {
   });
 };
 
+// Query hook for fetching HSN codes
+export const useHsnCodes = () => {
+  return useQuery({
+    queryKey: ['firs', 'hsn-codes'],
+    queryFn: () => apiService.getFIRSHsnCodes(),
+    staleTime: 12 * 60 * 60 * 1000, // 12 hours (matches backend cache)
+    select: (response) => {
+      // Extract the HSN codes array from the response
+      const data = response.data?.data || response.data || [];
+      // Handle different response structures
+      if (Array.isArray(data)) {
+        return data;
+      }
+      // If it's an object with codes array
+      if (data.codes && Array.isArray(data.codes)) {
+        return data.codes;
+      }
+      // If it's an object with data array
+      if (data.data && Array.isArray(data.data)) {
+        return data.data;
+      }
+      return [];
+    },
+  });
+};
+
+// Query hook for fetching invoice types
+export const useInvoiceTypes = () => {
+  return useQuery({
+    queryKey: ['firs', 'invoice-types'],
+    queryFn: () => apiService.getFIRSInvoiceTypes(),
+    staleTime: 12 * 60 * 60 * 1000, // 12 hours (matches backend cache)
+    select: (response) => {
+      // Extract the invoice types array from the response
+      const data = response.data?.data || response.data || [];
+      // Handle different response structures
+      if (Array.isArray(data)) {
+        return data;
+      }
+      // If it's an object with codes/data array
+      if (data.codes && Array.isArray(data.codes)) {
+        return data.codes;
+      }
+      if (data.data && Array.isArray(data.data)) {
+        return data.data;
+      }
+      return [];
+    },
+  });
+};
+

@@ -97,6 +97,8 @@ export interface DashboardOverview {
   } | null;
   is_aggregated?: boolean;
   is_super_admin?: boolean;
+  service_missing?: boolean;
+  setup_url?: string;
   counts?: DashboardCounts;
   metrics?: {
     total_companies: number;

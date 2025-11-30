@@ -78,6 +78,9 @@ export const InvoiceChart: React.FC<InvoiceChartProps> = ({
     </ResponsiveContainer>
   );
 
+  const getDisplayAmount = (item: ChartData) =>
+    typeof item.amount === 'number' ? item.amount : item.value;
+
   const renderPieChart = () => {
     // Filter out zero values for the pie chart (they won't render anyway)
     // But keep all data for the legend below
@@ -126,7 +129,11 @@ export const InvoiceChart: React.FC<InvoiceChartProps> = ({
             </Pie>
           )}
           <Tooltip
-            formatter={(value: number) => [formatCurrency(value), 'Amount']}
+            formatter={(_value: number, _name, props) => {
+              const payload = props?.payload as ChartData | undefined;
+              const amount = payload ? getDisplayAmount(payload) : _value;
+              return [formatCurrency(amount), 'Amount'];
+            }}
             contentStyle={{
               backgroundColor: '#fff',
               border: '1px solid #e5e7eb',
@@ -208,7 +215,7 @@ export const InvoiceChart: React.FC<InvoiceChartProps> = ({
 
   const getTotalValue = () => {
     if (!data || data.length === 0) return 0;
-    return data.reduce((sum, item) => sum + item.value, 0);
+    return data.reduce((sum, item) => sum + getDisplayAmount(item), 0);
   };
 
   return (
@@ -232,19 +239,24 @@ export const InvoiceChart: React.FC<InvoiceChartProps> = ({
         {renderChart()}
 
         {type === 'pie' && (
-          <div className="mt-4 grid grid-cols-2 gap-4">
+          <div className="mt-4 grid grid-cols-3 gap-x-4 gap-y-3">
             {data.map((item, index) => (
-              <div key={item.name} className="flex items-center space-x-2">
+              <div key={item.name} className="flex items-center gap-2">
                 <div
-                  className="w-3 h-3 rounded-full"
+                  className="w-3 h-3 rounded-full flex-shrink-0"
                   style={{ backgroundColor: item.color || COLORS[index % COLORS.length] }}
                 />
-                <span className="text-sm text-muted-foreground">
-                  {item.name}
-                </span>
-                <span className="text-sm font-medium ml-auto">
-                  {formatCurrency(item.value)}
-                </span>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm text-muted-foreground truncate">
+                    {item.name}
+                  </div>
+                  <div className="text-xs font-medium text-foreground">
+                    {formatCurrency(getDisplayAmount(item))}
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    {item.value} {item.value === 1 ? 'invoice' : 'invoices'}
+                  </div>
+                </div>
               </div>
             ))}
           </div>

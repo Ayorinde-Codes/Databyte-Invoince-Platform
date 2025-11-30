@@ -261,7 +261,7 @@ const AboutPage = () => {
               streamline their e-invoicing processes.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <Link to="/login">
+              <Link to="/auth/register">
                 <Button className="bg-white text-blue-600 hover:bg-gray-100 px-8 py-4 text-lg font-medium rounded-lg">
                   Start Free Trial
                   <ArrowRight className="ml-2 w-5 h-5" />
