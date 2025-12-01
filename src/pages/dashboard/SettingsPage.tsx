@@ -80,6 +80,16 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 
+type TeamMember = {
+  id: number;
+  name: string;
+  email: string;
+  role?: string;
+  is_blocked?: boolean;
+  status?: string;
+  approval_status?: string;
+};
+
 export const SettingsPage = () => {
   const { user } = useAuth();
   const [showApiKey, setShowApiKey] = useState(false);
@@ -230,7 +240,7 @@ export const SettingsPage = () => {
 
   // Handle edit user
   const handleEditUser = (userId: number) => {
-    const member = teamMembers.find((m: any) => m.id === userId);
+    const member = teamMembers.find((m: TeamMember) => m.id === userId);
     if (member) {
       setEditForm({ role: member.role || 'company_user' });
       setShowEditDialog(userId);
@@ -259,7 +269,7 @@ export const SettingsPage = () => {
   };
 
   // Get status display
-  const getStatusDisplay = (user: any) => {
+  const getStatusDisplay = (user: TeamMember) => {
     if (user.is_blocked) return { label: 'Blocked', variant: 'destructive' as const };
     if (user.status === 'active') return { label: 'Active', variant: 'default' as const };
     if (user.status === 'inactive') return { label: 'Inactive', variant: 'secondary' as const };
@@ -514,19 +524,19 @@ export const SettingsPage = () => {
                     <Skeleton className="h-12 w-full" />
                   </div>
                 ) : (
-                  <div className="rounded-md border">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Name</TableHead>
-                          <TableHead>Email</TableHead>
-                          <TableHead>Role</TableHead>
-                          <TableHead>Status</TableHead>
-                          <TableHead>Last Login</TableHead>
-                          <TableHead className="text-right">Actions</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
+                <div className="rounded-md border">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Name</TableHead>
+                        <TableHead>Email</TableHead>
+                        <TableHead>Role</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Last Login</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
                         {teamMembers.length === 0 ? (
                           <TableRow>
                             <TableCell colSpan={6} className="text-center text-muted-foreground">
@@ -534,53 +544,53 @@ export const SettingsPage = () => {
                             </TableCell>
                           </TableRow>
                         ) : (
-                          teamMembers.map((member: any) => {
+                          teamMembers.map((member: TeamMember) => {
                             const statusDisplay = getStatusDisplay(member);
                             return (
-                              <TableRow key={member.id}>
-                                <TableCell className="font-medium">
-                                  {member.name}
-                                </TableCell>
-                                <TableCell>{member.email}</TableCell>
-                                <TableCell>
-                                  <Badge
-                                    variant={
+                        <TableRow key={member.id}>
+                          <TableCell className="font-medium">
+                            {member.name}
+                          </TableCell>
+                          <TableCell>{member.email}</TableCell>
+                          <TableCell>
+                            <Badge
+                              variant={
                                       member.role === 'company_admin'
-                                        ? 'default'
-                                        : 'secondary'
-                                    }
-                                  >
+                                  ? 'default'
+                                  : 'secondary'
+                              }
+                            >
                                     {getRoleDisplayName(member.role)}
-                                  </Badge>
-                                </TableCell>
-                                <TableCell>
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
                                   <Badge variant={statusDisplay.variant}>
                                     {statusDisplay.label}
-                                  </Badge>
-                                </TableCell>
+                            </Badge>
+                          </TableCell>
                                 <TableCell>
                                   {member.last_login_at
                                     ? formatDate(member.last_login_at)
                                     : 'Never'}
                                 </TableCell>
-                                <TableCell className="text-right">
-                                  <div className="flex justify-end space-x-2">
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
+                          <TableCell className="text-right">
+                            <div className="flex justify-end space-x-2">
+                              <Button
+                                variant="ghost"
+                                size="sm"
                                       onClick={() => handleEditUser(member.id)}
-                                    >
+                              >
                                       <Edit className="w-4 h-4" />
-                                    </Button>
-                                  </div>
-                                </TableCell>
-                              </TableRow>
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
                             );
                           })
                         )}
-                      </TableBody>
-                    </Table>
-                  </div>
+                    </TableBody>
+                  </Table>
+                </div>
                 )}
               </CardContent>
             </Card>
@@ -803,14 +813,14 @@ export const SettingsPage = () => {
                   </div>
                 ) : (
                   <>
-                    <div className="space-y-4">
-                      <div className="flex items-center justify-between">
-                        <div className="space-y-0.5">
-                          <Label>Email Notifications</Label>
-                          <p className="text-sm text-muted-foreground">
-                            Receive notifications via email
-                          </p>
-                        </div>
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-0.5">
+                      <Label>Email Notifications</Label>
+                      <p className="text-sm text-muted-foreground">
+                        Receive notifications via email
+                      </p>
+                    </div>
                         <Switch
                           checked={preferencesState.email_notifications}
                           onCheckedChange={(checked) =>
@@ -820,15 +830,15 @@ export const SettingsPage = () => {
                             })
                           }
                         />
-                      </div>
+                  </div>
 
-                      <div className="flex items-center justify-between">
-                        <div className="space-y-0.5">
-                          <Label>Invoice Status Updates</Label>
-                          <p className="text-sm text-muted-foreground">
-                            Get notified when invoice status changes
-                          </p>
-                        </div>
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-0.5">
+                      <Label>Invoice Status Updates</Label>
+                      <p className="text-sm text-muted-foreground">
+                        Get notified when invoice status changes
+                      </p>
+                    </div>
                         <Switch
                           checked={preferencesState.invoice_status_updates}
                           onCheckedChange={(checked) =>
@@ -838,15 +848,15 @@ export const SettingsPage = () => {
                             })
                           }
                         />
-                      </div>
+                  </div>
 
-                      <div className="flex items-center justify-between">
-                        <div className="space-y-0.5">
-                          <Label>FIRS Compliance Alerts</Label>
-                          <p className="text-sm text-muted-foreground">
-                            Alerts for FIRS submission status
-                          </p>
-                        </div>
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-0.5">
+                      <Label>FIRS Compliance Alerts</Label>
+                      <p className="text-sm text-muted-foreground">
+                        Alerts for FIRS submission status
+                      </p>
+                    </div>
                         <Switch
                           checked={preferencesState.firs_compliance_alerts}
                           onCheckedChange={(checked) =>
@@ -856,15 +866,15 @@ export const SettingsPage = () => {
                             })
                           }
                         />
-                      </div>
+                  </div>
 
-                      <div className="flex items-center justify-between">
-                        <div className="space-y-0.5">
-                          <Label>System Maintenance</Label>
-                          <p className="text-sm text-muted-foreground">
-                            Notifications about system updates
-                          </p>
-                        </div>
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-0.5">
+                      <Label>System Maintenance</Label>
+                      <p className="text-sm text-muted-foreground">
+                        Notifications about system updates
+                      </p>
+                    </div>
                         <Switch
                           checked={preferencesState.system_maintenance}
                           onCheckedChange={(checked) =>
@@ -874,10 +884,10 @@ export const SettingsPage = () => {
                             })
                           }
                         />
-                      </div>
-                    </div>
+                  </div>
+                </div>
 
-                    <div className="flex justify-end">
+                <div className="flex justify-end">
                       <Button
                         onClick={() => {
                           updatePreferences.mutate(preferencesState);
@@ -891,12 +901,12 @@ export const SettingsPage = () => {
                           </>
                         ) : (
                           <>
-                            <Save className="w-4 h-4 mr-2" />
-                            Save Preferences
+                    <Save className="w-4 h-4 mr-2" />
+                    Save Preferences
                           </>
                         )}
-                      </Button>
-                    </div>
+                  </Button>
+                </div>
                   </>
                 )}
               </CardContent>
@@ -1147,7 +1157,7 @@ export const SettingsPage = () => {
             </DialogHeader>
             <div className="space-y-4 py-4">
               {showEditDialog && (() => {
-                const member = teamMembers.find((m: any) => m.id === showEditDialog);
+                const member = teamMembers.find((m: TeamMember) => m.id === showEditDialog);
                 return member ? (
                   <>
                     <div className="space-y-2">

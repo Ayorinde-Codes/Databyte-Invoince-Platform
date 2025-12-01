@@ -148,6 +148,14 @@ type ERPSyncStatus = {
   [key: string]: unknown;
 };
 
+type AccessPointProvider = {
+  id: number;
+  name: string;
+  code: string;
+  is_active?: boolean;
+  has_credentials?: boolean;
+};
+
 const toERPServiceSummaryArray = (value: unknown): ERPServiceSummary[] => {
   if (!Array.isArray(value)) {
     return [];
@@ -244,7 +252,7 @@ export const ERPConfigPage = () => {
   const [showApiSecret, setShowApiSecret] = useState(false);
   const [erpEditForm, setErpEditForm] = useState<{
     is_active: boolean;
-    setting_value?: Record<string, any>;
+    setting_value?: Record<string, unknown>;
   }>({
     is_active: true,
     setting_value: {},
@@ -355,7 +363,7 @@ export const ERPConfigPage = () => {
   // Parse ERP setting for edit dialog
   const erpSettingData = erpSettingResponse?.data;
   const erpSetting = (erpSettingData && typeof erpSettingData === 'object' && 'setting' in erpSettingData)
-    ? (erpSettingData as { setting?: any }).setting
+    ? (erpSettingData as { setting?: unknown }).setting
     : null;
 
   // Update edit form when ERP setting is loaded
@@ -730,47 +738,47 @@ export const ERPConfigPage = () => {
           <div className="flex items-center gap-3">
             {canManageERP() && (
               <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
-              <DialogTrigger asChild>
-                <Button size="sm">
-                  <Plus className="w-4 h-4 mr-2" />
-                  Add ERP System
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="max-w-md">
-                <DialogHeader>
-                  <DialogTitle>Add ERP System</DialogTitle>
-                  <DialogDescription>
-                    Select an ERP system to integrate with your platform
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="space-y-4">
+                <DialogTrigger asChild>
+                  <Button size="sm">
+                    <Plus className="w-4 h-4 mr-2" />
+                    Add ERP System
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="max-w-md">
+                  <DialogHeader>
+                    <DialogTitle>Add ERP System</DialogTitle>
+                    <DialogDescription>
+                      Select an ERP system to integrate with your platform
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-4">
                     {isLoadingServices ? (
                       <div className="space-y-2">
                         <Skeleton className="h-10 w-full" />
                       </div>
                     ) : (
-                  <div className="space-y-2">
-                    <Label htmlFor="erp-select">ERP System</Label>
-                    <Select value={selectedERP} onValueChange={setSelectedERP}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select ERP system" />
-                      </SelectTrigger>
-                      <SelectContent>
+                      <div className="space-y-2">
+                        <Label htmlFor="erp-select">ERP System</Label>
+                        <Select value={selectedERP} onValueChange={setSelectedERP}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select ERP system" />
+                          </SelectTrigger>
+                          <SelectContent>
                             {erpServices.map((erp) => (
                               <SelectItem key={erp.code} value={erp.code}>
-                            <div>
-                              <div className="font-medium">{erp.name}</div>
-                              <div className="text-sm text-muted-foreground">
+                                <div>
+                                  <div className="font-medium">{erp.name}</div>
+                                  <div className="text-sm text-muted-foreground">
                                     {erp.description || erp.connection_type}
-                              </div>
-                            </div>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+                                  </div>
+                                </div>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
                     )}
-                  <div className="flex justify-end space-x-2">
+                    <div className="flex justify-end space-x-2">
                       <Button
                         variant="outline"
                         onClick={() => {
@@ -813,7 +821,7 @@ export const ERPConfigPage = () => {
                                 is_active: true,
                               });
                               // Close add dialog and open create dialog
-                              setShowAddDialog(false);
+                          setShowAddDialog(false);
                               setShowCreateDialog(true);
                               setSelectedERP('');
                             }
@@ -823,10 +831,10 @@ export const ERPConfigPage = () => {
                       >
                         Continue Setup
                       </Button>
+                    </div>
                   </div>
-                </div>
-              </DialogContent>
-            </Dialog>
+                </DialogContent>
+              </Dialog>
             )}
           </div>
         </div>
@@ -942,46 +950,46 @@ export const ERPConfigPage = () => {
                     </AlertDescription>
                   </Alert>
                 ) : (
-                <div className="rounded-md border">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
+                  <div className="rounded-md border">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
                           {isSuperAdmin && <TableHead>Company</TableHead>}
-                        <TableHead>System</TableHead>
-                        <TableHead>Status</TableHead>
+                          <TableHead>System</TableHead>
+                          <TableHead>Status</TableHead>
                           <TableHead>Type</TableHead>
-                        <TableHead>Last Sync</TableHead>
+                          <TableHead>Last Sync</TableHead>
                           <TableHead>Last Test</TableHead>
                           <TableHead className="text-center">Actions</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
                       {erpConfigurations.map((erp) => (
-                        <TableRow key={erp.id}>
+                            <TableRow key={erp.id}>
                               {isSuperAdmin && (
-                          <TableCell>
-                            <div>
+                                <TableCell>
+                                  <div>
                                     <div className="font-medium">{erp.company?.name || 'N/A'}</div>
-                              <div className="text-sm text-muted-foreground">
+                                    <div className="text-sm text-muted-foreground">
                                       {erp.company?.email || ''}
-                              </div>
-                            </div>
-                          </TableCell>
+                                    </div>
+                                  </div>
+                                </TableCell>
                               )}
-                          <TableCell>
-                            <div>
+                              <TableCell>
+                                <div>
                                   <div className="font-medium">{erp.erp_name || erp.erp_type}</div>
-                              <div className="text-sm text-muted-foreground">
+                                  <div className="text-sm text-muted-foreground">
                                     {erp.connection_type || 'N/A'}
-                              </div>
-                            </div>
-                          </TableCell>
+                                  </div>
+                                </div>
+                              </TableCell>
                               <TableCell>{getStatusBadge(erp)}</TableCell>
-                          <TableCell>
+                              <TableCell>
                                 <Badge variant="outline">{erp.erp_type}</Badge>
-                          </TableCell>
-                          <TableCell>
-                            <div className="text-sm">
+                              </TableCell>
+                              <TableCell>
+                                <div className="text-sm">
                                   {erp.last_sync_at ? (
                                     <div>
                                       <div className="font-medium">{formatDate(erp.last_sync_at)}</div>
@@ -1002,9 +1010,9 @@ export const ERPConfigPage = () => {
                                   ) : (
                                     <span className="text-muted-foreground">Never</span>
                                   )}
-                            </div>
-                          </TableCell>
-                          <TableCell>
+                                </div>
+                              </TableCell>
+                              <TableCell>
                                 <div className="text-sm">
                                   {erp.last_connection_test_at ? (
                                     <div>
@@ -1023,9 +1031,9 @@ export const ERPConfigPage = () => {
                                     <span className="text-muted-foreground">Never tested</span>
                                   )}
                                 </div>
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <div className="flex justify-end space-x-2">
+                              </TableCell>
+                              <TableCell className="text-right">
+                                <div className="flex justify-end space-x-2">
                                   <Button
                                     variant="ghost"
                                     size="sm"
@@ -1036,9 +1044,9 @@ export const ERPConfigPage = () => {
                                     {testConnection.isPending ? (
                                       <Loader2 className="w-4 h-4 animate-spin" />
                                     ) : (
-                                <TestTube className="w-4 h-4" />
+                                      <TestTube className="w-4 h-4" />
                                     )}
-                              </Button>
+                                  </Button>
                                   {canManageERP() && (
                                     <>
                                       <Button
@@ -1060,8 +1068,8 @@ export const ERPConfigPage = () => {
                                         onClick={() => setShowEditDialog(erp.id)}
                                         title="Edit"
                                       >
-                                <Settings className="w-4 h-4" />
-                              </Button>
+                                        <Settings className="w-4 h-4" />
+                                      </Button>
                                       <Button
                                         variant="ghost"
                                         size="sm"
@@ -1072,27 +1080,27 @@ export const ERPConfigPage = () => {
                                         {syncData.isPending || (syncStatus?.has_pending_jobs && showSyncDialog === erp.id) ? (
                                           <Loader2 className="w-4 h-4 animate-spin" />
                                         ) : (
-                                <RefreshCw className="w-4 h-4" />
+                                          <RefreshCw className="w-4 h-4" />
                                         )}
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="text-red-600"
+                                      </Button>
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="text-red-600"
                                         onClick={() => setShowDeleteDialog(erp.id)}
                                         title="Delete"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </Button>
+                                      >
+                                        <Trash2 className="w-4 h-4" />
+                                      </Button>
                                     </>
                                   )}
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
                 )}
               </CardContent>
             </Card>
@@ -1132,7 +1140,7 @@ export const ERPConfigPage = () => {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                          {availableProviders.map((provider: any) => {
+                          {availableProviders.map((provider: AccessPointProvider) => {
                             const isActive = provider.id === activeProvider?.id;
                             const hasCredentials = activeProvider?.has_credentials || false;
                             
@@ -1249,24 +1257,24 @@ export const ERPConfigPage = () => {
                         </TableRow>
                             );
                           })}
-                    </TableBody>
-                  </Table>
-                </div>
-                  )}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
               </CardContent>
             </Card>
-          </TabsContent>
+            </TabsContent>
 
             {/* Settings Tab */}
             <TabsContent value="settings" className="space-y-6">
-            <Card>
-              <CardHeader>
+              <Card>
+                <CardHeader>
                   <div className="flex justify-between items-center">
                     <div>
                       <CardTitle>FIRS Configuration</CardTitle>
-                <CardDescription>
+                      <CardDescription>
                         Configure your FIRS (Federal Inland Revenue Service) e-invoicing settings
-                </CardDescription>
+                      </CardDescription>
                     </div>
                     {canManageERP() && (
                       <Button
@@ -1302,19 +1310,19 @@ export const ERPConfigPage = () => {
                       </Button>
                     )}
                   </div>
-              </CardHeader>
-              <CardContent>
+                </CardHeader>
+                <CardContent>
                   {isLoadingFIRS ? (
                     <div className="space-y-4">
                       <Skeleton className="h-20 w-full" />
                       <Skeleton className="h-20 w-full" />
                     </div>
                   ) : firsConfiguration ? (
-                <div className="space-y-6">
+                    <div className="space-y-6">
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="rounded-lg border bg-card p-4">
                           <div className="flex items-center justify-between mb-2">
-                            <Label className="text-sm font-medium text-muted-foreground">Business ID</Label>
+                          <Label className="text-sm font-medium text-muted-foreground">Business ID</Label>
                             <Button
                               variant="ghost"
                               size="sm"
@@ -1328,11 +1336,11 @@ export const ERPConfigPage = () => {
                             >
                               <Copy className="h-3 w-3" />
                             </Button>
-                          </div>
+                        </div>
                           <div className="mt-1 font-mono text-sm break-all text-foreground">
                             {firsConfiguration.business_id || 'N/A'}
-                          </div>
                         </div>
+                          </div>
                         <div className="rounded-lg border bg-card p-4">
                           <div className="flex items-center justify-between mb-2">
                             <Label className="text-sm font-medium text-muted-foreground">Service ID (Entity ID)</Label>
@@ -1349,7 +1357,7 @@ export const ERPConfigPage = () => {
                             >
                               <Copy className="h-3 w-3" />
                             </Button>
-                          </div>
+                        </div>
                           <div className="mt-1 font-mono text-sm break-all text-foreground">
                             {firsConfiguration.service_id || 'N/A'}
                           </div>
@@ -1371,8 +1379,8 @@ export const ERPConfigPage = () => {
                               </>
                             )}
                           </Badge>
-                        </div>
-                        {canManageERP() && (
+                      </div>
+                      {canManageERP() && (
                           <Button
                             variant="outline"
                             onClick={() => {
@@ -1399,7 +1407,7 @@ export const ERPConfigPage = () => {
                               </>
                             )}
                           </Button>
-                        )}
+                      )}
                       </div>
                     </div>
                   ) : (
@@ -1461,7 +1469,7 @@ export const ERPConfigPage = () => {
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-4">
-                    <div className="space-y-2">
+              <div className="space-y-2">
                 <Label htmlFor="business_id">Business ID *</Label>
                 <Input
                   id="business_id"
@@ -1469,9 +1477,9 @@ export const ERPConfigPage = () => {
                   onChange={(e) => setFirsConfigForm({ ...firsConfigForm, business_id: e.target.value })}
                   placeholder="Enter your FIRS Business ID"
                 />
-                    </div>
+              </div>
 
-                    <div className="space-y-2">
+              <div className="space-y-2">
                 <Label htmlFor="service_id">Service ID (Entity ID) *</Label>
                 <Input
                   id="service_id"
@@ -1512,10 +1520,10 @@ export const ERPConfigPage = () => {
                           ? Number.parseInt(firsConfiguration.id, 10) 
                           : firsConfiguration.id;
                         if (!Number.isNaN(configId)) {
-                          await updateFIRSConfig.mutateAsync({
+                        await updateFIRSConfig.mutateAsync({
                             id: configId,
-                            data: firsConfigForm,
-                          });
+                          data: firsConfigForm,
+                        });
                         }
                       } else {
                         await createFIRSConfig.mutateAsync(firsConfigForm);
@@ -1572,17 +1580,17 @@ export const ERPConfigPage = () => {
                   value={syncDataType}
                   onValueChange={(value) => setSyncDataType(value as SyncDataType)}
                 >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select data type" />
-                        </SelectTrigger>
-                        <SelectContent>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select data type" />
+                  </SelectTrigger>
+                  <SelectContent>
                     <SelectItem value="vendors">Vendors</SelectItem>
                           <SelectItem value="customers">Customers</SelectItem>
-                          <SelectItem value="products">Products</SelectItem>
+                    <SelectItem value="products">Products</SelectItem>
                     <SelectItem value="invoices">Invoices</SelectItem>
                     <SelectItem value="tax_categories">Tax Categories</SelectItem>
-                        </SelectContent>
-                      </Select>
+                  </SelectContent>
+                </Select>
                     </div>
 
               {/* Dependency Warning for Invoices */}
@@ -1605,10 +1613,10 @@ export const ERPConfigPage = () => {
                 <Label htmlFor="incremental" className="cursor-pointer">
                   Sync only new/updated records (incremental)
                 </Label>
-                  </div>
+              </div>
 
               {(syncDataType === 'invoices' || syncDataType === 'customers' || syncDataType === 'vendors') && (
-                    <div className="space-y-4">
+                <div className="space-y-4">
                   <div className="space-y-2">
                     <Label>Date From (Optional)</Label>
                     <Popover>
@@ -1630,7 +1638,7 @@ export const ERPConfigPage = () => {
                         />
                       </PopoverContent>
                     </Popover>
-                          </div>
+                  </div>
 
                   <div className="space-y-2">
                     <Label>Date To (Optional)</Label>
@@ -1653,8 +1661,8 @@ export const ERPConfigPage = () => {
                         />
                       </PopoverContent>
                     </Popover>
-                        </div>
-                        </div>
+                  </div>
+                </div>
               )}
 
               <div className="flex justify-end space-x-2 pt-4">
@@ -1875,7 +1883,7 @@ export const ERPConfigPage = () => {
                     {erpSetting.setting_value.server_details && (
                       <div className="space-y-3 p-4 border rounded-md">
                         <Label className="text-sm font-semibold">Server Details</Label>
-                        {Object.entries(erpSetting.setting_value.server_details).map(([key, value]: [string, any]) => (
+                        {Object.entries(erpSetting.setting_value.server_details).map(([key, value]: [string, unknown]) => (
                           <div key={key} className="space-y-2">
                             <Label htmlFor={`server-${key}`} className="text-xs capitalize">
                               {key.replace(/_/g, ' ')}
@@ -1921,7 +1929,7 @@ export const ERPConfigPage = () => {
                     {erpSetting.setting_value.credentials && (
                       <div className="space-y-3 p-4 border rounded-md">
                         <Label className="text-sm font-semibold">Credentials</Label>
-                        {Object.entries(erpSetting.setting_value.credentials).map(([key, value]: [string, any]) => {
+                        {Object.entries(erpSetting.setting_value.credentials).map(([key, value]: [string, unknown]) => {
                           const isPassword = key.includes('password') || key.includes('secret') || key.includes('token');
                           const fieldId = `cred-${key}`;
                           const isVisible = passwordVisibility[fieldId] || false;
@@ -1973,7 +1981,7 @@ export const ERPConfigPage = () => {
                     {erpSetting.setting_value.permissions && (
                       <div className="space-y-3 p-4 border rounded-md">
                         <Label className="text-sm font-semibold">Permissions</Label>
-                        {Object.entries(erpSetting.setting_value.permissions).map(([key, value]: [string, any]) => (
+                        {Object.entries(erpSetting.setting_value.permissions).map(([key, value]: [string, unknown]) => (
                           <div key={key} className="flex items-center space-x-2">
                             <Switch
                               id={`perm-${key}`}
@@ -2001,7 +2009,7 @@ export const ERPConfigPage = () => {
                         <Label className="text-sm font-semibold">Sync Settings</Label>
                         {Object.entries(erpSetting.setting_value.sync_settings)
                           .filter(([key]) => key !== 'last_sync_at') // Exclude last_sync_at
-                          .map(([key, value]: [string, any]) => (
+                          .map(([key, value]: [string, unknown]) => (
                           <div key={key} className="space-y-2">
                             <Label htmlFor={`sync-${key}`} className="text-xs capitalize">
                               {key.replace(/_/g, ' ')}
@@ -2056,7 +2064,7 @@ export const ERPConfigPage = () => {
                         typeof value !== 'object' &&
                         !Array.isArray(value)
                       )
-                      .map(([key, value]: [string, any]) => (
+                      .map(([key, value]: [string, unknown]) => (
                         <div key={key} className="space-y-2">
                           <Label htmlFor={`setting-${key}`} className="text-xs capitalize">
                             {key.replace(/_/g, ' ')}
