@@ -133,22 +133,35 @@ export const SettingsPage = () => {
   const preferencesData = (preferencesResponseData && typeof preferencesResponseData === 'object' && 'preferences' in preferencesResponseData)
     ? (preferencesResponseData as { preferences?: unknown }).preferences
     : undefined;
-  const preferences = preferencesData || {
+  type Preferences = {
+    email_notifications: boolean;
+    invoice_status_updates: boolean;
+    firs_compliance_alerts: boolean;
+    system_maintenance: boolean;
+  };
+  
+  const defaultPreferences: Preferences = {
     email_notifications: true,
     invoice_status_updates: true,
     firs_compliance_alerts: true,
     system_maintenance: true,
   };
   
+  const preferences: Preferences = (preferencesData && typeof preferencesData === 'object' && 
+    'email_notifications' in preferencesData &&
+    'invoice_status_updates' in preferencesData &&
+    'firs_compliance_alerts' in preferencesData &&
+    'system_maintenance' in preferencesData)
+    ? preferencesData as Preferences
+    : defaultPreferences;
+  
   // Preferences state
-  const [preferencesState, setPreferencesState] = useState(preferences);
+  const [preferencesState, setPreferencesState] = useState<Preferences>(preferences);
   
   // Update preferences state when data loads
   useEffect(() => {
-    if (preferencesData) {
-      setPreferencesState(preferencesData);
-    }
-  }, [preferencesData]);
+    setPreferencesState(preferences);
+  }, [preferences]);
   
   interface CompanyProfile {
     name?: string;
@@ -249,7 +262,7 @@ export const SettingsPage = () => {
   const handleEditUser = (userId: number) => {
     const member = teamMembers.find((m: TeamMember) => m.id === userId);
     if (member) {
-      setEditForm({ role: member.role || 'company_user' });
+      setEditForm({ role: (member.role === 'company_admin' ? 'company_admin' : 'company_user') });
       setShowEditDialog(userId);
     }
   };

@@ -25,6 +25,7 @@ interface AuthContextType {
     phone: string;
     address: string;
     tin: string;
+    primary_service_id: number;
   }) => Promise<AuthResponse>;
   logout: () => Promise<void>;
   updateUser: (user: Partial<User>) => void;

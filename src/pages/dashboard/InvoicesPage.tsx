@@ -239,8 +239,15 @@ export const InvoicesPage = () => {
     if (!hsnCodesData) return [];
     if (Array.isArray(hsnCodesData)) return hsnCodesData;
     // Handle object with codes/data array
-    const codes = hsnCodesData.codes || hsnCodesData.data || [];
-    return Array.isArray(codes) ? codes : [];
+    if (hsnCodesData && typeof hsnCodesData === 'object') {
+      const codes = ('codes' in hsnCodesData && Array.isArray((hsnCodesData as { codes?: unknown }).codes))
+        ? (hsnCodesData as { codes: unknown[] }).codes
+        : ('data' in hsnCodesData && Array.isArray((hsnCodesData as { data?: unknown }).data))
+        ? (hsnCodesData as { data: unknown[] }).data
+        : [];
+      return codes;
+    }
+    return [];
   }, [hsnCodesData]);
   
   // Extract invoice types array (handle different response structures)
@@ -248,8 +255,15 @@ export const InvoicesPage = () => {
     if (!invoiceTypesData) return [];
     if (Array.isArray(invoiceTypesData)) return invoiceTypesData;
     // Handle object with codes/data array
-    const types = invoiceTypesData.codes || invoiceTypesData.data || [];
-    return Array.isArray(types) ? types : [];
+    if (invoiceTypesData && typeof invoiceTypesData === 'object') {
+      const types = ('codes' in invoiceTypesData && Array.isArray((invoiceTypesData as { codes?: unknown }).codes))
+        ? (invoiceTypesData as { codes: unknown[] }).codes
+        : ('data' in invoiceTypesData && Array.isArray((invoiceTypesData as { data?: unknown }).data))
+        ? (invoiceTypesData as { data: unknown[] }).data
+        : [];
+      return types;
+    }
+    return [];
   }, [invoiceTypesData]);
   
   const getInvoiceTypeLabel = useCallback(
