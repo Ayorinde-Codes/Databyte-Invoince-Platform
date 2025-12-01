@@ -182,7 +182,26 @@ class ApiService {
           window.dispatchEvent(new CustomEvent('auth:unauthorized'));
         }
         
-        const errorData = responseData as { message?: string; errors?: Record<string, string[]> };
+        const errorData = responseData as { 
+          message?: string; 
+          errors?: Record<string, string[]>; 
+          data?: unknown;
+          status?: boolean;
+        };
+        
+        // Preserve the full response structure for validation errors (422)
+        // Backend returns: { status: false, message: "...", data: { errors: [...], warnings: [...], suggestions: [...] } }
+        if (response.status === 422 && errorData.data) {
+          throw {
+            status: false,
+            message: errorData.message || 'Request failed',
+            errors: errorData.errors,
+            data: errorData.data, // Preserve the nested data structure
+            statusCode: response.status,
+            response: responseData, // Preserve full response for debugging
+          } as ApiError & { data?: unknown; response?: unknown };
+        }
+        
         throw {
           status: false,
           message: errorData.message || 'Request failed',
@@ -236,11 +255,10 @@ class ApiService {
     postal_code?: string;
     country?: string;
     tin?: string;
+    primary_service_id: number;
     firs_config?: {
       business_id: string;
       service_id: string;
-      api_key: string;
-      client_secret: string;
       is_active?: boolean;
     };
   }): Promise<AuthApiResponse> {
@@ -521,6 +539,23 @@ class ApiService {
     );
   }
 
+  async updateARInvoiceFirsFields(
+    invoiceId: number,
+    data: {
+      firs_invoice_type_code: string;
+      firs_note: string;
+      previous_invoice_irn?: string;
+    }
+  ) {
+    return this.makeRequest(
+      API_ENDPOINTS.invoices.ar.updateFirsFields.replace(':invoiceId', invoiceId.toString()),
+      {
+        method: 'PUT',
+        body: data,
+      }
+    );
+  }
+
   async updateARInvoiceItem(invoiceId: number, itemId: number, data: {
     item_code?: string;
     description?: string;
@@ -681,6 +716,23 @@ class ApiService {
       {
         method: 'PUT',
         body: { hsn_code: hsnCode },
+      }
+    );
+  }
+
+  async updateAPInvoiceFirsFields(
+    invoiceId: number,
+    data: {
+      firs_invoice_type_code: string;
+      firs_note: string;
+      previous_invoice_irn?: string;
+    }
+  ) {
+    return this.makeRequest(
+      API_ENDPOINTS.invoices.ap.updateFirsFields.replace(':invoiceId', invoiceId.toString()),
+      {
+        method: 'PUT',
+        body: data,
       }
     );
   }
@@ -908,7 +960,7 @@ class ApiService {
   // ==================== ERP SETTINGS ====================
 
   async getERPServices() {
-    return this.makeRequest(API_ENDPOINTS.erp.services);
+    return this.makeRequest(API_ENDPOINTS.services.publicList);
   }
 
   async getERPSettings() {
@@ -979,12 +1031,27 @@ class ApiService {
 
   async syncERPData(id: number, data: {
     data_type: 'customers' | 'vendors' | 'products' | 'invoices' | 'tax_categories';
+    sync_mode?: 'sync' | 'async';
+    incremental?: boolean;
     options?: {
       date_from?: string;
       date_to?: string;
     };
   }) {
     return this.makeRequest(API_ENDPOINTS.erp.sync.replace(':id', id.toString()), {
+      method: 'POST',
+      body: data,
+    });
+  }
+
+  async syncAllERPData(id: number, data: {
+    incremental?: boolean;
+    options?: {
+      date_from?: string;
+      date_to?: string;
+    };
+  }) {
+    return this.makeRequest(API_ENDPOINTS.erp.syncAll.replace(':id', id.toString()), {
       method: 'POST',
       body: data,
     });
@@ -1020,8 +1087,6 @@ class ApiService {
   async createFIRSConfiguration(data: {
     business_id: string;
     service_id: string;
-    api_key: string;
-    client_secret: string;
     is_active?: boolean;
   }) {
     return this.makeRequest(API_ENDPOINTS.firs.config.create, {
@@ -1033,8 +1098,6 @@ class ApiService {
   async updateFIRSConfiguration(id: number, data: Partial<{
     business_id: string;
     service_id: string;
-    api_key: string;
-    client_secret: string;
     is_active: boolean;
   }>) {
     return this.makeRequest(API_ENDPOINTS.firs.config.update.replace(':id', id.toString()), {
@@ -1051,6 +1114,56 @@ class ApiService {
 
   async testFIRSConnection(id: number) {
     return this.makeRequest(API_ENDPOINTS.firs.config.test.replace(':id', id.toString()), {
+      method: 'POST',
+    });
+  }
+
+  // ==================== ACCESS POINT PROVIDERS ====================
+
+  async getAvailableAccessPointProviders() {
+    return this.makeRequest(API_ENDPOINTS.accessPointProviders.available);
+  }
+
+  async getActiveAccessPointProvider(unmask = false) {
+    const endpoint = unmask 
+      ? `${API_ENDPOINTS.accessPointProviders.active}?unmask=true`
+      : API_ENDPOINTS.accessPointProviders.active;
+    return this.makeRequest(endpoint);
+  }
+
+  async activateAccessPointProvider(data: {
+    access_point_provider_id: number;
+    credentials?: {
+      'x-api-key': string;
+      'x-api-secret': string;
+    };
+  }) {
+    return this.makeRequest(API_ENDPOINTS.accessPointProviders.activate, {
+      method: 'POST',
+      body: data,
+    });
+  }
+
+  async updateAccessPointProviderCredentials(id: number, data: {
+    credentials: {
+      'x-api-key': string;
+      'x-api-secret': string;
+    };
+  }) {
+    return this.makeRequest(API_ENDPOINTS.accessPointProviders.updateCredentials.replace(':id', id.toString()), {
+      method: 'PUT',
+      body: data,
+    });
+  }
+
+  async deactivateAccessPointProvider() {
+    return this.makeRequest(API_ENDPOINTS.accessPointProviders.deactivate, {
+      method: 'POST',
+    });
+  }
+
+  async resyncFirsProfile() {
+    return this.makeRequest(API_ENDPOINTS.accessPointProviders.resyncFirsProfile, {
       method: 'POST',
     });
   }
@@ -1086,7 +1199,52 @@ class ApiService {
     });
   }
 
+  async getCompanyUsers() {
+    return this.makeRequest(API_ENDPOINTS.company.users);
+  }
+
+  // ==================== COMPANY PREFERENCES ====================
+
+  async getCompanyPreferences() {
+    return this.makeRequest(API_ENDPOINTS.preferences.get);
+  }
+
+  async updateCompanyPreferences(data: {
+    email_notifications?: boolean;
+    invoice_status_updates?: boolean;
+    firs_compliance_alerts?: boolean;
+    system_maintenance?: boolean;
+  }) {
+    return this.makeRequest(API_ENDPOINTS.preferences.update, {
+      method: 'PUT',
+      body: data,
+    });
+  }
+
   // ==================== AUTHENTICATION ====================
+
+  async createUser(data: {
+    name: string;
+    email: string;
+    password: string;
+    password_confirmation: string;
+    role: 'company_admin' | 'company_user';
+  }) {
+    return this.makeRequest(API_ENDPOINTS.auth.createUser, {
+      method: 'POST',
+      body: data,
+    });
+  }
+
+  async assignUserRole(data: {
+    user_id: number;
+    role: 'company_admin' | 'company_user';
+  }) {
+    return this.makeRequest(API_ENDPOINTS.auth.assignRole, {
+      method: 'POST',
+      body: data,
+    });
+  }
 
   async changePassword(data: {
     current_password: string;
@@ -1121,13 +1279,25 @@ class ApiService {
     });
   }
 
-  async submitInvoice(data: {
+  async signInvoice(data: {
     invoice_id: number;
     invoice_type: 'ar' | 'ap';
     validate_with_hoptool?: boolean;
   }) {
-    return this.makeRequest(API_ENDPOINTS.firs.submit, {
+    return this.makeRequest(API_ENDPOINTS.firs.sign, {
       method: 'POST',
+      body: data,
+    });
+  }
+
+  async updatePayment(data: {
+    invoice_id: number;
+    invoice_type: 'ar' | 'ap';
+    payment_status: 'PENDING' | 'PAID' | 'REJECTED';
+    request_id?: string;
+  }) {
+    return this.makeRequest(API_ENDPOINTS.firs.updatePayment, {
+      method: 'PUT',
       body: data,
     });
   }
@@ -1175,6 +1345,10 @@ class ApiService {
       ? `${API_ENDPOINTS.firs.lgas}?state=${state}`
       : API_ENDPOINTS.firs.lgas;
     return this.makeRequest(endpoint);
+  }
+
+  async getFIRSHsnCodes() {
+    return this.makeRequest(API_ENDPOINTS.firs.hsnCodes);
   }
 
   async syncFIRSResources() {

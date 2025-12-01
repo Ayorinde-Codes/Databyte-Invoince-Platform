@@ -122,7 +122,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
 
   const handleLogout = () => {
     logout();
-    navigate('/');
+    navigate('/auth/login');
   };
 
   return (
@@ -141,7 +141,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
               <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
                 <FileText className="w-5 h-5 text-primary-foreground" />
               </div>
-              <span className="text-xl font-bold">Databyte</span>
+              <span className="text-xl font-bold">Databytes</span>
             </div>
             <Button
               variant="ghost"
@@ -188,7 +188,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                 <FileText className="w-5 h-5 text-primary-foreground" />
               </div>
               {!sidebarCollapsed && (
-                <span className="text-xl font-bold">Databyte</span>
+                <span className="text-xl font-bold">Databytes</span>
               )}
             </div>
             <Button

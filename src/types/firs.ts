@@ -3,12 +3,7 @@ export interface FIRSConfiguration {
   id: string;
   company_id: string;
   business_id: string;
-  api_key: string;
-  api_secret: string;
   service_id: string;
-  public_key: string;
-  certificate: string;
-  environment: 'sandbox' | 'production';
   is_active: boolean;
   last_validation_at?: string;
   validation_status: 'pending' | 'valid' | 'invalid' | 'expired';
@@ -19,12 +14,7 @@ export interface FIRSConfiguration {
 
 export interface FIRSCredentials {
   business_id: string;
-  api_key: string;
-  api_secret: string;
   service_id: string;
-  public_key: string;
-  certificate: string;
-  environment: 'sandbox' | 'production';
 }
 
 export interface FIRSValidationResponse {

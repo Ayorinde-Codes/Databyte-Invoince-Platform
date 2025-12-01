@@ -88,3 +88,70 @@ export const useTestFIRSConnection = () => {
   });
 };
 
+// Query hook for fetching HSN codes
+export const useHsnCodes = () => {
+  return useQuery({
+    queryKey: ['firs', 'hsn-codes'],
+    queryFn: () => apiService.getFIRSHsnCodes(),
+    staleTime: 12 * 60 * 60 * 1000, // 12 hours (matches backend cache)
+    select: (response) => {
+      // Extract the HSN codes array from the response
+      const responseData = response.data;
+      let data: unknown = [];
+      if (responseData && typeof responseData === 'object') {
+        if ('data' in responseData) {
+          data = (responseData as { data?: unknown }).data || [];
+        } else {
+          data = responseData;
+        }
+      }
+      // Handle different response structures
+      if (Array.isArray(data)) {
+        return data;
+      }
+      // If it's an object with codes array
+      if (data && typeof data === 'object' && 'codes' in data && Array.isArray((data as { codes?: unknown }).codes)) {
+        return (data as { codes: unknown[] }).codes;
+      }
+      // If it's an object with data array
+      if (data && typeof data === 'object' && 'data' in data && Array.isArray((data as { data?: unknown }).data)) {
+        return (data as { data: unknown[] }).data;
+      }
+      return [];
+    },
+  });
+};
+
+// Query hook for fetching invoice types
+export const useInvoiceTypes = () => {
+  return useQuery({
+    queryKey: ['firs', 'invoice-types'],
+    queryFn: () => apiService.getFIRSInvoiceTypes(),
+    staleTime: 12 * 60 * 60 * 1000, // 12 hours (matches backend cache)
+    select: (response) => {
+      // Extract the invoice types array from the response
+      const responseData = response.data;
+      let data: unknown = [];
+      if (responseData && typeof responseData === 'object') {
+        if ('data' in responseData) {
+          data = (responseData as { data?: unknown }).data || [];
+        } else {
+          data = responseData;
+        }
+      }
+      // Handle different response structures
+      if (Array.isArray(data)) {
+        return data;
+      }
+      // If it's an object with codes/data array
+      if (data && typeof data === 'object' && 'codes' in data && Array.isArray((data as { codes?: unknown }).codes)) {
+        return (data as { codes: unknown[] }).codes;
+      }
+      if (data && typeof data === 'object' && 'data' in data && Array.isArray((data as { data?: unknown }).data)) {
+        return (data as { data: unknown[] }).data;
+      }
+      return [];
+    },
+  });
+};
+

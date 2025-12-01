@@ -228,21 +228,6 @@ export const LoginPage = () => {
                   </Link>
                 </p>
               </div>
-
-              {/* Demo Credentials */}
-              <div className="mt-6 p-4 bg-muted/50 rounded-lg">
-                <p className="text-sm font-medium text-muted-foreground mb-2">
-                  Demo Credentials:
-                </p>
-                <div className="text-sm text-muted-foreground space-y-1">
-                  <p>
-                    <strong>Email:</strong> admin@abcmanufacturing.com
-                  </p>
-                  <p>
-                    <strong>Password:</strong> password123
-                  </p>
-                </div>
-              </div>
             </CardContent>
           </Card>
         </div>

@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
   Plus,
@@ -18,7 +19,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import type { DashboardInvoice, DashboardRecentInvoices } from '@/types/dashboard';
 
 import { DashboardLayout } from '../../components/layout/DashboardLayout';
@@ -80,7 +81,7 @@ const normalizeInvoiceStatus = (status: InvoiceRecord['status']): string => {
 
 const normalizeFirsStatus = (
   status: InvoiceRecord['firs_status']
-): 'approved' | 'validated' | 'submitted' | 'pending' | 'rejected' | 'not_required' | null => {
+): 'approved' | 'validated' | 'signed' | 'pending' | 'rejected' | 'cancelled' | 'not_required' | null => {
   if (!status) {
     return null; // Return null for empty status, not 'pending'
   }
@@ -89,8 +90,10 @@ const normalizeFirsStatus = (
       return 'approved';
     case 'validated':
       return 'validated';
-    case 'submitted':
-      return 'submitted';
+    case 'signed':
+      return 'signed';
+    case 'cancelled':
+      return 'cancelled';
     case 'rejected':
       return 'rejected';
     case 'not_required':
@@ -168,22 +171,35 @@ export const DashboardPage = () => {
   });
 
   const dashboardData = dashboardResponse?.data;
+  const serviceMissing = Boolean(dashboardData?.service_missing);
+  const setupUrl = dashboardData?.setup_url || '/dashboard/erp-config';
   const isLoading = isLoadingDashboard;
   // Check super-admin status from both auth context and API response
   const isSuperAdmin = isUserSuperAdmin() || dashboardData?.is_super_admin || dashboardData?.is_aggregated || false;
+  const shouldFetchCompanyData = !isUserSuperAdmin() && !!dashboardData && !serviceMissing;
+  const serviceCode = dashboardData?.service?.code;
+  const shouldFetchInvoices = shouldFetchCompanyData && !!serviceCode;
 
-  // Fetch AR invoices for revenue calculation (only for regular company, not super-admin)
+  // Fetch AR invoices for revenue calculation (only when company has service)
   const { data: arInvoicesResponse, error: arInvoicesError, isLoading: isLoadingAR } = useQuery({
-    queryKey: ['invoices', 'ar', 'dashboard'],
-    queryFn: () => apiService.getARInvoices({ per_page: 1000 }), // Get all for calculations
-    enabled: !isUserSuperAdmin(), // Only fetch for regular company dashboards
+    queryKey: ['invoices', 'ar', 'dashboard', serviceCode],
+    queryFn: () =>
+      apiService.getARInvoices({
+        per_page: 1000,
+        ...(serviceCode ? { source_system: serviceCode } : {}),
+      }),
+    enabled: shouldFetchInvoices,
   });
 
-  // Fetch AP invoices for revenue calculation (only for regular company, not super-admin)
+  // Fetch AP invoices for revenue calculation (only when company has service)
   const { data: apInvoicesResponse, error: apInvoicesError, isLoading: isLoadingAP } = useQuery({
-    queryKey: ['invoices', 'ap', 'dashboard'],
-    queryFn: () => apiService.getAPInvoices({ per_page: 1000 }), // Get all for calculations
-    enabled: !isUserSuperAdmin(), // Only fetch for regular company dashboards
+    queryKey: ['invoices', 'ap', 'dashboard', serviceCode],
+    queryFn: () =>
+      apiService.getAPInvoices({
+        per_page: 1000,
+        ...(serviceCode ? { source_system: serviceCode } : {}),
+      }),
+    enabled: shouldFetchInvoices,
   });
 
   const error = dashboardError || arInvoicesError || apInvoicesError;
@@ -308,7 +324,8 @@ export const DashboardPage = () => {
     // Create chart data for ALL statuses (including those with 0)
     const chartData = allPossibleStatuses.map(status => ({
       name: status.charAt(0).toUpperCase() + status.slice(1),
-      value: statusCounts[status].total > 0 ? statusCounts[status].total : 0,
+      value: statusCounts[status].count,
+      amount: statusCounts[status].total,
       color: statusColors[status] || '#6B7280',
       count: statusCounts[status].count,
     }));
@@ -353,7 +370,7 @@ export const DashboardPage = () => {
 
     const approved = invoices.filter((invoice) => {
       const status = (invoice.firs_status ?? '').toLowerCase();
-      return status === 'approved' || status === 'submitted';
+      return status === 'approved' || status === 'signed';
     }).length;
     
     return total > 0 ? (approved / total) * 100 : 0;
@@ -467,6 +484,27 @@ export const DashboardPage = () => {
 
   // Error state
   if (error) {
+  if (!isSuperAdmin && serviceMissing) {
+    return (
+      <DashboardLayout>
+        <div className="max-w-3xl mx-auto space-y-6">
+          <Alert>
+            <AlertTitle>ERP service setup required</AlertTitle>
+            <AlertDescription className="space-y-4">
+              <p>
+                We couldn’t find an active ERP configuration for your company. Please select and configure a primary service to unlock
+                your dashboard metrics.
+              </p>
+              <Button asChild>
+                <Link to={setupUrl}>Go to ERP Configuration</Link>
+              </Button>
+            </AlertDescription>
+          </Alert>
+        </div>
+      </DashboardLayout>
+    );
+  }
+
     return (
       <DashboardLayout>
         <Alert variant="destructive">

@@ -33,7 +33,7 @@ interface Invoice {
   customerAvatar?: string;
   amount: number;
   status: 'paid' | 'sent' | 'overdue' | 'draft' | 'cancelled';
-  firsStatus: 'approved' | 'validated' | 'submitted' | 'pending' | 'rejected' | 'not_required' | null;
+  firsStatus: 'approved' | 'validated' | 'signed' | 'pending' | 'rejected' | 'cancelled' | 'not_required' | null;
   date: string;
   dueDate?: string;
 }
@@ -110,10 +110,15 @@ export const RecentInvoices: React.FC<RecentInvoicesProps> = ({
         className: 'bg-blue-100 text-blue-800 border-blue-200',
         icon: Shield,
       },
-      submitted: {
-        label: 'FIRS Submitted',
-        className: 'bg-blue-100 text-blue-800 border-blue-200',
+      signed: {
+        label: 'FIRS Signed',
+        className: 'bg-purple-100 text-purple-800 border-purple-200',
         icon: Send,
+      },
+      cancelled: {
+        label: 'FIRS Cancelled',
+        className: 'bg-gray-100 text-gray-800 border-gray-200',
+        icon: XCircle,
       },
       pending: {
         label: 'FIRS Pending',

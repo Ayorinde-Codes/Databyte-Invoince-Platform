@@ -95,19 +95,29 @@ export const ReportsPage = () => {
   const dashboardData = dashboardResponse?.data;
   const isLoading = isLoadingDashboard;
   const isSuperAdmin = isUserSuperAdmin() || dashboardData?.is_super_admin || dashboardData?.is_aggregated || false;
+  const serviceCode = dashboardData?.service?.code;
+  const shouldFetchInvoices = !isUserSuperAdmin() && !!dashboardData && !!serviceCode;
 
   // Fetch AR invoices for calculations
   const { data: arInvoicesResponse, error: arInvoicesError } = useQuery({
-    queryKey: ['invoices', 'ar', 'reports'],
-    queryFn: () => apiService.getARInvoices({ per_page: 1000 }),
-    enabled: !isUserSuperAdmin() && !!dashboardData,
+    queryKey: ['invoices', 'ar', 'reports', serviceCode],
+    queryFn: () =>
+      apiService.getARInvoices({
+        per_page: 1000,
+        ...(serviceCode ? { source_system: serviceCode } : {}),
+      }),
+    enabled: shouldFetchInvoices,
   });
 
   // Fetch AP invoices for calculations
   const { data: apInvoicesResponse, error: apInvoicesError } = useQuery({
-    queryKey: ['invoices', 'ap', 'reports'],
-    queryFn: () => apiService.getAPInvoices({ per_page: 1000 }),
-    enabled: !isUserSuperAdmin() && !!dashboardData,
+    queryKey: ['invoices', 'ap', 'reports', serviceCode],
+    queryFn: () =>
+      apiService.getAPInvoices({
+        per_page: 1000,
+        ...(serviceCode ? { source_system: serviceCode } : {}),
+      }),
+    enabled: shouldFetchInvoices,
   });
 
   const error = dashboardError || arInvoicesError || apInvoicesError;
@@ -231,7 +241,8 @@ export const ReportsPage = () => {
     // Create chart data for ALL statuses (including those with 0)
     const chartData = allPossibleStatuses.map(status => ({
       name: status.charAt(0).toUpperCase() + status.slice(1),
-      value: statusCounts[status].total > 0 ? statusCounts[status].total : 0,
+      value: statusCounts[status].count,
+      amount: statusCounts[status].total,
       color: statusColors[status] || '#6B7280',
       count: statusCounts[status].count,
     }));
