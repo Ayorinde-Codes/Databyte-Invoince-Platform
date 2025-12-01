@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -11,7 +11,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useAuth } from '../../hooks/useAuth';
+import { apiService } from '@/services/api';
 
 const registerSchema = z.object({
   name: z.string().min(2, 'Company name must be at least 2 characters'),
@@ -21,6 +23,7 @@ const registerSchema = z.object({
   phone: z.string().min(10, 'Phone number must be at least 10 characters'),
   address: z.string().min(5, 'Address must be at least 5 characters'),
   tin: z.string().min(8, 'TIN must be at least 8 characters'),
+  primary_service_id: z.string().min(1, 'Please select an ERP service'),
   terms_accepted: z.boolean().refine(val => val === true, 'You must accept the terms and conditions'),
 }).refine((data) => data.password === data.confirm_password, {
   message: "Passwords don't match",
@@ -34,6 +37,9 @@ export const RegisterPage = () => {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
+
+  const [services, setServices] = useState<Array<{ id: number; name: string; code: string }>>([]);
+  const [isLoadingServices, setIsLoadingServices] = useState(false);
 
   const {
     register,
@@ -52,12 +58,46 @@ export const RegisterPage = () => {
       address: '',
       tin: '',
       terms_accepted: false,
+      primary_service_id: '',
     },
   });
 
   const termsAccepted = watch('terms_accepted');
+  const selectedService = watch('primary_service_id');
 
   const { register: registerUser } = useAuth();
+
+  useEffect(() => {
+    const fetchServices = async () => {
+      try {
+        setIsLoadingServices(true);
+        const response = await apiService.getERPServices();
+        const responseData = response?.data;
+        let serviceData: unknown = [];
+        if (responseData && typeof responseData === 'object') {
+          if ('services' in responseData && Array.isArray((responseData as { services?: unknown }).services)) {
+            serviceData = (responseData as { services: unknown[] }).services;
+          } else if (Array.isArray(responseData)) {
+            serviceData = responseData;
+          }
+        }
+        setServices(Array.isArray(serviceData) ? serviceData : []);
+      } catch (error) {
+        console.error('Failed to load ERP services', error);
+        toast.error('Failed to load ERP services. Please try again.');
+      } finally {
+        setIsLoadingServices(false);
+      }
+    };
+
+    fetchServices();
+  }, []);
+
+  useEffect(() => {
+    if (services.length > 0 && !selectedService) {
+      setValue('primary_service_id', services[0].id.toString(), { shouldValidate: true });
+    }
+  }, [services, selectedService, setValue]);
 
   const onSubmit = async (data: RegisterFormData) => {
     setIsLoading(true);
@@ -70,6 +110,7 @@ export const RegisterPage = () => {
         phone: data.phone,
         address: data.address,
         tin: data.tin,
+        primary_service_id: Number(data.primary_service_id),
       });
 
       toast.success('Registration successful! Welcome to Databyte.');
@@ -123,7 +164,7 @@ export const RegisterPage = () => {
 
       {/* Right Side - Registration Form */}
       <div className="flex-1 flex flex-col justify-center px-6 py-12 lg:px-12">
-        <div className="w-full max-w-md mx-auto">
+        <div className="w-full max-w-2xl mx-auto">
           {/* Back to Home Link */}
           <Link 
             to="/" 
@@ -133,7 +174,7 @@ export const RegisterPage = () => {
             Back to Home
           </Link>
 
-          <Card className="border-0 shadow-lg">
+          <Card className="border-0 shadow-lg w-full">
             <CardHeader className="space-y-1 pb-6">
               <CardTitle className="text-2xl font-bold">Create your account</CardTitle>
               <CardDescription>
@@ -151,9 +192,9 @@ export const RegisterPage = () => {
                   </div>
                   
                   <div className="space-y-2">
-                    <Label htmlFor="name">Full Name</Label>
+                    <Label htmlFor="full_name">Full Name</Label>
                     <Input
-                      id="name"
+                      id="full_name"
                       type="text"
                       placeholder="Enter your full name"
                       {...register('name')}
@@ -201,9 +242,9 @@ export const RegisterPage = () => {
                   </div>
                   
                   <div className="space-y-2">
-                    <Label htmlFor="name">Company Name</Label>
+                    <Label htmlFor="company_name_input">Company Name</Label>
                     <Input
-                      id="name"
+                      id="company_name_input"
                       type="text"
                       placeholder="Enter your company name"
                       {...register('name')}
@@ -239,6 +280,32 @@ export const RegisterPage = () => {
                     />
                     {errors.tin && (
                       <p className="text-sm text-destructive">{errors.tin.message}</p>
+                    )}
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="primary_service_id">Primary ERP Service</Label>
+                    <Select
+                      onValueChange={(value) => setValue('primary_service_id', value, { shouldValidate: true })}
+                      value={selectedService || undefined}
+                      disabled={isLoadingServices || services.length === 0}
+                    >
+                      <SelectTrigger
+                        id="primary_service_id"
+                        className={errors.primary_service_id ? 'border-destructive' : ''}
+                      >
+                        <SelectValue placeholder={isLoadingServices ? 'Loading services...' : 'Select an ERP service'} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {services.map((service) => (
+                          <SelectItem key={service.id} value={service.id.toString()}>
+                            {service.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {errors.primary_service_id && (
+                      <p className="text-sm text-destructive">{errors.primary_service_id.message}</p>
                     )}
                   </div>
                 </div>

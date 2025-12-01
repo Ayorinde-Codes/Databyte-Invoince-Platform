@@ -175,6 +175,38 @@ export const useBulkUpdateARInvoiceItemHsnCodes = () => {
   });
 };
 
+// Mutation hook for updating AR invoice FIRS fields
+export const useUpdateARInvoiceFirsFields = () => {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: ({
+      invoiceId,
+      firs_invoice_type_code,
+      firs_note,
+      previous_invoice_irn,
+    }: {
+      invoiceId: number;
+      firs_invoice_type_code: string;
+      firs_note: string;
+      previous_invoice_irn?: string;
+    }) =>
+      apiService.updateARInvoiceFirsFields(invoiceId, {
+        firs_invoice_type_code,
+        firs_note,
+        previous_invoice_irn,
+      }),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['invoices', 'ar', variables.invoiceId] });
+      queryClient.invalidateQueries({ queryKey: ['invoices', 'ar'] });
+      toast.success('Invoice FIRS fields updated successfully');
+    },
+    onError: (error: unknown) => {
+      toast.error(extractErrorMessage(error, 'Failed to update FIRS fields'));
+    },
+  });
+};
+
 // Mutation hook for updating AR invoice item
 export const useUpdateARInvoiceItem = () => {
   const queryClient = useQueryClient();
@@ -335,6 +367,38 @@ export const useBulkUpdateAPInvoiceItemHsnCodes = () => {
     },
     onError: (error: unknown) => {
       toast.error(extractErrorMessage(error, 'Failed to update HSN codes'));
+    },
+  });
+};
+
+// Mutation hook for updating AP invoice FIRS fields
+export const useUpdateAPInvoiceFirsFields = () => {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: ({
+      invoiceId,
+      firs_invoice_type_code,
+      firs_note,
+      previous_invoice_irn,
+    }: {
+      invoiceId: number;
+      firs_invoice_type_code: string;
+      firs_note: string;
+      previous_invoice_irn?: string;
+    }) =>
+      apiService.updateAPInvoiceFirsFields(invoiceId, {
+        firs_invoice_type_code,
+        firs_note,
+        previous_invoice_irn,
+      }),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['invoices', 'ap', variables.invoiceId] });
+      queryClient.invalidateQueries({ queryKey: ['invoices', 'ap'] });
+      toast.success('Invoice FIRS fields updated successfully');
+    },
+    onError: (error: unknown) => {
+      toast.error(extractErrorMessage(error, 'Failed to update FIRS fields'));
     },
   });
 };

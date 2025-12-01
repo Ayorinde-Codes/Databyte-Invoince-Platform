@@ -25,6 +25,7 @@ interface AuthContextType {
     phone: string;
     address: string;
     tin: string;
+    primary_service_id: number;
   }) => Promise<AuthResponse>;
   logout: () => Promise<void>;
   updateUser: (user: Partial<User>) => void;
@@ -148,6 +149,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     phone: string;
     address: string;
     tin: string;
+    primary_service_id: number;
   }): Promise<AuthResponse> => {
     setIsLoading(true);
 
@@ -161,6 +163,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         phone: userData.phone,
         address: userData.address,
         tin: userData.tin,
+        primary_service_id: userData.primary_service_id,
       };
       const response = await apiService.register(apiData);
 
@@ -168,8 +171,20 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         throw new Error(response.message || 'Registration failed');
       }
 
-      const { token, user } = response.data;
-      const company = user.company;
+      // Defensive checks for response structure
+      const { token, user } = response.data || {};
+      
+      if (!token || !user) {
+        console.error('Registration response missing required fields:', response);
+        throw new Error('Invalid registration response. Please try again.');
+      }
+
+      const company = user?.company;
+
+      if (!company) {
+        console.error('Registration response missing company data:', response);
+        throw new Error('Company data not found in registration response. Please contact support.');
+      }
 
       // Store auth data
       setToken(token);
@@ -199,6 +214,15 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setUser(null);
       setCompany(null);
       setToken(null);
+      removeLocalStorage(AUTH_CONFIG.token_key);
+      removeLocalStorage(AUTH_CONFIG.user_key);
+      removeLocalStorage(AUTH_CONFIG.company_key);
+      removeLocalStorage(AUTH_CONFIG.refresh_token_key);
+      
+      // Redirect to login page
+      if (window.location.pathname !== '/auth/login') {
+        window.location.href = '/auth/login';
+      }
     }
   }, []);
 

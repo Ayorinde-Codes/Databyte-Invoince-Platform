@@ -51,7 +51,7 @@ const Index = () => {
               <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center">
                 <BarChart3 className="w-6 h-6 text-white" />
               </div>
-              <span className="text-2xl font-bold text-gray-900">Databyte</span>
+              <span className="text-2xl font-bold text-gray-900">Databytes</span>
             </div>
 
             {/* Desktop Navigation */}
@@ -486,7 +486,7 @@ const Index = () => {
             </div>
 
             <div className="mt-16">
-              <Link to="/login">
+              <Link to="/auth/register">
                 <Button className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-4 text-lg font-medium rounded-lg">
                   Start Your Free Trial
                 </Button>

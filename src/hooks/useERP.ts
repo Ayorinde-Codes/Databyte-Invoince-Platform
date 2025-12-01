@@ -7,6 +7,8 @@ type CreateERPSettingPayload = Parameters<typeof apiService.createERPSetting>[0]
 type UpdateERPSettingPayload = Parameters<typeof apiService.updateERPSetting>[1];
 type SyncERPDataPayload = Parameters<typeof apiService.syncERPData>[1];
 type BatchSyncERPDataPayload = Parameters<typeof apiService.batchSyncERPData>[1];
+type ActivateAccessPointProviderPayload = Parameters<typeof apiService.activateAccessPointProvider>[0];
+type UpdateAccessPointProviderCredentialsPayload = Parameters<typeof apiService.updateAccessPointProviderCredentials>[1];
 
 // ==================== ERP SETTINGS ====================
 
@@ -112,17 +114,30 @@ export const useSyncERPData = () => {
   return useMutation({
     mutationFn: ({ id, data }: { id: number; data: SyncERPDataPayload }) =>
       apiService.syncERPData(id, data),
-    onSuccess: (_, variables) => {
+    onSuccess: (response, variables) => {
+      // Check if job was queued (async mode) or completed immediately (sync mode)
+      const responseData = response.data;
+      if (responseData && typeof responseData === 'object' && 'status' in responseData && responseData.status === 'queued') {
+        toast.success('Sync job queued. Processing in background...');
+      } else {
+        toast.success('Data synced successfully');
+      }
+      
       // Invalidate all related queries
       queryClient.invalidateQueries({ queryKey: ['dashboard'] });
       queryClient.invalidateQueries({ queryKey: ['invoices'] });
       queryClient.invalidateQueries({ queryKey: ['parties'] });
       queryClient.invalidateQueries({ queryKey: ['products'] });
       queryClient.invalidateQueries({ queryKey: ['erp', 'settings', variables.id, 'sync-status'] });
-      toast.success('Data synced successfully');
     },
     onError: (error: unknown) => {
-      toast.error(extractErrorMessage(error, 'Sync failed'));
+      const errorMessage = extractErrorMessage(error, 'Sync failed');
+      // Check if it's a dependency error
+      if (errorMessage.includes('Please sync')) {
+        toast.error(errorMessage);
+      } else {
+        toast.error('Sync failed: ' + errorMessage);
+      }
     },
   });
 };
@@ -133,7 +148,32 @@ export const useERPSyncStatus = (id: number | null) => {
     queryKey: ['erp', 'settings', id, 'sync-status'],
     queryFn: () => apiService.getERPSyncStatus(id!),
     enabled: !!id,
-    refetchInterval: 30000, // Refetch every 30 seconds if sync is in progress
+    refetchInterval: (query) => {
+      // Poll every 3 seconds if there are pending jobs, otherwise every 30 seconds
+      const data = query.state.data?.data;
+      if (data && typeof data === 'object' && 'has_pending_jobs' in data) {
+        return (data as { has_pending_jobs?: boolean }).has_pending_jobs ? 3000 : 30000;
+      }
+      return 30000;
+    },
+  });
+};
+
+// Mutation hook for syncing all ERP data in correct order
+export const useSyncAllERPData = () => {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: ({ id, data }: { id: number; data: { incremental?: boolean; options?: unknown } }) =>
+      apiService.syncAllERPData(id, data),
+    onSuccess: (response, variables) => {
+      toast.success('Full sync queued. Processing in correct order...');
+      // Invalidate sync status to trigger polling
+      queryClient.invalidateQueries({ queryKey: ['erp', 'settings', variables.id, 'sync-status'] });
+    },
+    onError: (error: unknown) => {
+      toast.error(extractErrorMessage(error, 'Sync all failed'));
+    },
   });
 };
 
@@ -155,6 +195,94 @@ export const useBatchSyncERPData = () => {
     },
     onError: (error: unknown) => {
       toast.error(extractErrorMessage(error, 'Batch sync failed'));
+    },
+  });
+};
+
+// ==================== ACCESS POINT PROVIDERS ====================
+
+// Query hook for fetching available Access Point Providers
+export const useAvailableAccessPointProviders = () => {
+  return useQuery({
+    queryKey: ['access-point-providers', 'available'],
+    queryFn: () => apiService.getAvailableAccessPointProviders(),
+    staleTime: 10 * 60 * 1000, // 10 minutes
+  });
+};
+
+// Query hook for fetching active Access Point Provider
+export const useActiveAccessPointProvider = (unmask = false) => {
+  return useQuery({
+    queryKey: ['access-point-providers', 'active', unmask],
+    queryFn: () => apiService.getActiveAccessPointProvider(unmask),
+    staleTime: 5 * 60 * 1000, // 5 minutes
+  });
+};
+
+// Mutation hook for activating Access Point Provider
+export const useActivateAccessPointProvider = () => {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: (data: ActivateAccessPointProviderPayload) =>
+      apiService.activateAccessPointProvider(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['access-point-providers'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+      toast.success('Access Point Provider activated successfully');
+    },
+    onError: (error: unknown) => {
+      toast.error(extractErrorMessage(error, 'Failed to activate Access Point Provider'));
+    },
+  });
+};
+
+// Mutation hook for updating Access Point Provider credentials
+export const useUpdateAccessPointProviderCredentials = () => {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: ({ id, data }: { id: number; data: UpdateAccessPointProviderCredentialsPayload }) =>
+      apiService.updateAccessPointProviderCredentials(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['access-point-providers'] });
+      toast.success('Credentials updated successfully');
+    },
+    onError: (error: unknown) => {
+      toast.error(extractErrorMessage(error, 'Failed to update credentials'));
+    },
+  });
+};
+
+// Mutation hook for deactivating Access Point Provider
+export const useDeactivateAccessPointProvider = () => {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: () => apiService.deactivateAccessPointProvider(),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['access-point-providers'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+      toast.success('Access Point Provider deactivated successfully');
+    },
+    onError: (error: unknown) => {
+      toast.error(extractErrorMessage(error, 'Failed to deactivate Access Point Provider'));
+    },
+  });
+};
+
+// Mutation hook for resyncing FIRS profile data
+export const useResyncFirsProfile = () => {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: () => apiService.resyncFirsProfile(),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['access-point-providers'] });
+      toast.success('FIRS profile resynced successfully');
+    },
+    onError: (error: unknown) => {
+      toast.error(extractErrorMessage(error, 'Failed to resync FIRS profile'));
     },
   });
 };
