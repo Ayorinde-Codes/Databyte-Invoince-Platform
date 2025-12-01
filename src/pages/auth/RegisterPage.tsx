@@ -72,10 +72,15 @@ export const RegisterPage = () => {
       try {
         setIsLoadingServices(true);
         const response = await apiService.getERPServices();
-        const serviceData =
-          response?.data?.services ??
-          response?.data ??
-          [];
+        const responseData = response?.data;
+        let serviceData: unknown = [];
+        if (responseData && typeof responseData === 'object') {
+          if ('services' in responseData && Array.isArray((responseData as { services?: unknown }).services)) {
+            serviceData = (responseData as { services: unknown[] }).services;
+          } else if (Array.isArray(responseData)) {
+            serviceData = responseData;
+          }
+        }
         setServices(Array.isArray(serviceData) ? serviceData : []);
       } catch (error) {
         console.error('Failed to load ERP services', error);

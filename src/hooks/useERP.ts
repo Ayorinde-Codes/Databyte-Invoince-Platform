@@ -117,7 +117,7 @@ export const useSyncERPData = () => {
     onSuccess: (response, variables) => {
       // Check if job was queued (async mode) or completed immediately (sync mode)
       const responseData = response.data;
-      if (responseData?.status === 'queued') {
+      if (responseData && typeof responseData === 'object' && 'status' in responseData && responseData.status === 'queued') {
         toast.success('Sync job queued. Processing in background...');
       } else {
         toast.success('Data synced successfully');
@@ -151,7 +151,10 @@ export const useERPSyncStatus = (id: number | null) => {
     refetchInterval: (query) => {
       // Poll every 3 seconds if there are pending jobs, otherwise every 30 seconds
       const data = query.state.data?.data;
-      return data?.has_pending_jobs ? 3000 : 30000;
+      if (data && typeof data === 'object' && 'has_pending_jobs' in data) {
+        return (data as { has_pending_jobs?: boolean }).has_pending_jobs ? 3000 : 30000;
+      }
+      return 30000;
     },
   });
 };
