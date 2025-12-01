@@ -148,6 +148,19 @@ type ERPSyncStatus = {
   [key: string]: unknown;
 };
 
+type ERPSetting = {
+  id?: number;
+  erp_name?: string | null;
+  erp_type?: string | null;
+  connection_type?: string | null;
+  is_active?: boolean;
+  setting_value?: Record<string, unknown>;
+  server_details?: Record<string, unknown>;
+  credentials?: Record<string, unknown>;
+  permissions?: Record<string, unknown>;
+  sync_settings?: Record<string, unknown>;
+};
+
 type AccessPointProvider = {
   id: number;
   name: string;
@@ -362,8 +375,8 @@ export const ERPConfigPage = () => {
 
   // Parse ERP setting for edit dialog
   const erpSettingData = erpSettingResponse?.data;
-  const erpSetting = (erpSettingData && typeof erpSettingData === 'object' && 'setting' in erpSettingData)
-    ? (erpSettingData as { setting?: unknown }).setting
+  const erpSetting: ERPSetting | null = (erpSettingData && typeof erpSettingData === 'object' && 'setting' in erpSettingData)
+    ? (erpSettingData as { setting?: ERPSetting | unknown }).setting as ERPSetting | null
     : null;
 
   // Update edit form when ERP setting is loaded
@@ -477,7 +490,18 @@ export const ERPConfigPage = () => {
       });
 
       // Extract the created setting ID from the response
-      const settingId = result?.data?.id || result?.data?.setting?.id;
+      const resultData = result?.data;
+      let settingId: number | undefined;
+      if (resultData && typeof resultData === 'object') {
+        if ('id' in resultData && typeof (resultData as { id?: unknown }).id === 'number') {
+          settingId = (resultData as { id: number }).id;
+        } else if ('setting' in resultData) {
+          const setting = (resultData as { setting?: unknown }).setting;
+          if (setting && typeof setting === 'object' && 'id' in setting && typeof (setting as { id?: unknown }).id === 'number') {
+            settingId = (setting as { id: number }).id;
+          }
+        }
+      }
       
       if (!settingId) {
         throw new Error('Failed to create setting for testing');
@@ -815,7 +839,7 @@ export const ERPConfigPage = () => {
                                     can_read_tax_categories: true,
                                   },
                                   sync_settings: {
-                                    sync_frequency: 'daily',
+                                    sync_frequency: 1440, // daily in minutes
                                   },
                                 },
                                 is_active: true,
@@ -1896,7 +1920,10 @@ export const ERPConfigPage = () => {
                                 onChange={(e) => {
                                   const newSettingValue = { ...(erpEditForm.setting_value || {}) };
                                   if (!newSettingValue.server_details) {
-                                    newSettingValue.server_details = { ...erpSetting.setting_value.server_details };
+                                    const serverDetails = erpSetting.setting_value?.server_details;
+                                    newSettingValue.server_details = (serverDetails && typeof serverDetails === 'object' && !Array.isArray(serverDetails))
+                                      ? { ...serverDetails as Record<string, unknown> }
+                                      : {};
                                   }
                                   newSettingValue.server_details[key] = e.target.value;
                                   setErpEditForm({ ...erpEditForm, setting_value: newSettingValue });
@@ -1947,7 +1974,10 @@ export const ERPConfigPage = () => {
                                   onChange={(e) => {
                                     const newSettingValue = { ...(erpEditForm.setting_value || {}) };
                                     if (!newSettingValue.credentials) {
-                                      newSettingValue.credentials = { ...erpSetting.setting_value.credentials };
+                                      const credentials = erpSetting.setting_value?.credentials;
+                                      newSettingValue.credentials = (credentials && typeof credentials === 'object' && !Array.isArray(credentials))
+                                        ? { ...credentials as Record<string, unknown> }
+                                        : {};
                                     }
                                     newSettingValue.credentials[key] = e.target.value;
                                     setErpEditForm({ ...erpEditForm, setting_value: newSettingValue });
@@ -1989,7 +2019,10 @@ export const ERPConfigPage = () => {
                               onCheckedChange={(checked) => {
                                 const newSettingValue = { ...(erpEditForm.setting_value || {}) };
                                 if (!newSettingValue.permissions) {
-                                  newSettingValue.permissions = { ...erpSetting.setting_value.permissions };
+                                  const permissions = erpSetting.setting_value?.permissions;
+                                  newSettingValue.permissions = (permissions && typeof permissions === 'object' && !Array.isArray(permissions))
+                                    ? { ...permissions as Record<string, unknown> }
+                                    : {};
                                 }
                                 newSettingValue.permissions[key] = checked;
                                 setErpEditForm({ ...erpEditForm, setting_value: newSettingValue });
@@ -2022,7 +2055,10 @@ export const ERPConfigPage = () => {
                                   onCheckedChange={(checked) => {
                                     const newSettingValue = { ...(erpEditForm.setting_value || {}) };
                                     if (!newSettingValue.sync_settings) {
-                                      newSettingValue.sync_settings = { ...erpSetting.setting_value.sync_settings };
+                                      const syncSettings = erpSetting.setting_value?.sync_settings;
+                                      newSettingValue.sync_settings = (syncSettings && typeof syncSettings === 'object' && !Array.isArray(syncSettings))
+                                        ? { ...syncSettings as Record<string, unknown> }
+                                        : {};
                                     }
                                     newSettingValue.sync_settings[key] = checked;
                                     setErpEditForm({ ...erpEditForm, setting_value: newSettingValue });
@@ -2040,7 +2076,10 @@ export const ERPConfigPage = () => {
                                 onChange={(e) => {
                                   const newSettingValue = { ...(erpEditForm.setting_value || {}) };
                                   if (!newSettingValue.sync_settings) {
-                                    newSettingValue.sync_settings = { ...erpSetting.setting_value.sync_settings };
+                                    const syncSettings = erpSetting.setting_value?.sync_settings;
+                                    newSettingValue.sync_settings = (syncSettings && typeof syncSettings === 'object' && !Array.isArray(syncSettings))
+                                      ? { ...syncSettings as Record<string, unknown> }
+                                      : {};
                                   }
                                   newSettingValue.sync_settings[key] = e.target.value;
                                   setErpEditForm({ ...erpEditForm, setting_value: newSettingValue });
@@ -2073,7 +2112,7 @@ export const ERPConfigPage = () => {
                             <div className="flex items-center space-x-2">
                               <Switch
                                 id={`setting-${key}`}
-                                checked={erpEditForm.setting_value?.[key] ?? value}
+                                checked={typeof erpEditForm.setting_value?.[key] === 'boolean' ? erpEditForm.setting_value[key] as boolean : (value as boolean)}
                                 onCheckedChange={(checked) => {
                                   const newSettingValue = { ...(erpEditForm.setting_value || {}) };
                                   newSettingValue[key] = checked;
@@ -2081,14 +2120,14 @@ export const ERPConfigPage = () => {
                                 }}
                               />
                               <Label htmlFor={`setting-${key}`} className="cursor-pointer">
-                                {(erpEditForm.setting_value?.[key] ?? value) ? 'Enabled' : 'Disabled'}
+                                {(typeof erpEditForm.setting_value?.[key] === 'boolean' ? erpEditForm.setting_value[key] : value) ? 'Enabled' : 'Disabled'}
                               </Label>
                     </div>
                           ) : (
                             <Input
                               id={`setting-${key}`}
                               type="text"
-                              value={erpEditForm.setting_value?.[key] || value || ''}
+                              value={String(erpEditForm.setting_value?.[key] ?? value ?? '')}
                               onChange={(e) => {
                                 const newSettingValue = { ...(erpEditForm.setting_value || {}) };
                                 newSettingValue[key] = e.target.value;

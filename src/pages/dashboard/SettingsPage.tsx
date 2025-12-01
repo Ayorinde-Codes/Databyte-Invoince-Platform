@@ -88,6 +88,7 @@ type TeamMember = {
   is_blocked?: boolean;
   status?: string;
   approval_status?: string;
+  last_login_at?: string | null;
 };
 
 export const SettingsPage = () => {
@@ -122,10 +123,16 @@ export const SettingsPage = () => {
   const { data: preferencesResponse, isLoading: isLoadingPreferences } = useCompanyPreferences();
   const updatePreferences = useUpdateCompanyPreferences();
   
-  const teamMembers = usersResponse?.data?.users || [];
+  const usersResponseData = usersResponse?.data;
+  const teamMembers: TeamMember[] = (usersResponseData && typeof usersResponseData === 'object' && 'users' in usersResponseData && Array.isArray((usersResponseData as { users?: unknown }).users))
+    ? (usersResponseData as { users: TeamMember[] }).users
+    : [];
   
   // Extract preferences data
-  const preferencesData = preferencesResponse?.data?.preferences;
+  const preferencesResponseData = preferencesResponse?.data;
+  const preferencesData = (preferencesResponseData && typeof preferencesResponseData === 'object' && 'preferences' in preferencesResponseData)
+    ? (preferencesResponseData as { preferences?: unknown }).preferences
+    : undefined;
   const preferences = preferencesData || {
     email_notifications: true,
     invoice_status_updates: true,
