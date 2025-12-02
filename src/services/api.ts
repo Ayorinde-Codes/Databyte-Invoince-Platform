@@ -150,6 +150,16 @@ class ApiService {
 
       clearTimeout(timeoutId);
 
+      // Log response details for debugging (especially for login)
+      if (endpoint.includes('/auth/login')) {
+        console.log('Login request details:', {
+          url,
+          status: response.status,
+          statusText: response.statusText,
+          headers: Object.fromEntries(response.headers.entries()),
+        });
+      }
+
       // Check content type before parsing JSON
       const contentType = response.headers.get('content-type') || '';
       let responseData: unknown;
@@ -162,8 +172,14 @@ class ApiService {
           const text = await response.text();
           responseData = { message: text || 'Request failed' };
         }
+        
+        // Log response data for login endpoint
+        if (endpoint.includes('/auth/login')) {
+          console.log('Login response data:', responseData);
+        }
       } catch (parseError) {
         // If JSON parsing fails, create a basic error response
+        console.error('Failed to parse response:', parseError);
         responseData = {
           message: `Request failed with status ${response.status}`,
         };
