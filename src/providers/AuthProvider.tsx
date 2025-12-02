@@ -114,9 +114,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
     try {
       const response = await apiService.login(credentials);
+      
+      // Log response for debugging
+      console.log('Login API response:', response);
 
       if (!response.status || !response.data) {
-        throw new Error(response.message || 'Login failed');
+        const errorMsg = response.message || 'Login failed';
+        console.error('Login failed - API response:', { status: response.status, message: response.message, data: response.data });
+        throw new Error(errorMsg);
       }
 
       const { token, user } = response.data;
@@ -134,7 +139,22 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       return response.data;
     } catch (error: unknown) {
       console.error('Login error:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Login failed. Please check your credentials.';
+      
+      // Extract more detailed error information
+      let errorMessage = 'Login failed. Please check your credentials.';
+      
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      } else if (error && typeof error === 'object') {
+        // Handle ApiError structure
+        const apiError = error as { message?: string; statusCode?: number; errors?: Record<string, string[]> };
+        if (apiError.message) {
+          errorMessage = apiError.message;
+        }
+        // Log full error for debugging
+        console.error('Full API error:', apiError);
+      }
+      
       throw new Error(errorMessage);
     } finally {
       setIsLoading(false);
