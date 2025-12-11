@@ -39,7 +39,7 @@ export const MetricsCard: React.FC<MetricsCardProps> = ({
         const absVal = Math.abs(val as number);
         const currencyInfo = CURRENCIES.NGN || { symbol: '₦', decimal_places: 2 };
         const symbol = currencyInfo.symbol;
-
+        
         if (absVal >= 1000000000) {
           const abbreviated = ((val as number) / 1000000000).toFixed(1);
           return `${symbol}${abbreviated}B`;
