@@ -223,6 +223,7 @@ export const ERPConfigPage = () => {
         host: '',
         port: 1433,
         database: '',
+        schema: 'SEED',
       },
       credentials: {
         username: '',
@@ -382,9 +383,23 @@ export const ERPConfigPage = () => {
   // Update edit form when ERP setting is loaded
   useEffect(() => {
     if (erpSetting && showEditDialog) {
+      const settingValue = { ...(erpSetting.setting_value || {}) };
+      // Ensure schema exists for Sage X3
+      if (erpSetting.erp_type === 'sage_x3' && settingValue.server_details) {
+        const serverDetails = settingValue.server_details;
+        if (serverDetails && typeof serverDetails === 'object' && !Array.isArray(serverDetails)) {
+          const details = serverDetails as Record<string, unknown>;
+          if (!details.schema) {
+            settingValue.server_details = {
+              ...details,
+              schema: 'SEED',
+            };
+          }
+        }
+      }
       setErpEditForm({
         is_active: erpSetting.is_active ?? true,
-        setting_value: erpSetting.setting_value || {},
+        setting_value: settingValue,
       });
     }
   }, [erpSetting, showEditDialog]);
@@ -560,6 +575,7 @@ export const ERPConfigPage = () => {
             host: '',
             port: 1433,
             database: '',
+            schema: 'SEED',
           },
           credentials: {
             username: '',
@@ -597,9 +613,21 @@ export const ERPConfigPage = () => {
 
   const handleUpdateERP = async (id: number) => {
     try {
+      // Ensure schema is included for Sage X3 if not present
+      const updateData = { ...erpEditForm };
+      if (erpSetting?.erp_type === 'sage_x3' && updateData.setting_value?.server_details) {
+        const serverDetails = updateData.setting_value.server_details;
+        if (serverDetails && typeof serverDetails === 'object' && !Array.isArray(serverDetails)) {
+          const details = serverDetails as Record<string, unknown>;
+          if (!details.schema) {
+            details.schema = 'SEED';
+          }
+        }
+      }
+      
       await updateERPSetting.mutateAsync({
         id,
-        data: erpEditForm,
+        data: updateData,
       });
       setShowEditDialog(null);
       setErpEditForm({ is_active: true, setting_value: {} });
@@ -826,6 +854,7 @@ export const ERPConfigPage = () => {
                                     host: '',
                                     port: selectedERP === 'sage_300' || selectedERP === 'sage_x3' ? 1433 : 5432,
                                     database: '',
+                                    ...(selectedERP === 'sage_x3' && { schema: 'SEED' }),
                                   },
                                   credentials: {
                                     username: '',
@@ -1911,12 +1940,15 @@ export const ERPConfigPage = () => {
                           <div key={key} className="space-y-2">
                             <Label htmlFor={`server-${key}`} className="text-xs capitalize">
                               {key.replace(/_/g, ' ')}
+                              {key === 'schema' && erpSetting.erp_type === 'sage_x3' && (
+                                <span className="text-muted-foreground ml-1">(Optional)</span>
+                              )}
                             </Label>
                             <div className="relative">
                               <Input
                                 id={`server-${key}`}
                                 type={key.includes('password') && !passwordVisibility[`server-${key}`] ? 'password' : 'text'}
-                                value={erpEditForm.setting_value?.server_details?.[key] || value || ''}
+                                value={erpEditForm.setting_value?.server_details?.[key] ?? (key === 'schema' && erpSetting.erp_type === 'sage_x3' ? 'SEED' : value) ?? ''}
                                 onChange={(e) => {
                                   const newSettingValue = { ...(erpEditForm.setting_value || {}) };
                                   if (!newSettingValue.server_details) {
@@ -1925,10 +1957,10 @@ export const ERPConfigPage = () => {
                                       ? { ...serverDetails as Record<string, unknown> }
                                       : {};
                                   }
-                                  newSettingValue.server_details[key] = e.target.value;
+                                  newSettingValue.server_details[key] = e.target.value || (key === 'schema' ? 'SEED' : '');
                                   setErpEditForm({ ...erpEditForm, setting_value: newSettingValue });
                                 }}
-                                placeholder={`Enter ${key.replace(/_/g, ' ')}`}
+                                placeholder={key === 'schema' && erpSetting.erp_type === 'sage_x3' ? 'SEED (default)' : `Enter ${key.replace(/_/g, ' ')}`}
                                 className={key.includes('password') ? 'pr-10' : ''}
                               />
                               {key.includes('password') && (
@@ -1949,6 +1981,42 @@ export const ERPConfigPage = () => {
                     </div>
                   </div>
                         ))}
+                        {/* Add schema field for Sage X3 if it doesn't exist in server_details */}
+                        {erpSetting.erp_type === 'sage_x3' && (() => {
+                          const serverDetails = erpSetting.setting_value.server_details;
+                          const hasSchema = serverDetails && typeof serverDetails === 'object' && !Array.isArray(serverDetails) && 'schema' in (serverDetails as Record<string, unknown>);
+                          return !hasSchema;
+                        })() && (
+                          <div className="space-y-2">
+                            <Label htmlFor="server-schema" className="text-xs capitalize">
+                              Schema <span className="text-muted-foreground">(Optional)</span>
+                            </Label>
+                            <Input
+                              id="server-schema"
+                              type="text"
+                              value={(erpEditForm.setting_value?.server_details && typeof erpEditForm.setting_value.server_details === 'object' && !Array.isArray(erpEditForm.setting_value.server_details) && 'schema' in (erpEditForm.setting_value.server_details as Record<string, unknown>))
+                                ? String((erpEditForm.setting_value.server_details as Record<string, unknown>).schema || 'SEED')
+                                : 'SEED'}
+                              onChange={(e) => {
+                                const newSettingValue = { ...(erpEditForm.setting_value || {}) };
+                                if (!newSettingValue.server_details) {
+                                  const serverDetails = erpSetting.setting_value?.server_details;
+                                  newSettingValue.server_details = (serverDetails && typeof serverDetails === 'object' && !Array.isArray(serverDetails))
+                                    ? { ...serverDetails as Record<string, unknown> }
+                                    : {};
+                                }
+                                if (newSettingValue.server_details && typeof newSettingValue.server_details === 'object' && !Array.isArray(newSettingValue.server_details)) {
+                                  (newSettingValue.server_details as Record<string, unknown>).schema = e.target.value || 'SEED';
+                                }
+                                setErpEditForm({ ...erpEditForm, setting_value: newSettingValue });
+                              }}
+                              placeholder="SEED (default)"
+                            />
+                            <p className="text-xs text-muted-foreground">
+                              Default: SEED. Enter your Sage X3 schema name if different (e.g., TESTRUN).
+                            </p>
+                          </div>
+                        )}
                       </div>
                     )}
 
@@ -2270,6 +2338,32 @@ export const ERPConfigPage = () => {
                     placeholder="Database name"
                   />
                 </div>
+                {/* Schema field for Sage X3 */}
+                {erpCreateForm.erp_type === 'sage_x3' && (
+                  <div className="space-y-2">
+                    <Label htmlFor="create-schema">Schema (Optional)</Label>
+                    <Input
+                      id="create-schema"
+                      value={erpCreateForm.setting_value.server_details.schema || 'SEED'}
+                      onChange={(e) =>
+                        setErpCreateForm({
+                          ...erpCreateForm,
+                          setting_value: {
+                            ...erpCreateForm.setting_value,
+                            server_details: {
+                              ...erpCreateForm.setting_value.server_details,
+                              schema: e.target.value || 'SEED',
+                            },
+                          },
+                        })
+                      }
+                      placeholder="SEED"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Default: SEED. Enter your Sage X3 schema name if different (e.g., TESTRUN).
+                    </p>
+                  </div>
+                )}
                 <div className="flex justify-end">
                   <Button
                     type="button"
@@ -2513,6 +2607,7 @@ export const ERPConfigPage = () => {
                                 host: '',
                                 port: 1433,
                                 database: '',
+                                schema: 'SEED',
                               },
                               credentials: {
                                 username: '',
@@ -2544,6 +2639,7 @@ export const ERPConfigPage = () => {
                             host: '',
                             port: 1433,
                             database: '',
+                            schema: 'SEED',
                           },
                           credentials: {
                             username: '',
