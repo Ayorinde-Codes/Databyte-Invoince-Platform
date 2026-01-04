@@ -157,10 +157,28 @@ interface Invoice {
   source_system?: string;
 }
 
+interface QuickFix {
+  type: 'party_tin' | 'party_email' | 'party_telephone' | 'item_hsn_code' | 'firs_invoice_type_code' | 'firs_note' | 'previous_invoice_irn';
+  message: string;
+  party_id?: number;
+  party_name?: string;
+  item_id?: number;
+  item_description?: string;
+  item_index?: number;
+  field: string;
+  action: 'update_party' | 'update_invoice_item' | 'update_firs_fields';
+  endpoint?: string;
+}
+
 interface ValidationDetails {
   errors?: string[];
   warnings?: string[];
   suggestions?: string[];
+  quick_fixes?: QuickFix[];
+  invoice_id?: number;
+  invoice_type?: 'ar' | 'ap';
+  party_id?: number;
+  party_name?: string;
 }
 
 interface ValidationErrorResponse {
@@ -208,8 +226,19 @@ export const InvoicesPage = () => {
     errors?: string[];
     warnings?: string[];
     suggestions?: string[];
+    quick_fixes?: QuickFix[];
+    invoice_id?: number;
+    invoice_type?: 'ar' | 'ap';
+    party_id?: number;
+    party_name?: string;
     message?: string;
   } | null>(null);
+  const [quickFixDialog, setQuickFixDialog] = useState<{
+    open: boolean;
+    fix: QuickFix | null;
+    value: string;
+  }>({ open: false, fix: null, value: '' });
+  const [isUpdatingQuickFix, setIsUpdatingQuickFix] = useState(false);
   const [editingItemId, setEditingItemId] = useState<number | null>(null);
   const [editingHsnCode, setEditingHsnCode] = useState<string>('');
   const [isUpdatingItem, setIsUpdatingItem] = useState(false);
@@ -405,6 +434,189 @@ export const InvoicesPage = () => {
     });
   }
 
+  // Quick fix handlers
+  const handleQuickFix = (fix: QuickFix) => {
+    // Debug: Log the fix being handled
+    console.log('handleQuickFix called:', { 
+      action: fix.action, 
+      type: fix.type, 
+      invoice_id: validationResult?.invoice_id,
+      invoice_type: validationResult?.invoice_type 
+    });
+    
+    // Handle FIRS fields action - open FIRS fields dialog instead of quick fix dialog
+    if (fix.action === 'update_firs_fields' && validationResult?.invoice_id && validationResult?.invoice_type) {
+      console.log('Opening FIRS fields dialog for invoice:', validationResult.invoice_id);
+      // Close validation dialog first and wait a bit to ensure it closes
+      setShowValidationDialog(false);
+      // Small delay to ensure validation dialog closes before opening FIRS fields dialog
+      setTimeout(() => {
+        // Try to find invoice in current list or selected invoice
+        // Use the same extraction logic as used elsewhere in the component
+        const arDataObj = arData?.data;
+        const arInvoiceList = (arDataObj && typeof arDataObj === 'object' && 'data' in arDataObj && Array.isArray(arDataObj.data))
+          ? arDataObj.data
+          : [];
+        
+        const apDataObj = apData?.data;
+        const apInvoiceList = (apDataObj && typeof apDataObj === 'object' && 'data' in apDataObj && Array.isArray(apDataObj.data))
+          ? apDataObj.data
+          : [];
+        
+        const invoice = activeTab === 'ar' 
+          ? (arInvoiceList.find((inv: Invoice) => inv.id === validationResult.invoice_id) || 
+             (selectedInvoice && selectedInvoice.id === validationResult.invoice_id ? selectedInvoice : null))
+          : (apInvoiceList.find((inv: Invoice) => inv.id === validationResult.invoice_id) ||
+             (selectedInvoice && selectedInvoice.id === validationResult.invoice_id ? selectedInvoice : null));
+        
+        if (invoice) {
+          // Invoice found, open FIRS fields dialog
+          handleOpenFirsFieldsDialog(invoice);
+        } else {
+          // Invoice not in current list, fetch it
+          const fetchInvoice = async () => {
+            try {
+              const response = validationResult.invoice_type === 'ar'
+                ? await apiService.getARInvoice(validationResult.invoice_id)
+                : await apiService.getAPInvoice(validationResult.invoice_id);
+              if (response?.data) {
+                handleOpenFirsFieldsDialog(response.data as Invoice);
+              } else {
+                toast.error('Failed to load invoice details');
+              }
+            } catch (error) {
+              console.error('Failed to fetch invoice:', error);
+              toast.error('Failed to load invoice details');
+            }
+          };
+          fetchInvoice();
+        }
+      }, 150); // Small delay to ensure validation dialog closes
+      return;
+    }
+    
+    // Set default value based on field type
+    let defaultValue = '';
+    if (fix.field === 'hsn_code') {
+      defaultValue = '';
+    } else if (fix.field === 'tin') {
+      defaultValue = '';
+    } else if (fix.field === 'email') {
+      defaultValue = '';
+    } else if (fix.field === 'telephone') {
+      defaultValue = '';
+    }
+    
+    setQuickFixDialog({
+      open: true,
+      fix,
+      value: defaultValue,
+    });
+  };
+
+  const handleQuickFixUpdate = async () => {
+    if (!quickFixDialog.fix) return;
+
+    setIsUpdatingQuickFix(true);
+    try {
+      const { fix, value } = quickFixDialog;
+
+      if (fix.action === 'update_party' && fix.party_id) {
+        // Update party field
+        await apiService.updateParty(fix.party_id, {
+          [fix.field]: value,
+        } as Record<string, unknown>);
+        toast.success(`${fix.message} updated successfully`);
+      } else if (fix.action === 'update_invoice_item' && fix.item_id && validationResult?.invoice_id && validationResult?.invoice_type) {
+        // Update invoice item field
+        // Use specific HSN code endpoint if updating HSN code, otherwise use general update endpoint
+        if (fix.field === 'hsn_code') {
+          if (validationResult.invoice_type === 'ar') {
+            await apiService.updateARInvoiceItemHsnCode(validationResult.invoice_id, fix.item_id, value);
+          } else {
+            await apiService.updateAPInvoiceItemHsnCode(validationResult.invoice_id, fix.item_id, value);
+          }
+        } else {
+          if (validationResult.invoice_type === 'ar') {
+            await apiService.updateARInvoiceItem(validationResult.invoice_id, fix.item_id, {
+              [fix.field]: value,
+            } as Record<string, unknown>);
+          } else {
+            await apiService.updateAPInvoiceItem(validationResult.invoice_id, fix.item_id, {
+              [fix.field]: value,
+            } as Record<string, unknown>);
+          }
+        }
+        toast.success(`${fix.message} updated successfully`);
+      }
+
+      // Close dialog and refresh invoice data
+      setQuickFixDialog({ open: false, fix: null, value: '' });
+      
+      // Invalidate and refetch invoices to get updated data
+      queryClient.invalidateQueries({ queryKey: ['invoices'] });
+      if (validationResult?.invoice_type === 'ar') {
+        queryClient.invalidateQueries({ queryKey: ['invoices', 'ar'] });
+        await refetchAR();
+      } else if (validationResult?.invoice_type === 'ap') {
+        queryClient.invalidateQueries({ queryKey: ['invoices', 'ap'] });
+        await refetchAP();
+      }
+      
+      // Update selected invoice if it's the same one being updated
+      if (selectedInvoice && validationResult?.invoice_id === selectedInvoice.id) {
+        // Refetch the selected invoice to get updated data
+        try {
+          if (validationResult.invoice_type === 'ar') {
+            const response = await apiService.getARInvoice(selectedInvoice.id, 'items');
+            if (response?.data) {
+              setSelectedInvoice(response.data as Invoice);
+            }
+          } else {
+            const response = await apiService.getAPInvoice(selectedInvoice.id, 'items');
+            if (response?.data) {
+              setSelectedInvoice(response.data as Invoice);
+            }
+          }
+        } catch (error) {
+          console.error('Failed to refresh selected invoice:', error);
+        }
+      }
+      
+      // Update validation result to remove the fixed item from quick_fixes
+      if (validationResult && fix.action === 'update_invoice_item' && fix.item_id) {
+        const updatedQuickFixes = validationResult.quick_fixes?.filter(
+          (qf: QuickFix) => !(qf.type === 'item_hsn_code' && qf.item_id === fix.item_id)
+        ) || [];
+        
+        // Update errors to remove the fixed HSN code error
+        const updatedErrors = validationResult.errors?.filter(
+          (error: string) => !error.includes(fix.item_description || '')
+        ) || [];
+        
+        setValidationResult({
+          ...validationResult,
+          quick_fixes: updatedQuickFixes,
+          errors: updatedErrors.length > 0 ? updatedErrors : undefined,
+        });
+        
+        // If no more errors, mark as valid
+        if (updatedErrors.length === 0 && (!validationResult.warnings || validationResult.warnings.length === 0)) {
+          setValidationResult(null);
+          toast.success('All validation issues resolved!');
+        }
+      } else {
+        // Clear validation result to allow re-validation
+        setValidationResult(null);
+      }
+    } catch (error) {
+      const errorMessage = extractErrorMessage(error);
+      toast.error(`Failed to update: ${errorMessage}`);
+    } finally {
+      setIsUpdatingQuickFix(false);
+    }
+  };
+
   const getStatusBadge = (status: string) => {
     const statusConfig: Record<
       string,
@@ -561,13 +773,24 @@ export const InvoicesPage = () => {
         queryClient.invalidateQueries({ queryKey: ['dashboard'] });
       } else {
         // Check if response has validation details
-        // Backend returns: { status: false, message: "...", data: { errors: [...], warnings: [...], suggestions: [...] } }
+        // Backend returns: { status: false, message: "...", data: { errors: [...], warnings: [...], suggestions: [...], quick_fixes: [...] } }
         const validationData = 
           response.data && typeof response.data === 'object' && 'data' in response.data
             ? (response.data.data as ValidationDetails)
             : response.data && typeof response.data === 'object' && ('errors' in response.data || 'warnings' in response.data)
             ? (response.data as ValidationDetails)
             : undefined;
+
+        // Debug: Log validation data to see what we're receiving
+        if (validationData) {
+          console.log('Validation Data Received:', {
+            errors: validationData.errors?.length,
+            warnings: validationData.warnings?.length,
+            suggestions: validationData.suggestions?.length,
+            quick_fixes: validationData.quick_fixes?.length,
+            quick_fixes_data: validationData.quick_fixes,
+          });
+        }
 
         if (
           validationData &&
@@ -579,6 +802,11 @@ export const InvoicesPage = () => {
             errors: validationData.errors ?? [],
             warnings: validationData.warnings ?? [],
             suggestions: validationData.suggestions ?? [],
+            quick_fixes: validationData.quick_fixes ?? [],
+            invoice_id: validationData.invoice_id,
+            invoice_type: validationData.invoice_type,
+            party_id: validationData.party_id,
+            party_name: validationData.party_name,
             message: response.message || 'Validation failed',
           });
           setShowValidationDialog(true);
@@ -625,6 +853,11 @@ export const InvoicesPage = () => {
           errors: validationData.errors ?? [],
           warnings: validationData.warnings ?? [],
           suggestions: validationData.suggestions ?? [],
+          quick_fixes: validationData.quick_fixes ?? [],
+          invoice_id: validationData.invoice_id,
+          invoice_type: validationData.invoice_type,
+          party_id: validationData.party_id,
+          party_name: validationData.party_name,
           message: errorMessage,
         });
         setShowValidationDialog(true);
@@ -653,7 +886,6 @@ export const InvoicesPage = () => {
       const response = await apiService.signInvoice({
         invoice_id: invoice.id,
         invoice_type: activeTab,
-        validate_with_hoptool: true,
       });
 
       if (response.status) {
@@ -822,18 +1054,36 @@ export const InvoicesPage = () => {
       // Invalidate and refetch invoices to get updated data
       if (activeTab === 'ar') {
         queryClient.invalidateQueries({ queryKey: ['invoices', 'ar'] });
+        queryClient.invalidateQueries({ queryKey: ['invoices', 'ar', invoice.id] });
         await refetchAR();
       } else {
         queryClient.invalidateQueries({ queryKey: ['invoices', 'ap'] });
+        queryClient.invalidateQueries({ queryKey: ['invoices', 'ap', invoice.id] });
         await refetchAP();
       }
 
-      // Update selected invoice if it's the same one
+      // Update selected invoice if it's the same one - refetch to get latest data
       if (selectedInvoice && selectedInvoice.id === invoice.id) {
-        const updatedItems = selectedInvoice.items?.map(i => 
-          i.id === item.id ? { ...i, hsn_code: editingHsnCode.trim() } : i
-        );
-        setSelectedInvoice({ ...selectedInvoice, items: updatedItems });
+        try {
+          if (activeTab === 'ar') {
+            const response = await apiService.getARInvoice(invoice.id, 'items');
+            if (response?.data) {
+              setSelectedInvoice(response.data as Invoice);
+            }
+          } else {
+            const response = await apiService.getAPInvoice(invoice.id, 'items');
+            if (response?.data) {
+              setSelectedInvoice(response.data as Invoice);
+            }
+          }
+        } catch (error) {
+          console.error('Failed to refresh selected invoice:', error);
+          // Fallback to manual update if refetch fails
+          const updatedItems = selectedInvoice.items?.map(i => 
+            i.id === item.id ? { ...i, hsn_code: editingHsnCode.trim() } : i
+          );
+          setSelectedInvoice({ ...selectedInvoice, items: updatedItems });
+        }
       }
 
       setEditingItemId(null);
@@ -1485,7 +1735,7 @@ export const InvoicesPage = () => {
                               Download PDF
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
-                            <DropdownMenuItem
+                                          <DropdownMenuItem
                               onClick={() => handleOpenFirsFieldsDialog(invoice)}
                               disabled={
                                 !canUpdate ||
@@ -1506,11 +1756,11 @@ export const InvoicesPage = () => {
                                 invoice.status === 'cancelled' ||
                                 ['validated', 'signed', 'approved'].includes(invoice.firs_status || '')
                               }
-                            >
-                              <Shield className="mr-2 h-4 w-4" />
+                                          >
+                                            <Shield className="mr-2 h-4 w-4" />
                               {isValidating ? 'Validating...' : 'Validate FIRS'}
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
+                              </DropdownMenuItem>
+                                          <DropdownMenuItem
                               onClick={() => handleSignInvoice(invoice)}
                               disabled={
                                 !canSignFIRS ||
@@ -1534,11 +1784,11 @@ export const InvoicesPage = () => {
                                     invoice.status === 'paid' ||
                                     invoice.status === 'cancelled' ||
                                     ['cancelled', 'rejected'].includes(invoice.firs_status || '')
-                                  }
-                                >
-                                  <CheckCircle className="mr-2 h-4 w-4" />
+                                            }
+                                          >
+                                            <CheckCircle className="mr-2 h-4 w-4" />
                                   Mark as Paid
-                                </DropdownMenuItem>
+                              </DropdownMenuItem>
                                 <DropdownMenuItem
                                   onClick={() => handleUpdatePayment(invoice, 'PENDING')}
                                   disabled={
@@ -1621,8 +1871,8 @@ export const InvoicesPage = () => {
                                                   {index + 1}
                                                 </TableCell>
                                                 <TableCell>
-                                                  <div className="font-medium">
-                                                    {item.item_code || 'N/A'}
+                                                    <div className="font-medium">
+                                                      {item.item_code || 'N/A'}
                                                   </div>
                                                 </TableCell>
                                                 <TableCell>
@@ -1729,12 +1979,13 @@ export const InvoicesPage = () => {
                                                       <span className="text-sm">
                                                         {item.hsn_code || 'Not set'}
                                                       </span>
-                                                      {canUpdate && (
+                                                      {(canUpdate || !item.hsn_code) && (
                                                         <Button
                                                           size="sm"
                                                           variant="ghost"
                                                           className="h-5 w-5 p-0"
                                                           onClick={() => handleStartEditHsn(item)}
+                                                          title={!canUpdate && !item.hsn_code ? 'Set HSN code' : 'Edit HSN code'}
                                                         >
                                                           <Edit className="h-3 w-3" />
                                                         </Button>
@@ -2125,12 +2376,13 @@ export const InvoicesPage = () => {
                                   <span className="text-sm">
                                     {item.hsn_code || 'Not set'}
                                   </span>
-                                  {canUpdate && (
+                                  {(canUpdate || !item.hsn_code) && (
                                     <Button
                                       size="sm"
                                       variant="ghost"
                                       className="h-6 w-6 p-0"
                                       onClick={() => handleStartEditHsn(item)}
+                                      title={!canUpdate && !item.hsn_code ? 'Set HSN code' : 'Edit HSN code'}
                                     >
                                       <Edit className="h-3 w-3" />
                                     </Button>
@@ -2223,7 +2475,7 @@ export const InvoicesPage = () => {
 
       {/* Validation Result Dialog */}
       <Dialog open={showValidationDialog} onOpenChange={setShowValidationDialog}>
-        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto z-50">
           <DialogHeader>
             <DialogTitle>FIRS Validation Results</DialogTitle>
             <DialogDescription>
@@ -2240,11 +2492,48 @@ export const InvoicesPage = () => {
                     Errors ({validationResult.errors.length})
                   </h4>
                   <div className="bg-red-50 border border-red-200 rounded-md p-4 space-y-2">
-                    {validationResult.errors.map((error, index) => (
-                      <div key={index} className="text-sm text-red-800">
-                        • {error}
-                      </div>
-                    ))}
+                    {validationResult.errors.map((error, index) => {
+                      // Find matching quick fix for this error
+                      // Match by error content - try to find the most relevant fix
+                      const matchingFix = validationResult.quick_fixes?.find((fix) => {
+                        // Match FIRS field errors
+                        if (fix.action === 'update_firs_fields') {
+                          if (fix.type === 'firs_invoice_type_code' && error.includes('invoice type code')) return true;
+                          if (fix.type === 'firs_note' && error.includes('FIRS note')) return true;
+                          if (fix.type === 'previous_invoice_irn' && error.includes('Previous invoice IRN')) return true;
+                        }
+                        // Match party TIN errors
+                        if (fix.type === 'party_tin' && (error.includes('TIN is missing') || error.includes('TIN'))) return true;
+                        // Match party email errors
+                        if (fix.type === 'party_email' && error.includes('email')) return true;
+                        // Match party telephone errors
+                        if (fix.type === 'party_telephone' && error.includes('telephone')) return true;
+                        // Match HSN code errors - check if error mentions the item description
+                        if (fix.type === 'item_hsn_code' && error.includes('HSN codes')) {
+                          // If fix has item_description, check if error mentions it
+                          if (fix.item_description && error.includes(fix.item_description)) return true;
+                          // Otherwise, match any HSN code error
+                          return true;
+                        }
+                        return false;
+                      });
+
+                      return (
+                        <div key={index} className="flex items-start justify-between gap-2 text-sm text-red-800">
+                          <span className="flex-1">• {error}</span>
+                          {matchingFix && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-7 text-xs whitespace-nowrap"
+                              onClick={() => handleQuickFix(matchingFix)}
+                            >
+                              Fix
+                            </Button>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               )}
@@ -2257,9 +2546,53 @@ export const InvoicesPage = () => {
                     Warnings ({validationResult.warnings.length})
                   </h4>
                   <div className="bg-yellow-50 border border-yellow-200 rounded-md p-4 space-y-2">
-                    {validationResult.warnings.map((warning, index) => (
-                      <div key={index} className="text-sm text-yellow-800">
-                        • {warning}
+                    {validationResult.warnings.map((warning, index) => {
+                      // Find matching quick fix for this warning
+                      const matchingFix = validationResult.quick_fixes?.find((fix) => {
+                        if (fix.type === 'party_email' && warning.includes('email')) return true;
+                        if (fix.type === 'party_telephone' && warning.includes('telephone')) return true;
+                        return false;
+                      });
+
+                      return (
+                        <div key={index} className="flex items-start justify-between gap-2 text-sm text-yellow-800">
+                          <span className="flex-1">• {warning}</span>
+                          {matchingFix && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-7 text-xs whitespace-nowrap"
+                              onClick={() => handleQuickFix(matchingFix)}
+                            >
+                              Fix
+                            </Button>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Quick Fixes Section */}
+              {validationResult.quick_fixes && validationResult.quick_fixes.length > 0 && (
+                <div className="space-y-2">
+                  <h4 className="text-sm font-semibold text-blue-600 flex items-center gap-2">
+                    <RefreshCw className="w-4 h-4" />
+                    Quick Fixes Available ({validationResult.quick_fixes.length})
+                  </h4>
+                  <div className="bg-blue-50 border border-blue-200 rounded-md p-4 space-y-2">
+                    {validationResult.quick_fixes.map((fix, index) => (
+                      <div key={index} className="flex items-center justify-between gap-2 text-sm text-blue-800">
+                        <span className="flex-1">• {fix.message}</span>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 text-xs whitespace-nowrap"
+                          onClick={() => handleQuickFix(fix)}
+                        >
+                          Fix Now
+                        </Button>
                       </div>
                     ))}
                   </div>
@@ -2306,9 +2639,127 @@ export const InvoicesPage = () => {
         </DialogContent>
       </Dialog>
 
+      {/* Quick Fix Dialog */}
+      <Dialog open={quickFixDialog.open} onOpenChange={(open) => !open && setQuickFixDialog({ open: false, fix: null, value: '' })}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Quick Fix</DialogTitle>
+            <DialogDescription>
+              {quickFixDialog.fix?.message || 'Update field value'}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 mt-4">
+            {quickFixDialog.fix && (
+              <>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">
+                    {quickFixDialog.fix.field === 'tin' && 'TIN'}
+                    {quickFixDialog.fix.field === 'email' && 'Email'}
+                    {quickFixDialog.fix.field === 'telephone' && 'Telephone'}
+                    {quickFixDialog.fix.field === 'hsn_code' && 'HSN Code'}
+                    {quickFixDialog.fix.field !== 'tin' && quickFixDialog.fix.field !== 'email' && quickFixDialog.fix.field !== 'telephone' && quickFixDialog.fix.field !== 'hsn_code' && quickFixDialog.fix.field}
+                  </label>
+                  {quickFixDialog.fix.field === 'hsn_code' && hsnCodes.length > 0 ? (
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          role="combobox"
+                          className="w-full justify-between"
+                          disabled={isUpdatingQuickFix}
+                        >
+                          {quickFixDialog.value 
+                            ? (() => {
+                                const selectedCode = hsnCodes.find((c: string | { hscode?: string; code?: string; value?: string; name?: string }) => getHsnCodeValue(c) === quickFixDialog.value);
+                                return selectedCode ? getHsnCodeDisplay(selectedCode) : quickFixDialog.value;
+                              })()
+                            : 'Select HSN code...'}
+                          <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0 z-[100]" align="start">
+                        <Command>
+                          <CommandInput placeholder="Search HSN codes..." className="h-9" />
+                          <CommandList>
+                            <CommandEmpty>
+                              <div className="py-2 text-center text-sm">
+                                <div>No HSN code found.</div>
+                                <div className="text-xs text-muted-foreground mt-1">
+                                  Type to enter custom code
+                                </div>
+                              </div>
+                            </CommandEmpty>
+                            <CommandGroup>
+                              {isLoadingHsnCodes ? (
+                                <div className="py-2 text-center text-sm text-muted-foreground">
+                                  Loading HSN codes...
+                                </div>
+                              ) : (
+                                hsnCodes.map((code: string | { hscode?: string; description?: string; code?: string; value?: string; name?: string }) => {
+                                  const codeValue = getHsnCodeValue(code);
+                                  const displayText = getHsnCodeDisplay(code);
+                                  return (
+                                    <CommandItem
+                                      key={codeValue}
+                                      value={codeValue}
+                                      onSelect={() => {
+                                        setQuickFixDialog({ ...quickFixDialog, value: codeValue });
+                                      }}
+                                    >
+                                      {displayText}
+                                    </CommandItem>
+                                  );
+                                })
+                              )}
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
+                  ) : (
+                    <Input
+                      type={quickFixDialog.fix.field === 'email' ? 'email' : 'text'}
+                      value={quickFixDialog.value}
+                      onChange={(e) => setQuickFixDialog({ ...quickFixDialog, value: e.target.value })}
+                      placeholder={`Enter ${quickFixDialog.fix.field}`}
+                      disabled={isUpdatingQuickFix}
+                    />
+                  )}
+                  {quickFixDialog.fix.field === 'tin' && (
+                    <p className="text-xs text-muted-foreground">
+                      FIRS requires TIN in the format 12345678-1234 (8 digits, dash, 4 digits)
+                    </p>
+                  )}
+                  {quickFixDialog.fix.field === 'telephone' && (
+                    <p className="text-xs text-muted-foreground">
+                      Format: +2348055902479 or 08055902479
+                    </p>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setQuickFixDialog({ open: false, fix: null, value: '' })}
+              disabled={isUpdatingQuickFix}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleQuickFixUpdate}
+              disabled={isUpdatingQuickFix || !quickFixDialog.value.trim()}
+            >
+              {isUpdatingQuickFix ? 'Updating...' : 'Update'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* FIRS Fields Dialog */}
       <Dialog open={showFirsFieldsDialog} onOpenChange={setShowFirsFieldsDialog}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-2xl z-50">
           <DialogHeader>
             <DialogTitle>Edit FIRS Fields</DialogTitle>
             <DialogDescription>
@@ -2319,13 +2770,16 @@ export const InvoicesPage = () => {
             {/* Invoice Type Code */}
             <div className="space-y-2">
               <label className="text-sm font-medium">Invoice Type Code *</label>
-              <Popover open={invoiceTypePopoverOpen} onOpenChange={setInvoiceTypePopoverOpen}>
+              <Popover open={invoiceTypePopoverOpen} onOpenChange={setInvoiceTypePopoverOpen} modal={false}>
                 <PopoverTrigger asChild>
                   <Button
                     variant="outline"
                     role="combobox"
                     className="w-full justify-between"
                     disabled={isUpdatingFirsFields || isLoadingInvoiceTypes}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                    }}
                   >
                     {firsInvoiceTypeCode
                       ? invoiceTypes.find(
@@ -2335,7 +2789,1821 @@ export const InvoicesPage = () => {
                     <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-full p-0" align="start">
+                <PopoverContent 
+                  className="w-[var(--radix-popover-trigger-width)] p-0 z-[100]" 
+                  align="start"
+                  onInteractOutside={(e) => {
+                    // Prevent closing when clicking on Dialog overlay
+                    const target = e.target as HTMLElement;
+                    if (target.closest('[role="dialog"]')) {
+                      e.preventDefault();
+                    }
+                  }}
+                >
+                  <Command>
+                    <CommandInput placeholder="Search invoice types..." className="h-9" />
+                    <CommandList>
+                      <CommandEmpty>
+                        <div className="py-2 text-center text-sm">
+                          <div>No invoice type found.</div>
+                        </div>
+                      </CommandEmpty>
+                      <CommandGroup>
+                        {isLoadingInvoiceTypes ? (
+                          <div className="py-2 text-center text-sm text-muted-foreground">
+                            Loading invoice types...
+                          </div>
+                        ) : (
+                          invoiceTypes.map((type: { code?: string; value?: string }) => (
+                            <CommandItem
+                              key={type.code}
+                              value={type.code || ''}
+                              onSelect={() => {
+                                setFirsInvoiceTypeCode(type.code || '');
+                                setInvoiceTypePopoverOpen(false);
+                                // Clear previous IRN if type doesn't require it
+                                if (!requiresPreviousIrn(type.code)) {
+                                  setPreviousInvoiceIrn('');
+                                }
+                              }}
+                            >
+                              {type.code} - {type.value || type.code}
+                            </CommandItem>
+                          ))
+                        )}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+            </div>
+
+            {/* FIRS Note */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">FIRS Note *</label>
+              <Input
+                value={firsNote}
+                onChange={(e) => setFirsNote(e.target.value)}
+                placeholder="Enter FIRS note..."
+                disabled={isUpdatingFirsFields}
+                className="w-full"
+              />
+            </div>
+
+            {/* Previous Invoice IRN (conditional) */}
+            {requiresPreviousIrn(firsInvoiceTypeCode) && (
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Previous Invoice IRN *</label>
+                <Input
+                  value={previousInvoiceIrn}
+                  onChange={(e) => setPreviousInvoiceIrn(e.target.value)}
+                  placeholder="Enter previous invoice IRN..."
+                  disabled={isUpdatingFirsFields}
+                  className="w-full"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Required for credit note or debit note invoices
+                </p>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={handleCloseFirsFieldsDialog}
+              disabled={isUpdatingFirsFields}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSaveFirsFields}
+              disabled={isUpdatingFirsFields || !firsInvoiceTypeCode.trim() || !firsNote.trim()}
+            >
+              {isUpdatingFirsFields ? 'Saving...' : 'Save'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* QR Code Dialog */}
+      <Dialog open={showQRCodeDialog} onOpenChange={setShowQRCodeDialog}>
+        <DialogContent className="max-w-md bg-transparent border-none shadow-none">
+          <div className="flex flex-col items-center justify-center bg-white/95 backdrop-blur-sm rounded-lg p-6 border border-gray-200">
+            <DialogHeader className="w-full">
+              <DialogTitle className="text-center mb-4">FIRS QR Code</DialogTitle>
+              <DialogDescription className="text-center">
+                Scan this QR code to verify the invoice
+              </DialogDescription>
+            </DialogHeader>
+            {selectedQRCode && (
+              <div className="flex items-center justify-center p-4 bg-white rounded-lg shadow-lg">
+                <img
+                  src={selectedQRCode.startsWith('data:') ? selectedQRCode : `data:image/png;base64,${selectedQRCode}`}
+                  alt="FIRS QR Code"
+                  className="w-64 h-64 object-contain"
+                  onError={(e) => {
+                    console.error('QR Code image failed to load:', selectedQRCode.substring(0, 50));
+                    // Fallback: try as base64 if it's not a data URI
+                    if (!selectedQRCode.startsWith('data:')) {
+                      (e.target as HTMLImageElement).src = `data:image/png;base64,${selectedQRCode}`;
+                    }
+                  }}
+                />
+              </div>
+            )}
+            <DialogFooter className="w-full mt-4">
+              <Button
+                variant="outline"
+                onClick={() => setShowQRCodeDialog(false)}
+                className="w-full"
+              >
+                Close
+              </Button>
+            </DialogFooter>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Validation Result Dialog */}
+      <Dialog open={showValidationDialog} onOpenChange={setShowValidationDialog}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto z-50">
+          <DialogHeader>
+            <DialogTitle>FIRS Validation Results</DialogTitle>
+            <DialogDescription>
+              {validationResult?.message || 'Invoice validation details'}
+            </DialogDescription>
+          </DialogHeader>
+          {validationResult && (
+            <div className="space-y-4 mt-4">
+              {/* Errors */}
+              {validationResult.errors && validationResult.errors.length > 0 && (
+                <div className="space-y-2">
+                  <h4 className="text-sm font-semibold text-red-600 flex items-center gap-2">
+                    <XCircle className="w-4 h-4" />
+                    Errors ({validationResult.errors.length})
+                  </h4>
+                  <div className="bg-red-50 border border-red-200 rounded-md p-4 space-y-2">
+                    {validationResult.errors.map((error, index) => {
+                      // Find matching quick fix for this error
+                      // Match by error content - try to find the most relevant fix
+                      const matchingFix = validationResult.quick_fixes?.find((fix) => {
+                        // Match FIRS field errors
+                        if (fix.action === 'update_firs_fields') {
+                          if (fix.type === 'firs_invoice_type_code' && error.includes('invoice type code')) return true;
+                          if (fix.type === 'firs_note' && error.includes('FIRS note')) return true;
+                          if (fix.type === 'previous_invoice_irn' && error.includes('Previous invoice IRN')) return true;
+                        }
+                        // Match party TIN errors
+                        if (fix.type === 'party_tin' && (error.includes('TIN is missing') || error.includes('TIN'))) return true;
+                        // Match party email errors
+                        if (fix.type === 'party_email' && error.includes('email')) return true;
+                        // Match party telephone errors
+                        if (fix.type === 'party_telephone' && error.includes('telephone')) return true;
+                        // Match HSN code errors - check if error mentions the item description
+                        if (fix.type === 'item_hsn_code' && error.includes('HSN codes')) {
+                          // If fix has item_description, check if error mentions it
+                          if (fix.item_description && error.includes(fix.item_description)) return true;
+                          // Otherwise, match any HSN code error
+                          return true;
+                        }
+                        return false;
+                      });
+
+                      return (
+                        <div key={index} className="flex items-start justify-between gap-2 text-sm text-red-800">
+                          <span className="flex-1">• {error}</span>
+                          {matchingFix && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-7 text-xs whitespace-nowrap"
+                              onClick={() => handleQuickFix(matchingFix)}
+                            >
+                              Fix
+                            </Button>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Warnings */}
+              {validationResult.warnings && validationResult.warnings.length > 0 && (
+                <div className="space-y-2">
+                  <h4 className="text-sm font-semibold text-yellow-600 flex items-center gap-2">
+                    <AlertTriangle className="w-4 h-4" />
+                    Warnings ({validationResult.warnings.length})
+                  </h4>
+                  <div className="bg-yellow-50 border border-yellow-200 rounded-md p-4 space-y-2">
+                    {validationResult.warnings.map((warning, index) => {
+                      // Find matching quick fix for this warning
+                      const matchingFix = validationResult.quick_fixes?.find((fix) => {
+                        if (fix.type === 'party_email' && warning.includes('email')) return true;
+                        if (fix.type === 'party_telephone' && warning.includes('telephone')) return true;
+                        return false;
+                      });
+
+                      return (
+                        <div key={index} className="flex items-start justify-between gap-2 text-sm text-yellow-800">
+                          <span className="flex-1">• {warning}</span>
+                          {matchingFix && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-7 text-xs whitespace-nowrap"
+                              onClick={() => handleQuickFix(matchingFix)}
+                            >
+                              Fix
+                            </Button>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Quick Fixes Section */}
+              {validationResult.quick_fixes && validationResult.quick_fixes.length > 0 && (
+                <div className="space-y-2">
+                  <h4 className="text-sm font-semibold text-blue-600 flex items-center gap-2">
+                    <RefreshCw className="w-4 h-4" />
+                    Quick Fixes Available ({validationResult.quick_fixes.length})
+                  </h4>
+                  <div className="bg-blue-50 border border-blue-200 rounded-md p-4 space-y-2">
+                    {validationResult.quick_fixes.map((fix, index) => (
+                      <div key={index} className="flex items-center justify-between gap-2 text-sm text-blue-800">
+                        <span className="flex-1">• {fix.message}</span>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 text-xs whitespace-nowrap"
+                          onClick={() => handleQuickFix(fix)}
+                        >
+                          Fix Now
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Suggestions */}
+              {validationResult.suggestions && validationResult.suggestions.length > 0 && (
+                <div className="space-y-2">
+                  <h4 className="text-sm font-semibold text-blue-600 flex items-center gap-2">
+                    <CheckCircle className="w-4 h-4" />
+                    Suggestions ({validationResult.suggestions.length})
+                  </h4>
+                  <div className="bg-blue-50 border border-blue-200 rounded-md p-4 space-y-2">
+                    {validationResult.suggestions.map((suggestion, index) => (
+                      <div key={index} className="text-sm text-blue-800">
+                        • {suggestion}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {(!validationResult.errors || validationResult.errors.length === 0) &&
+                (!validationResult.warnings || validationResult.warnings.length === 0) &&
+                (!validationResult.suggestions || validationResult.suggestions.length === 0) && (
+                  <div className="text-sm text-muted-foreground text-center py-4">
+                    No validation details available
+                  </div>
+                )}
+            </div>
+          )}
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowValidationDialog(false);
+                setValidationResult(null);
+              }}
+            >
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Quick Fix Dialog */}
+      <Dialog open={quickFixDialog.open} onOpenChange={(open) => !open && setQuickFixDialog({ open: false, fix: null, value: '' })}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Quick Fix</DialogTitle>
+            <DialogDescription>
+              {quickFixDialog.fix?.message || 'Update field value'}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 mt-4">
+            {quickFixDialog.fix && (
+              <>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">
+                    {quickFixDialog.fix.field === 'tin' && 'TIN'}
+                    {quickFixDialog.fix.field === 'email' && 'Email'}
+                    {quickFixDialog.fix.field === 'telephone' && 'Telephone'}
+                    {quickFixDialog.fix.field === 'hsn_code' && 'HSN Code'}
+                    {quickFixDialog.fix.field !== 'tin' && quickFixDialog.fix.field !== 'email' && quickFixDialog.fix.field !== 'telephone' && quickFixDialog.fix.field !== 'hsn_code' && quickFixDialog.fix.field}
+                  </label>
+                  {quickFixDialog.fix.field === 'hsn_code' && hsnCodes.length > 0 ? (
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          role="combobox"
+                          className="w-full justify-between"
+                          disabled={isUpdatingQuickFix}
+                        >
+                          {quickFixDialog.value 
+                            ? (() => {
+                                const selectedCode = hsnCodes.find((c: string | { hscode?: string; code?: string; value?: string; name?: string }) => getHsnCodeValue(c) === quickFixDialog.value);
+                                return selectedCode ? getHsnCodeDisplay(selectedCode) : quickFixDialog.value;
+                              })()
+                            : 'Select HSN code...'}
+                          <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0 z-[100]" align="start">
+                        <Command>
+                          <CommandInput placeholder="Search HSN codes..." className="h-9" />
+                          <CommandList>
+                            <CommandEmpty>
+                              <div className="py-2 text-center text-sm">
+                                <div>No HSN code found.</div>
+                                <div className="text-xs text-muted-foreground mt-1">
+                                  Type to enter custom code
+                                </div>
+                              </div>
+                            </CommandEmpty>
+                            <CommandGroup>
+                              {isLoadingHsnCodes ? (
+                                <div className="py-2 text-center text-sm text-muted-foreground">
+                                  Loading HSN codes...
+                                </div>
+                              ) : (
+                                hsnCodes.map((code: string | { hscode?: string; description?: string; code?: string; value?: string; name?: string }) => {
+                                  const codeValue = getHsnCodeValue(code);
+                                  const displayText = getHsnCodeDisplay(code);
+                                  return (
+                                    <CommandItem
+                                      key={codeValue}
+                                      value={codeValue}
+                                      onSelect={() => {
+                                        setQuickFixDialog({ ...quickFixDialog, value: codeValue });
+                                      }}
+                                    >
+                                      {displayText}
+                                    </CommandItem>
+                                  );
+                                })
+                              )}
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
+                  ) : (
+                    <Input
+                      type={quickFixDialog.fix.field === 'email' ? 'email' : 'text'}
+                      value={quickFixDialog.value}
+                      onChange={(e) => setQuickFixDialog({ ...quickFixDialog, value: e.target.value })}
+                      placeholder={`Enter ${quickFixDialog.fix.field}`}
+                      disabled={isUpdatingQuickFix}
+                    />
+                  )}
+                  {quickFixDialog.fix.field === 'tin' && (
+                    <p className="text-xs text-muted-foreground">
+                      FIRS requires TIN in the format 12345678-1234 (8 digits, dash, 4 digits)
+                    </p>
+                  )}
+                  {quickFixDialog.fix.field === 'telephone' && (
+                    <p className="text-xs text-muted-foreground">
+                      Format: +2348055902479 or 08055902479
+                    </p>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setQuickFixDialog({ open: false, fix: null, value: '' })}
+              disabled={isUpdatingQuickFix}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleQuickFixUpdate}
+              disabled={isUpdatingQuickFix || !quickFixDialog.value.trim()}
+            >
+              {isUpdatingQuickFix ? 'Updating...' : 'Update'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* FIRS Fields Dialog */}
+      <Dialog open={showFirsFieldsDialog} onOpenChange={setShowFirsFieldsDialog}>
+        <DialogContent className="max-w-2xl z-50">
+          <DialogHeader>
+            <DialogTitle>Edit FIRS Fields</DialogTitle>
+            <DialogDescription>
+              Configure invoice type, note, and previous invoice reference for FIRS submission
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 mt-4">
+            {/* Invoice Type Code */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Invoice Type Code *</label>
+              <Popover open={invoiceTypePopoverOpen} onOpenChange={setInvoiceTypePopoverOpen} modal={false}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    className="w-full justify-between"
+                    disabled={isUpdatingFirsFields || isLoadingInvoiceTypes}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                    }}
+                  >
+                    {firsInvoiceTypeCode
+                      ? invoiceTypes.find(
+                          (t: { code?: string }) => t.code === firsInvoiceTypeCode
+                        )?.value || firsInvoiceTypeCode
+                      : 'Select invoice type...'}
+                    <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent 
+                  className="w-[var(--radix-popover-trigger-width)] p-0 z-[100]" 
+                  align="start"
+                  onInteractOutside={(e) => {
+                    // Prevent closing when clicking on Dialog overlay
+                    const target = e.target as HTMLElement;
+                    if (target.closest('[role="dialog"]')) {
+                      e.preventDefault();
+                    }
+                  }}
+                >
+                  <Command>
+                    <CommandInput placeholder="Search invoice types..." className="h-9" />
+                    <CommandList>
+                      <CommandEmpty>
+                        <div className="py-2 text-center text-sm">
+                          <div>No invoice type found.</div>
+                        </div>
+                      </CommandEmpty>
+                      <CommandGroup>
+                        {isLoadingInvoiceTypes ? (
+                          <div className="py-2 text-center text-sm text-muted-foreground">
+                            Loading invoice types...
+                          </div>
+                        ) : (
+                          invoiceTypes.map((type: { code?: string; value?: string }) => (
+                            <CommandItem
+                              key={type.code}
+                              value={type.code || ''}
+                              onSelect={() => {
+                                setFirsInvoiceTypeCode(type.code || '');
+                                setInvoiceTypePopoverOpen(false);
+                                // Clear previous IRN if type doesn't require it
+                                if (!requiresPreviousIrn(type.code)) {
+                                  setPreviousInvoiceIrn('');
+                                }
+                              }}
+                            >
+                              {type.code} - {type.value || type.code}
+                            </CommandItem>
+                          ))
+                        )}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+            </div>
+
+            {/* FIRS Note */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">FIRS Note *</label>
+              <Input
+                value={firsNote}
+                onChange={(e) => setFirsNote(e.target.value)}
+                placeholder="Enter FIRS note..."
+                disabled={isUpdatingFirsFields}
+                className="w-full"
+              />
+            </div>
+
+            {/* Previous Invoice IRN (conditional) */}
+            {requiresPreviousIrn(firsInvoiceTypeCode) && (
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Previous Invoice IRN *</label>
+                <Input
+                  value={previousInvoiceIrn}
+                  onChange={(e) => setPreviousInvoiceIrn(e.target.value)}
+                  placeholder="Enter previous invoice IRN..."
+                  disabled={isUpdatingFirsFields}
+                  className="w-full"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Required for credit note or debit note invoices
+                </p>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={handleCloseFirsFieldsDialog}
+              disabled={isUpdatingFirsFields}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSaveFirsFields}
+              disabled={isUpdatingFirsFields || !firsInvoiceTypeCode.trim() || !firsNote.trim()}
+            >
+              {isUpdatingFirsFields ? 'Saving...' : 'Save'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* QR Code Dialog */}
+      <Dialog open={showQRCodeDialog} onOpenChange={setShowQRCodeDialog}>
+        <DialogContent className="max-w-md bg-transparent border-none shadow-none">
+          <div className="flex flex-col items-center justify-center bg-white/95 backdrop-blur-sm rounded-lg p-6 border border-gray-200">
+            <DialogHeader className="w-full">
+              <DialogTitle className="text-center mb-4">FIRS QR Code</DialogTitle>
+              <DialogDescription className="text-center">
+                Scan this QR code to verify the invoice
+              </DialogDescription>
+            </DialogHeader>
+            {selectedQRCode && (
+              <div className="flex items-center justify-center p-4 bg-white rounded-lg shadow-lg">
+                <img
+                  src={selectedQRCode.startsWith('data:') ? selectedQRCode : `data:image/png;base64,${selectedQRCode}`}
+                  alt="FIRS QR Code"
+                  className="w-64 h-64 object-contain"
+                  onError={(e) => {
+                    console.error('QR Code image failed to load:', selectedQRCode.substring(0, 50));
+                    // Fallback: try as base64 if it's not a data URI
+                    if (!selectedQRCode.startsWith('data:')) {
+                      (e.target as HTMLImageElement).src = `data:image/png;base64,${selectedQRCode}`;
+                    }
+                  }}
+                />
+              </div>
+            )}
+            <DialogFooter className="w-full mt-4">
+              <Button
+                variant="outline"
+                onClick={() => setShowQRCodeDialog(false)}
+                className="w-full"
+              >
+                Close
+              </Button>
+            </DialogFooter>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Validation Result Dialog */}
+      <Dialog open={showValidationDialog} onOpenChange={setShowValidationDialog}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto z-50">
+          <DialogHeader>
+            <DialogTitle>FIRS Validation Results</DialogTitle>
+            <DialogDescription>
+              {validationResult?.message || 'Invoice validation details'}
+            </DialogDescription>
+          </DialogHeader>
+          {validationResult && (
+            <div className="space-y-4 mt-4">
+              {/* Errors */}
+              {validationResult.errors && validationResult.errors.length > 0 && (
+                <div className="space-y-2">
+                  <h4 className="text-sm font-semibold text-red-600 flex items-center gap-2">
+                    <XCircle className="w-4 h-4" />
+                    Errors ({validationResult.errors.length})
+                  </h4>
+                  <div className="bg-red-50 border border-red-200 rounded-md p-4 space-y-2">
+                    {validationResult.errors.map((error, index) => {
+                      // Find matching quick fix for this error
+                      // Match by error content - try to find the most relevant fix
+                      const matchingFix = validationResult.quick_fixes?.find((fix) => {
+                        // Match FIRS field errors
+                        if (fix.action === 'update_firs_fields') {
+                          if (fix.type === 'firs_invoice_type_code' && error.includes('invoice type code')) return true;
+                          if (fix.type === 'firs_note' && error.includes('FIRS note')) return true;
+                          if (fix.type === 'previous_invoice_irn' && error.includes('Previous invoice IRN')) return true;
+                        }
+                        // Match party TIN errors
+                        if (fix.type === 'party_tin' && (error.includes('TIN is missing') || error.includes('TIN'))) return true;
+                        // Match party email errors
+                        if (fix.type === 'party_email' && error.includes('email')) return true;
+                        // Match party telephone errors
+                        if (fix.type === 'party_telephone' && error.includes('telephone')) return true;
+                        // Match HSN code errors - check if error mentions the item description
+                        if (fix.type === 'item_hsn_code' && error.includes('HSN codes')) {
+                          // If fix has item_description, check if error mentions it
+                          if (fix.item_description && error.includes(fix.item_description)) return true;
+                          // Otherwise, match any HSN code error
+                          return true;
+                        }
+                        return false;
+                      });
+
+                      return (
+                        <div key={index} className="flex items-start justify-between gap-2 text-sm text-red-800">
+                          <span className="flex-1">• {error}</span>
+                          {matchingFix && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-7 text-xs whitespace-nowrap"
+                              onClick={() => handleQuickFix(matchingFix)}
+                            >
+                              Fix
+                            </Button>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Warnings */}
+              {validationResult.warnings && validationResult.warnings.length > 0 && (
+                <div className="space-y-2">
+                  <h4 className="text-sm font-semibold text-yellow-600 flex items-center gap-2">
+                    <AlertTriangle className="w-4 h-4" />
+                    Warnings ({validationResult.warnings.length})
+                  </h4>
+                  <div className="bg-yellow-50 border border-yellow-200 rounded-md p-4 space-y-2">
+                    {validationResult.warnings.map((warning, index) => {
+                      // Find matching quick fix for this warning
+                      const matchingFix = validationResult.quick_fixes?.find((fix) => {
+                        if (fix.type === 'party_email' && warning.includes('email')) return true;
+                        if (fix.type === 'party_telephone' && warning.includes('telephone')) return true;
+                        return false;
+                      });
+
+                      return (
+                        <div key={index} className="flex items-start justify-between gap-2 text-sm text-yellow-800">
+                          <span className="flex-1">• {warning}</span>
+                          {matchingFix && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-7 text-xs whitespace-nowrap"
+                              onClick={() => handleQuickFix(matchingFix)}
+                            >
+                              Fix
+                            </Button>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Quick Fixes Section */}
+              {validationResult.quick_fixes && validationResult.quick_fixes.length > 0 && (
+                <div className="space-y-2">
+                  <h4 className="text-sm font-semibold text-blue-600 flex items-center gap-2">
+                    <RefreshCw className="w-4 h-4" />
+                    Quick Fixes Available ({validationResult.quick_fixes.length})
+                  </h4>
+                  <div className="bg-blue-50 border border-blue-200 rounded-md p-4 space-y-2">
+                    {validationResult.quick_fixes.map((fix, index) => (
+                      <div key={index} className="flex items-center justify-between gap-2 text-sm text-blue-800">
+                        <span className="flex-1">• {fix.message}</span>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 text-xs whitespace-nowrap"
+                          onClick={() => handleQuickFix(fix)}
+                        >
+                          Fix Now
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Suggestions */}
+              {validationResult.suggestions && validationResult.suggestions.length > 0 && (
+                <div className="space-y-2">
+                  <h4 className="text-sm font-semibold text-blue-600 flex items-center gap-2">
+                    <CheckCircle className="w-4 h-4" />
+                    Suggestions ({validationResult.suggestions.length})
+                  </h4>
+                  <div className="bg-blue-50 border border-blue-200 rounded-md p-4 space-y-2">
+                    {validationResult.suggestions.map((suggestion, index) => (
+                      <div key={index} className="text-sm text-blue-800">
+                        • {suggestion}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {(!validationResult.errors || validationResult.errors.length === 0) &&
+                (!validationResult.warnings || validationResult.warnings.length === 0) &&
+                (!validationResult.suggestions || validationResult.suggestions.length === 0) && (
+                  <div className="text-sm text-muted-foreground text-center py-4">
+                    No validation details available
+                  </div>
+                )}
+            </div>
+          )}
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowValidationDialog(false);
+                setValidationResult(null);
+              }}
+            >
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Quick Fix Dialog */}
+      <Dialog open={quickFixDialog.open} onOpenChange={(open) => !open && setQuickFixDialog({ open: false, fix: null, value: '' })}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Quick Fix</DialogTitle>
+            <DialogDescription>
+              {quickFixDialog.fix?.message || 'Update field value'}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 mt-4">
+            {quickFixDialog.fix && (
+              <>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">
+                    {quickFixDialog.fix.field === 'tin' && 'TIN'}
+                    {quickFixDialog.fix.field === 'email' && 'Email'}
+                    {quickFixDialog.fix.field === 'telephone' && 'Telephone'}
+                    {quickFixDialog.fix.field === 'hsn_code' && 'HSN Code'}
+                    {quickFixDialog.fix.field !== 'tin' && quickFixDialog.fix.field !== 'email' && quickFixDialog.fix.field !== 'telephone' && quickFixDialog.fix.field !== 'hsn_code' && quickFixDialog.fix.field}
+                  </label>
+                  {quickFixDialog.fix.field === 'hsn_code' && hsnCodes.length > 0 ? (
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          role="combobox"
+                          className="w-full justify-between"
+                          disabled={isUpdatingQuickFix}
+                        >
+                          {quickFixDialog.value 
+                            ? (() => {
+                                const selectedCode = hsnCodes.find((c: string | { hscode?: string; code?: string; value?: string; name?: string }) => getHsnCodeValue(c) === quickFixDialog.value);
+                                return selectedCode ? getHsnCodeDisplay(selectedCode) : quickFixDialog.value;
+                              })()
+                            : 'Select HSN code...'}
+                          <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0 z-[100]" align="start">
+                        <Command>
+                          <CommandInput placeholder="Search HSN codes..." className="h-9" />
+                          <CommandList>
+                            <CommandEmpty>
+                              <div className="py-2 text-center text-sm">
+                                <div>No HSN code found.</div>
+                                <div className="text-xs text-muted-foreground mt-1">
+                                  Type to enter custom code
+                                </div>
+                              </div>
+                            </CommandEmpty>
+                            <CommandGroup>
+                              {isLoadingHsnCodes ? (
+                                <div className="py-2 text-center text-sm text-muted-foreground">
+                                  Loading HSN codes...
+                                </div>
+                              ) : (
+                                hsnCodes.map((code: string | { hscode?: string; description?: string; code?: string; value?: string; name?: string }) => {
+                                  const codeValue = getHsnCodeValue(code);
+                                  const displayText = getHsnCodeDisplay(code);
+                                  return (
+                                    <CommandItem
+                                      key={codeValue}
+                                      value={codeValue}
+                                      onSelect={() => {
+                                        setQuickFixDialog({ ...quickFixDialog, value: codeValue });
+                                      }}
+                                    >
+                                      {displayText}
+                                    </CommandItem>
+                                  );
+                                })
+                              )}
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
+                  ) : (
+                    <Input
+                      type={quickFixDialog.fix.field === 'email' ? 'email' : 'text'}
+                      value={quickFixDialog.value}
+                      onChange={(e) => setQuickFixDialog({ ...quickFixDialog, value: e.target.value })}
+                      placeholder={`Enter ${quickFixDialog.fix.field}`}
+                      disabled={isUpdatingQuickFix}
+                    />
+                  )}
+                  {quickFixDialog.fix.field === 'tin' && (
+                    <p className="text-xs text-muted-foreground">
+                      FIRS requires TIN in the format 12345678-1234 (8 digits, dash, 4 digits)
+                    </p>
+                  )}
+                  {quickFixDialog.fix.field === 'telephone' && (
+                    <p className="text-xs text-muted-foreground">
+                      Format: +2348055902479 or 08055902479
+                    </p>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setQuickFixDialog({ open: false, fix: null, value: '' })}
+              disabled={isUpdatingQuickFix}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleQuickFixUpdate}
+              disabled={isUpdatingQuickFix || !quickFixDialog.value.trim()}
+            >
+              {isUpdatingQuickFix ? 'Updating...' : 'Update'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* FIRS Fields Dialog */}
+      <Dialog open={showFirsFieldsDialog} onOpenChange={setShowFirsFieldsDialog}>
+        <DialogContent className="max-w-2xl z-50">
+          <DialogHeader>
+            <DialogTitle>Edit FIRS Fields</DialogTitle>
+            <DialogDescription>
+              Configure invoice type, note, and previous invoice reference for FIRS submission
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 mt-4">
+            {/* Invoice Type Code */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Invoice Type Code *</label>
+              <Popover open={invoiceTypePopoverOpen} onOpenChange={setInvoiceTypePopoverOpen} modal={false}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    className="w-full justify-between"
+                    disabled={isUpdatingFirsFields || isLoadingInvoiceTypes}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                    }}
+                  >
+                    {firsInvoiceTypeCode
+                      ? invoiceTypes.find(
+                          (t: { code?: string }) => t.code === firsInvoiceTypeCode
+                        )?.value || firsInvoiceTypeCode
+                      : 'Select invoice type...'}
+                    <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent 
+                  className="w-[var(--radix-popover-trigger-width)] p-0 z-[100]" 
+                  align="start"
+                  onInteractOutside={(e) => {
+                    // Prevent closing when clicking on Dialog overlay
+                    const target = e.target as HTMLElement;
+                    if (target.closest('[role="dialog"]')) {
+                      e.preventDefault();
+                    }
+                  }}
+                >
+                  <Command>
+                    <CommandInput placeholder="Search invoice types..." className="h-9" />
+                    <CommandList>
+                      <CommandEmpty>
+                        <div className="py-2 text-center text-sm">
+                          <div>No invoice type found.</div>
+                        </div>
+                      </CommandEmpty>
+                      <CommandGroup>
+                        {isLoadingInvoiceTypes ? (
+                          <div className="py-2 text-center text-sm text-muted-foreground">
+                            Loading invoice types...
+                          </div>
+                        ) : (
+                          invoiceTypes.map((type: { code?: string; value?: string }) => (
+                            <CommandItem
+                              key={type.code}
+                              value={type.code || ''}
+                              onSelect={() => {
+                                setFirsInvoiceTypeCode(type.code || '');
+                                setInvoiceTypePopoverOpen(false);
+                                // Clear previous IRN if type doesn't require it
+                                if (!requiresPreviousIrn(type.code)) {
+                                  setPreviousInvoiceIrn('');
+                                }
+                              }}
+                            >
+                              {type.code} - {type.value || type.code}
+                            </CommandItem>
+                          ))
+                        )}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+            </div>
+
+            {/* FIRS Note */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">FIRS Note *</label>
+              <Input
+                value={firsNote}
+                onChange={(e) => setFirsNote(e.target.value)}
+                placeholder="Enter FIRS note..."
+                disabled={isUpdatingFirsFields}
+                className="w-full"
+              />
+            </div>
+
+            {/* Previous Invoice IRN (conditional) */}
+            {requiresPreviousIrn(firsInvoiceTypeCode) && (
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Previous Invoice IRN *</label>
+                <Input
+                  value={previousInvoiceIrn}
+                  onChange={(e) => setPreviousInvoiceIrn(e.target.value)}
+                  placeholder="Enter previous invoice IRN..."
+                  disabled={isUpdatingFirsFields}
+                  className="w-full"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Required for credit note or debit note invoices
+                </p>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={handleCloseFirsFieldsDialog}
+              disabled={isUpdatingFirsFields}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSaveFirsFields}
+              disabled={isUpdatingFirsFields || !firsInvoiceTypeCode.trim() || !firsNote.trim()}
+            >
+              {isUpdatingFirsFields ? 'Saving...' : 'Save'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* QR Code Dialog */}
+      <Dialog open={showQRCodeDialog} onOpenChange={setShowQRCodeDialog}>
+        <DialogContent className="max-w-md bg-transparent border-none shadow-none">
+          <div className="flex flex-col items-center justify-center bg-white/95 backdrop-blur-sm rounded-lg p-6 border border-gray-200">
+            <DialogHeader className="w-full">
+              <DialogTitle className="text-center mb-4">FIRS QR Code</DialogTitle>
+              <DialogDescription className="text-center">
+                Scan this QR code to verify the invoice
+              </DialogDescription>
+            </DialogHeader>
+            {selectedQRCode && (
+              <div className="flex items-center justify-center p-4 bg-white rounded-lg shadow-lg">
+                <img
+                  src={selectedQRCode.startsWith('data:') ? selectedQRCode : `data:image/png;base64,${selectedQRCode}`}
+                  alt="FIRS QR Code"
+                  className="w-64 h-64 object-contain"
+                  onError={(e) => {
+                    console.error('QR Code image failed to load:', selectedQRCode.substring(0, 50));
+                    // Fallback: try as base64 if it's not a data URI
+                    if (!selectedQRCode.startsWith('data:')) {
+                      (e.target as HTMLImageElement).src = `data:image/png;base64,${selectedQRCode}`;
+                    }
+                  }}
+                />
+              </div>
+            )}
+            <DialogFooter className="w-full mt-4">
+              <Button
+                variant="outline"
+                onClick={() => setShowQRCodeDialog(false)}
+                className="w-full"
+              >
+                Close
+              </Button>
+            </DialogFooter>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Validation Result Dialog */}
+      <Dialog open={showValidationDialog} onOpenChange={setShowValidationDialog}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto z-50">
+          <DialogHeader>
+            <DialogTitle>FIRS Validation Results</DialogTitle>
+            <DialogDescription>
+              {validationResult?.message || 'Invoice validation details'}
+            </DialogDescription>
+          </DialogHeader>
+          {validationResult && (
+            <div className="space-y-4 mt-4">
+              {/* Errors */}
+              {validationResult.errors && validationResult.errors.length > 0 && (
+                <div className="space-y-2">
+                  <h4 className="text-sm font-semibold text-red-600 flex items-center gap-2">
+                    <XCircle className="w-4 h-4" />
+                    Errors ({validationResult.errors.length})
+                  </h4>
+                  <div className="bg-red-50 border border-red-200 rounded-md p-4 space-y-2">
+                    {validationResult.errors.map((error, index) => {
+                      // Find matching quick fix for this error
+                      // Match by error content - try to find the most relevant fix
+                      const matchingFix = validationResult.quick_fixes?.find((fix) => {
+                        // Match FIRS field errors
+                        if (fix.action === 'update_firs_fields') {
+                          if (fix.type === 'firs_invoice_type_code' && error.includes('invoice type code')) return true;
+                          if (fix.type === 'firs_note' && error.includes('FIRS note')) return true;
+                          if (fix.type === 'previous_invoice_irn' && error.includes('Previous invoice IRN')) return true;
+                        }
+                        // Match party TIN errors
+                        if (fix.type === 'party_tin' && (error.includes('TIN is missing') || error.includes('TIN'))) return true;
+                        // Match party email errors
+                        if (fix.type === 'party_email' && error.includes('email')) return true;
+                        // Match party telephone errors
+                        if (fix.type === 'party_telephone' && error.includes('telephone')) return true;
+                        // Match HSN code errors - check if error mentions the item description
+                        if (fix.type === 'item_hsn_code' && error.includes('HSN codes')) {
+                          // If fix has item_description, check if error mentions it
+                          if (fix.item_description && error.includes(fix.item_description)) return true;
+                          // Otherwise, match any HSN code error
+                          return true;
+                        }
+                        return false;
+                      });
+
+                      return (
+                        <div key={index} className="flex items-start justify-between gap-2 text-sm text-red-800">
+                          <span className="flex-1">• {error}</span>
+                          {matchingFix && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-7 text-xs whitespace-nowrap"
+                              onClick={() => handleQuickFix(matchingFix)}
+                            >
+                              Fix
+                            </Button>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Warnings */}
+              {validationResult.warnings && validationResult.warnings.length > 0 && (
+                <div className="space-y-2">
+                  <h4 className="text-sm font-semibold text-yellow-600 flex items-center gap-2">
+                    <AlertTriangle className="w-4 h-4" />
+                    Warnings ({validationResult.warnings.length})
+                  </h4>
+                  <div className="bg-yellow-50 border border-yellow-200 rounded-md p-4 space-y-2">
+                    {validationResult.warnings.map((warning, index) => {
+                      // Find matching quick fix for this warning
+                      const matchingFix = validationResult.quick_fixes?.find((fix) => {
+                        if (fix.type === 'party_email' && warning.includes('email')) return true;
+                        if (fix.type === 'party_telephone' && warning.includes('telephone')) return true;
+                        return false;
+                      });
+
+                      return (
+                        <div key={index} className="flex items-start justify-between gap-2 text-sm text-yellow-800">
+                          <span className="flex-1">• {warning}</span>
+                          {matchingFix && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-7 text-xs whitespace-nowrap"
+                              onClick={() => handleQuickFix(matchingFix)}
+                            >
+                              Fix
+                            </Button>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Quick Fixes Section */}
+              {validationResult.quick_fixes && validationResult.quick_fixes.length > 0 && (
+                <div className="space-y-2">
+                  <h4 className="text-sm font-semibold text-blue-600 flex items-center gap-2">
+                    <RefreshCw className="w-4 h-4" />
+                    Quick Fixes Available ({validationResult.quick_fixes.length})
+                  </h4>
+                  <div className="bg-blue-50 border border-blue-200 rounded-md p-4 space-y-2">
+                    {validationResult.quick_fixes.map((fix, index) => (
+                      <div key={index} className="flex items-center justify-between gap-2 text-sm text-blue-800">
+                        <span className="flex-1">• {fix.message}</span>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 text-xs whitespace-nowrap"
+                          onClick={() => handleQuickFix(fix)}
+                        >
+                          Fix Now
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Suggestions */}
+              {validationResult.suggestions && validationResult.suggestions.length > 0 && (
+                <div className="space-y-2">
+                  <h4 className="text-sm font-semibold text-blue-600 flex items-center gap-2">
+                    <CheckCircle className="w-4 h-4" />
+                    Suggestions ({validationResult.suggestions.length})
+                  </h4>
+                  <div className="bg-blue-50 border border-blue-200 rounded-md p-4 space-y-2">
+                    {validationResult.suggestions.map((suggestion, index) => (
+                      <div key={index} className="text-sm text-blue-800">
+                        • {suggestion}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {(!validationResult.errors || validationResult.errors.length === 0) &&
+                (!validationResult.warnings || validationResult.warnings.length === 0) &&
+                (!validationResult.suggestions || validationResult.suggestions.length === 0) && (
+                  <div className="text-sm text-muted-foreground text-center py-4">
+                    No validation details available
+                  </div>
+                )}
+            </div>
+          )}
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowValidationDialog(false);
+                setValidationResult(null);
+              }}
+            >
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Quick Fix Dialog */}
+      <Dialog open={quickFixDialog.open} onOpenChange={(open) => !open && setQuickFixDialog({ open: false, fix: null, value: '' })}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Quick Fix</DialogTitle>
+            <DialogDescription>
+              {quickFixDialog.fix?.message || 'Update field value'}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 mt-4">
+            {quickFixDialog.fix && (
+              <>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">
+                    {quickFixDialog.fix.field === 'tin' && 'TIN'}
+                    {quickFixDialog.fix.field === 'email' && 'Email'}
+                    {quickFixDialog.fix.field === 'telephone' && 'Telephone'}
+                    {quickFixDialog.fix.field === 'hsn_code' && 'HSN Code'}
+                    {quickFixDialog.fix.field !== 'tin' && quickFixDialog.fix.field !== 'email' && quickFixDialog.fix.field !== 'telephone' && quickFixDialog.fix.field !== 'hsn_code' && quickFixDialog.fix.field}
+                  </label>
+                  {quickFixDialog.fix.field === 'hsn_code' && hsnCodes.length > 0 ? (
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          role="combobox"
+                          className="w-full justify-between"
+                          disabled={isUpdatingQuickFix}
+                        >
+                          {quickFixDialog.value 
+                            ? (() => {
+                                const selectedCode = hsnCodes.find((c: string | { hscode?: string; code?: string; value?: string; name?: string }) => getHsnCodeValue(c) === quickFixDialog.value);
+                                return selectedCode ? getHsnCodeDisplay(selectedCode) : quickFixDialog.value;
+                              })()
+                            : 'Select HSN code...'}
+                          <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0 z-[100]" align="start">
+                        <Command>
+                          <CommandInput placeholder="Search HSN codes..." className="h-9" />
+                          <CommandList>
+                            <CommandEmpty>
+                              <div className="py-2 text-center text-sm">
+                                <div>No HSN code found.</div>
+                                <div className="text-xs text-muted-foreground mt-1">
+                                  Type to enter custom code
+                                </div>
+                              </div>
+                            </CommandEmpty>
+                            <CommandGroup>
+                              {isLoadingHsnCodes ? (
+                                <div className="py-2 text-center text-sm text-muted-foreground">
+                                  Loading HSN codes...
+                                </div>
+                              ) : (
+                                hsnCodes.map((code: string | { hscode?: string; description?: string; code?: string; value?: string; name?: string }) => {
+                                  const codeValue = getHsnCodeValue(code);
+                                  const displayText = getHsnCodeDisplay(code);
+                                  return (
+                                    <CommandItem
+                                      key={codeValue}
+                                      value={codeValue}
+                                      onSelect={() => {
+                                        setQuickFixDialog({ ...quickFixDialog, value: codeValue });
+                                      }}
+                                    >
+                                      {displayText}
+                                    </CommandItem>
+                                  );
+                                })
+                              )}
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
+                  ) : (
+                    <Input
+                      type={quickFixDialog.fix.field === 'email' ? 'email' : 'text'}
+                      value={quickFixDialog.value}
+                      onChange={(e) => setQuickFixDialog({ ...quickFixDialog, value: e.target.value })}
+                      placeholder={`Enter ${quickFixDialog.fix.field}`}
+                      disabled={isUpdatingQuickFix}
+                    />
+                  )}
+                  {quickFixDialog.fix.field === 'tin' && (
+                    <p className="text-xs text-muted-foreground">
+                      FIRS requires TIN in the format 12345678-1234 (8 digits, dash, 4 digits)
+                    </p>
+                  )}
+                  {quickFixDialog.fix.field === 'telephone' && (
+                    <p className="text-xs text-muted-foreground">
+                      Format: +2348055902479 or 08055902479
+                    </p>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setQuickFixDialog({ open: false, fix: null, value: '' })}
+              disabled={isUpdatingQuickFix}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleQuickFixUpdate}
+              disabled={isUpdatingQuickFix || !quickFixDialog.value.trim()}
+            >
+              {isUpdatingQuickFix ? 'Updating...' : 'Update'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* FIRS Fields Dialog */}
+      <Dialog open={showFirsFieldsDialog} onOpenChange={setShowFirsFieldsDialog}>
+        <DialogContent className="max-w-2xl z-50">
+          <DialogHeader>
+            <DialogTitle>Edit FIRS Fields</DialogTitle>
+            <DialogDescription>
+              Configure invoice type, note, and previous invoice reference for FIRS submission
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 mt-4">
+            {/* Invoice Type Code */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Invoice Type Code *</label>
+              <Popover open={invoiceTypePopoverOpen} onOpenChange={setInvoiceTypePopoverOpen} modal={false}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    className="w-full justify-between"
+                    disabled={isUpdatingFirsFields || isLoadingInvoiceTypes}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                    }}
+                  >
+                    {firsInvoiceTypeCode
+                      ? invoiceTypes.find(
+                          (t: { code?: string }) => t.code === firsInvoiceTypeCode
+                        )?.value || firsInvoiceTypeCode
+                      : 'Select invoice type...'}
+                    <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent 
+                  className="w-[var(--radix-popover-trigger-width)] p-0 z-[100]" 
+                  align="start"
+                  onInteractOutside={(e) => {
+                    // Prevent closing when clicking on Dialog overlay
+                    const target = e.target as HTMLElement;
+                    if (target.closest('[role="dialog"]')) {
+                      e.preventDefault();
+                    }
+                  }}
+                >
+                  <Command>
+                    <CommandInput placeholder="Search invoice types..." className="h-9" />
+                    <CommandList>
+                      <CommandEmpty>
+                        <div className="py-2 text-center text-sm">
+                          <div>No invoice type found.</div>
+                        </div>
+                      </CommandEmpty>
+                      <CommandGroup>
+                        {isLoadingInvoiceTypes ? (
+                          <div className="py-2 text-center text-sm text-muted-foreground">
+                            Loading invoice types...
+                          </div>
+                        ) : (
+                          invoiceTypes.map((type: { code?: string; value?: string }) => (
+                            <CommandItem
+                              key={type.code}
+                              value={type.code || ''}
+                              onSelect={() => {
+                                setFirsInvoiceTypeCode(type.code || '');
+                                setInvoiceTypePopoverOpen(false);
+                                // Clear previous IRN if type doesn't require it
+                                if (!requiresPreviousIrn(type.code)) {
+                                  setPreviousInvoiceIrn('');
+                                }
+                              }}
+                            >
+                              {type.code} - {type.value || type.code}
+                            </CommandItem>
+                          ))
+                        )}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+            </div>
+
+            {/* FIRS Note */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">FIRS Note *</label>
+              <Input
+                value={firsNote}
+                onChange={(e) => setFirsNote(e.target.value)}
+                placeholder="Enter FIRS note..."
+                disabled={isUpdatingFirsFields}
+                className="w-full"
+              />
+            </div>
+
+            {/* Previous Invoice IRN (conditional) */}
+            {requiresPreviousIrn(firsInvoiceTypeCode) && (
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Previous Invoice IRN *</label>
+                <Input
+                  value={previousInvoiceIrn}
+                  onChange={(e) => setPreviousInvoiceIrn(e.target.value)}
+                  placeholder="Enter previous invoice IRN..."
+                  disabled={isUpdatingFirsFields}
+                  className="w-full"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Required for credit note or debit note invoices
+                </p>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={handleCloseFirsFieldsDialog}
+              disabled={isUpdatingFirsFields}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSaveFirsFields}
+              disabled={isUpdatingFirsFields || !firsInvoiceTypeCode.trim() || !firsNote.trim()}
+            >
+              {isUpdatingFirsFields ? 'Saving...' : 'Save'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* QR Code Dialog */}
+      <Dialog open={showQRCodeDialog} onOpenChange={setShowQRCodeDialog}>
+        <DialogContent className="max-w-md bg-transparent border-none shadow-none">
+          <div className="flex flex-col items-center justify-center bg-white/95 backdrop-blur-sm rounded-lg p-6 border border-gray-200">
+            <DialogHeader className="w-full">
+              <DialogTitle className="text-center mb-4">FIRS QR Code</DialogTitle>
+              <DialogDescription className="text-center">
+                Scan this QR code to verify the invoice
+              </DialogDescription>
+            </DialogHeader>
+            {selectedQRCode && (
+              <div className="flex items-center justify-center p-4 bg-white rounded-lg shadow-lg">
+                <img
+                  src={selectedQRCode.startsWith('data:') ? selectedQRCode : `data:image/png;base64,${selectedQRCode}`}
+                  alt="FIRS QR Code"
+                  className="w-64 h-64 object-contain"
+                  onError={(e) => {
+                    console.error('QR Code image failed to load:', selectedQRCode.substring(0, 50));
+                    // Fallback: try as base64 if it's not a data URI
+                    if (!selectedQRCode.startsWith('data:')) {
+                      (e.target as HTMLImageElement).src = `data:image/png;base64,${selectedQRCode}`;
+                    }
+                  }}
+                />
+              </div>
+            )}
+            <DialogFooter className="w-full mt-4">
+              <Button
+                variant="outline"
+                onClick={() => setShowQRCodeDialog(false)}
+                className="w-full"
+              >
+                Close
+              </Button>
+            </DialogFooter>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Validation Result Dialog */}
+      <Dialog open={showValidationDialog} onOpenChange={setShowValidationDialog}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto z-50">
+          <DialogHeader>
+            <DialogTitle>FIRS Validation Results</DialogTitle>
+            <DialogDescription>
+              {validationResult?.message || 'Invoice validation details'}
+            </DialogDescription>
+          </DialogHeader>
+          {validationResult && (
+            <div className="space-y-4 mt-4">
+              {/* Errors */}
+              {validationResult.errors && validationResult.errors.length > 0 && (
+                <div className="space-y-2">
+                  <h4 className="text-sm font-semibold text-red-600 flex items-center gap-2">
+                    <XCircle className="w-4 h-4" />
+                    Errors ({validationResult.errors.length})
+                  </h4>
+                  <div className="bg-red-50 border border-red-200 rounded-md p-4 space-y-2">
+                    {validationResult.errors.map((error, index) => {
+                      // Find matching quick fix for this error
+                      // Match by error content - try to find the most relevant fix
+                      const matchingFix = validationResult.quick_fixes?.find((fix) => {
+                        // Match FIRS field errors
+                        if (fix.action === 'update_firs_fields') {
+                          if (fix.type === 'firs_invoice_type_code' && error.includes('invoice type code')) return true;
+                          if (fix.type === 'firs_note' && error.includes('FIRS note')) return true;
+                          if (fix.type === 'previous_invoice_irn' && error.includes('Previous invoice IRN')) return true;
+                        }
+                        // Match party TIN errors
+                        if (fix.type === 'party_tin' && (error.includes('TIN is missing') || error.includes('TIN'))) return true;
+                        // Match party email errors
+                        if (fix.type === 'party_email' && error.includes('email')) return true;
+                        // Match party telephone errors
+                        if (fix.type === 'party_telephone' && error.includes('telephone')) return true;
+                        // Match HSN code errors - check if error mentions the item description
+                        if (fix.type === 'item_hsn_code' && error.includes('HSN codes')) {
+                          // If fix has item_description, check if error mentions it
+                          if (fix.item_description && error.includes(fix.item_description)) return true;
+                          // Otherwise, match any HSN code error
+                          return true;
+                        }
+                        return false;
+                      });
+
+                      return (
+                        <div key={index} className="flex items-start justify-between gap-2 text-sm text-red-800">
+                          <span className="flex-1">• {error}</span>
+                          {matchingFix && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-7 text-xs whitespace-nowrap"
+                              onClick={() => handleQuickFix(matchingFix)}
+                            >
+                              Fix
+                            </Button>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Warnings */}
+              {validationResult.warnings && validationResult.warnings.length > 0 && (
+                <div className="space-y-2">
+                  <h4 className="text-sm font-semibold text-yellow-600 flex items-center gap-2">
+                    <AlertTriangle className="w-4 h-4" />
+                    Warnings ({validationResult.warnings.length})
+                  </h4>
+                  <div className="bg-yellow-50 border border-yellow-200 rounded-md p-4 space-y-2">
+                    {validationResult.warnings.map((warning, index) => {
+                      // Find matching quick fix for this warning
+                      const matchingFix = validationResult.quick_fixes?.find((fix) => {
+                        if (fix.type === 'party_email' && warning.includes('email')) return true;
+                        if (fix.type === 'party_telephone' && warning.includes('telephone')) return true;
+                        return false;
+                      });
+
+                      return (
+                        <div key={index} className="flex items-start justify-between gap-2 text-sm text-yellow-800">
+                          <span className="flex-1">• {warning}</span>
+                          {matchingFix && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-7 text-xs whitespace-nowrap"
+                              onClick={() => handleQuickFix(matchingFix)}
+                            >
+                              Fix
+                            </Button>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Quick Fixes Section */}
+              {validationResult.quick_fixes && validationResult.quick_fixes.length > 0 && (
+                <div className="space-y-2">
+                  <h4 className="text-sm font-semibold text-blue-600 flex items-center gap-2">
+                    <RefreshCw className="w-4 h-4" />
+                    Quick Fixes Available ({validationResult.quick_fixes.length})
+                  </h4>
+                  <div className="bg-blue-50 border border-blue-200 rounded-md p-4 space-y-2">
+                    {validationResult.quick_fixes.map((fix, index) => (
+                      <div key={index} className="flex items-center justify-between gap-2 text-sm text-blue-800">
+                        <span className="flex-1">• {fix.message}</span>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 text-xs whitespace-nowrap"
+                          onClick={() => handleQuickFix(fix)}
+                        >
+                          Fix Now
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Suggestions */}
+              {validationResult.suggestions && validationResult.suggestions.length > 0 && (
+                <div className="space-y-2">
+                  <h4 className="text-sm font-semibold text-blue-600 flex items-center gap-2">
+                    <CheckCircle className="w-4 h-4" />
+                    Suggestions ({validationResult.suggestions.length})
+                  </h4>
+                  <div className="bg-blue-50 border border-blue-200 rounded-md p-4 space-y-2">
+                    {validationResult.suggestions.map((suggestion, index) => (
+                      <div key={index} className="text-sm text-blue-800">
+                        • {suggestion}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {(!validationResult.errors || validationResult.errors.length === 0) &&
+                (!validationResult.warnings || validationResult.warnings.length === 0) &&
+                (!validationResult.suggestions || validationResult.suggestions.length === 0) && (
+                  <div className="text-sm text-muted-foreground text-center py-4">
+                    No validation details available
+                  </div>
+                )}
+            </div>
+          )}
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowValidationDialog(false);
+                setValidationResult(null);
+              }}
+            >
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Quick Fix Dialog */}
+      <Dialog open={quickFixDialog.open} onOpenChange={(open) => !open && setQuickFixDialog({ open: false, fix: null, value: '' })}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Quick Fix</DialogTitle>
+            <DialogDescription>
+              {quickFixDialog.fix?.message || 'Update field value'}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 mt-4">
+            {quickFixDialog.fix && (
+              <>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">
+                    {quickFixDialog.fix.field === 'tin' && 'TIN'}
+                    {quickFixDialog.fix.field === 'email' && 'Email'}
+                    {quickFixDialog.fix.field === 'telephone' && 'Telephone'}
+                    {quickFixDialog.fix.field === 'hsn_code' && 'HSN Code'}
+                    {quickFixDialog.fix.field !== 'tin' && quickFixDialog.fix.field !== 'email' && quickFixDialog.fix.field !== 'telephone' && quickFixDialog.fix.field !== 'hsn_code' && quickFixDialog.fix.field}
+                  </label>
+                  {quickFixDialog.fix.field === 'hsn_code' && hsnCodes.length > 0 ? (
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          role="combobox"
+                          className="w-full justify-between"
+                          disabled={isUpdatingQuickFix}
+                        >
+                          {quickFixDialog.value 
+                            ? (() => {
+                                const selectedCode = hsnCodes.find((c: string | { hscode?: string; code?: string; value?: string; name?: string }) => getHsnCodeValue(c) === quickFixDialog.value);
+                                return selectedCode ? getHsnCodeDisplay(selectedCode) : quickFixDialog.value;
+                              })()
+                            : 'Select HSN code...'}
+                          <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0 z-[100]" align="start">
+                        <Command>
+                          <CommandInput placeholder="Search HSN codes..." className="h-9" />
+                          <CommandList>
+                            <CommandEmpty>
+                              <div className="py-2 text-center text-sm">
+                                <div>No HSN code found.</div>
+                                <div className="text-xs text-muted-foreground mt-1">
+                                  Type to enter custom code
+                                </div>
+                              </div>
+                            </CommandEmpty>
+                            <CommandGroup>
+                              {isLoadingHsnCodes ? (
+                                <div className="py-2 text-center text-sm text-muted-foreground">
+                                  Loading HSN codes...
+                                </div>
+                              ) : (
+                                hsnCodes.map((code: string | { hscode?: string; description?: string; code?: string; value?: string; name?: string }) => {
+                                  const codeValue = getHsnCodeValue(code);
+                                  const displayText = getHsnCodeDisplay(code);
+                                  return (
+                                    <CommandItem
+                                      key={codeValue}
+                                      value={codeValue}
+                                      onSelect={() => {
+                                        setQuickFixDialog({ ...quickFixDialog, value: codeValue });
+                                      }}
+                                    >
+                                      {displayText}
+                                    </CommandItem>
+                                  );
+                                })
+                              )}
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
+                  ) : (
+                    <Input
+                      type={quickFixDialog.fix.field === 'email' ? 'email' : 'text'}
+                      value={quickFixDialog.value}
+                      onChange={(e) => setQuickFixDialog({ ...quickFixDialog, value: e.target.value })}
+                      placeholder={`Enter ${quickFixDialog.fix.field}`}
+                      disabled={isUpdatingQuickFix}
+                    />
+                  )}
+                  {quickFixDialog.fix.field === 'tin' && (
+                    <p className="text-xs text-muted-foreground">
+                      FIRS requires TIN in the format 12345678-1234 (8 digits, dash, 4 digits)
+                    </p>
+                  )}
+                  {quickFixDialog.fix.field === 'telephone' && (
+                    <p className="text-xs text-muted-foreground">
+                      Format: +2348055902479 or 08055902479
+                    </p>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setQuickFixDialog({ open: false, fix: null, value: '' })}
+              disabled={isUpdatingQuickFix}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleQuickFixUpdate}
+              disabled={isUpdatingQuickFix || !quickFixDialog.value.trim()}
+            >
+              {isUpdatingQuickFix ? 'Updating...' : 'Update'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* FIRS Fields Dialog */}
+      <Dialog open={showFirsFieldsDialog} onOpenChange={setShowFirsFieldsDialog}>
+        <DialogContent className="max-w-2xl z-50">
+          <DialogHeader>
+            <DialogTitle>Edit FIRS Fields</DialogTitle>
+            <DialogDescription>
+              Configure invoice type, note, and previous invoice reference for FIRS submission
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 mt-4">
+            {/* Invoice Type Code */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Invoice Type Code *</label>
+              <Popover open={invoiceTypePopoverOpen} onOpenChange={setInvoiceTypePopoverOpen} modal={false}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    className="w-full justify-between"
+                    disabled={isUpdatingFirsFields || isLoadingInvoiceTypes}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                    }}
+                  >
+                    {firsInvoiceTypeCode
+                      ? invoiceTypes.find(
+                          (t: { code?: string }) => t.code === firsInvoiceTypeCode
+                        )?.value || firsInvoiceTypeCode
+                      : 'Select invoice type...'}
+                    <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent 
+                  className="w-[var(--radix-popover-trigger-width)] p-0 z-[100]" 
+                  align="start"
+                  onInteractOutside={(e) => {
+                    // Prevent closing when clicking on Dialog overlay
+                    const target = e.target as HTMLElement;
+                    if (target.closest('[role="dialog"]')) {
+                      e.preventDefault();
+                    }
+                  }}
+                >
                   <Command>
                     <CommandInput placeholder="Search invoice types..." className="h-9" />
                     <CommandList>

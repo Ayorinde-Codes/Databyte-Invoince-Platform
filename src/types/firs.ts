@@ -4,6 +4,7 @@ export interface FIRSConfiguration {
   company_id: string;
   business_id: string;
   service_id: string;
+  irn_service_id?: string;
   is_active: boolean;
   last_validation_at?: string;
   validation_status: 'pending' | 'valid' | 'invalid' | 'expired';
@@ -15,6 +16,7 @@ export interface FIRSConfiguration {
 export interface FIRSCredentials {
   business_id: string;
   service_id: string;
+  irn_service_id?: string;
 }
 
 export interface FIRSValidationResponse {
