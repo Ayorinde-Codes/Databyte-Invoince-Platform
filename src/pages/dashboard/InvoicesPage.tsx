@@ -480,7 +480,7 @@ export const InvoicesPage = () => {
                 ? await apiService.getARInvoice(validationResult.invoice_id)
                 : await apiService.getAPInvoice(validationResult.invoice_id);
               if (response?.data) {
-                handleOpenFirsFieldsDialog(response.data);
+                handleOpenFirsFieldsDialog(response.data as Invoice);
               } else {
                 toast.error('Failed to load invoice details');
               }
@@ -570,12 +570,12 @@ export const InvoicesPage = () => {
           if (validationResult.invoice_type === 'ar') {
             const response = await apiService.getARInvoice(selectedInvoice.id, 'items');
             if (response?.data) {
-              setSelectedInvoice(response.data);
+              setSelectedInvoice(response.data as Invoice);
             }
           } else {
             const response = await apiService.getAPInvoice(selectedInvoice.id, 'items');
             if (response?.data) {
-              setSelectedInvoice(response.data);
+              setSelectedInvoice(response.data as Invoice);
             }
           }
         } catch (error) {
@@ -1068,12 +1068,12 @@ export const InvoicesPage = () => {
           if (activeTab === 'ar') {
             const response = await apiService.getARInvoice(invoice.id, 'items');
             if (response?.data) {
-              setSelectedInvoice(response.data);
+              setSelectedInvoice(response.data as Invoice);
             }
           } else {
             const response = await apiService.getAPInvoice(invoice.id, 'items');
             if (response?.data) {
-              setSelectedInvoice(response.data);
+              setSelectedInvoice(response.data as Invoice);
             }
           }
         } catch (error) {
