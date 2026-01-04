@@ -360,93 +360,97 @@ export const SettingsPage = () => {
                   </div>
                 ) : (
                   <>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <div className="space-y-2">
-                        <Label htmlFor="company-name">Company Name</Label>
-                        <Input
-                          id="company-name"
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <Label htmlFor="company-name">Company Name</Label>
+                    <Input
+                      id="company-name"
                           value={companyForm.name}
                           onChange={(e) => setCompanyForm({ ...companyForm, name: e.target.value })}
                           placeholder="Enter company name"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="tax-id">Tax ID / RC Number</Label>
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="tin">Tax Identification Number (TIN) *</Label>
                         <Input
-                          id="tax-id"
+                          id="tin"
                           value={companyForm.tin}
                           onChange={(e) => setCompanyForm({ ...companyForm, tin: e.target.value })}
-                          placeholder="Enter TIN/RC Number"
+                          placeholder="Enter TIN (format: 12345678-1234)"
+                          pattern="^\d{8}-\d{4}$"
                         />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="email">Business Email</Label>
-                        <Input
-                          id="email"
-                          type="email"
+                        <p className="text-xs text-muted-foreground">
+                          TIN must be in format 12345678-1234
+                        </p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="email">Business Email</Label>
+                    <Input
+                      id="email"
+                      type="email"
                           value={companyForm.email}
                           onChange={(e) => setCompanyForm({ ...companyForm, email: e.target.value })}
                           placeholder="Enter business email"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="phone">Phone Number</Label>
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="phone">Phone Number</Label>
                         <Input
                           id="phone"
                           value={companyForm.phone}
                           onChange={(e) => setCompanyForm({ ...companyForm, phone: e.target.value })}
                           placeholder="Enter phone number"
                         />
-                      </div>
-                    </div>
+                  </div>
+                </div>
 
-                    <div className="space-y-2">
-                      <Label htmlFor="address">Business Address</Label>
-                      <Textarea
-                        id="address"
+                <div className="space-y-2">
+                  <Label htmlFor="address">Business Address</Label>
+                  <Textarea
+                    id="address"
                         value={companyForm.address}
                         onChange={(e) => setCompanyForm({ ...companyForm, address: e.target.value })}
                         placeholder="Enter business address"
-                        rows={3}
-                      />
-                    </div>
+                    rows={3}
+                  />
+                </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                      <div className="space-y-2">
-                        <Label htmlFor="city">City</Label>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <div className="space-y-2">
+                    <Label htmlFor="city">City</Label>
                         <Input
                           id="city"
                           value={companyForm.city}
                           onChange={(e) => setCompanyForm({ ...companyForm, city: e.target.value })}
                           placeholder="Enter city"
                         />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="state">State</Label>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="state">State</Label>
                         <Input
                           id="state"
                           value={companyForm.state}
                           onChange={(e) => setCompanyForm({ ...companyForm, state: e.target.value })}
                           placeholder="Enter state"
                         />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="country">Country</Label>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="country">Country</Label>
                         <Select
                           value={companyForm.country.toLowerCase()}
                           onValueChange={(value) => setCompanyForm({ ...companyForm, country: value })}
                         >
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="nigeria">Nigeria</SelectItem>
-                            <SelectItem value="ghana">Ghana</SelectItem>
-                            <SelectItem value="kenya">Kenya</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </div>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="nigeria">Nigeria</SelectItem>
+                        <SelectItem value="ghana">Ghana</SelectItem>
+                        <SelectItem value="kenya">Kenya</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
                   </>
                 )}
 
@@ -495,6 +499,11 @@ export const SettingsPage = () => {
                 <div className="flex justify-end">
                   <Button
                     onClick={() => {
+                      // Validate TIN format before submission
+                      if (companyForm.tin && !/^\d{8}-\d{4}$/.test(companyForm.tin)) {
+                        toast.error('TIN must be in format 12345678-1234');
+                        return;
+                      }
                       updateProfile.mutate(companyForm);
                     }}
                     disabled={updateProfile.isPending || isLoadingProfile}
@@ -506,8 +515,8 @@ export const SettingsPage = () => {
                       </>
                     ) : (
                       <>
-                        <Save className="w-4 h-4 mr-2" />
-                        Save Changes
+                    <Save className="w-4 h-4 mr-2" />
+                    Save Changes
                       </>
                     )}
                   </Button>
@@ -674,51 +683,51 @@ export const SettingsPage = () => {
                         </TableRow>
                       ) : (
                         apiKeys.map((key) => (
-                          <TableRow key={key.id}>
-                            <TableCell className="font-medium">
-                              {key.name}
-                            </TableCell>
-                            <TableCell>
-                              <div className="flex items-center space-x-2">
-                                <code className="text-sm bg-muted px-2 py-1 rounded">
-                                  {showApiKey ? key.key : '••••••••••••••••'}
-                                </code>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => setShowApiKey(!showApiKey)}
-                                >
-                                  {showApiKey ? (
-                                    <EyeOff className="w-4 h-4" />
-                                  ) : (
-                                    <Eye className="w-4 h-4" />
-                                  )}
-                                </Button>
-                                <Button variant="ghost" size="sm">
-                                  <Copy className="w-4 h-4" />
-                                </Button>
-                              </div>
-                            </TableCell>
-                            <TableCell>{key.created}</TableCell>
-                            <TableCell>{key.lastUsed}</TableCell>
-                            <TableCell>
-                              <Badge variant="default">{key.status}</Badge>
-                            </TableCell>
-                            <TableCell className="text-right">
-                              <div className="flex justify-end space-x-2">
-                                <Button variant="ghost" size="sm">
-                                  <RefreshCw className="w-4 h-4" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="text-red-600"
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                </Button>
-                              </div>
-                            </TableCell>
-                          </TableRow>
+                        <TableRow key={key.id}>
+                          <TableCell className="font-medium">
+                            {key.name}
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center space-x-2">
+                              <code className="text-sm bg-muted px-2 py-1 rounded">
+                                {showApiKey ? key.key : '••••••••••••••••'}
+                              </code>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setShowApiKey(!showApiKey)}
+                              >
+                                {showApiKey ? (
+                                  <EyeOff className="w-4 h-4" />
+                                ) : (
+                                  <Eye className="w-4 h-4" />
+                                )}
+                              </Button>
+                              <Button variant="ghost" size="sm">
+                                <Copy className="w-4 h-4" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                          <TableCell>{key.created}</TableCell>
+                          <TableCell>{key.lastUsed}</TableCell>
+                          <TableCell>
+                            <Badge variant="default">{key.status}</Badge>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex justify-end space-x-2">
+                              <Button variant="ghost" size="sm">
+                                <RefreshCw className="w-4 h-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="text-red-600"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
                         ))
                       )}
                     </TableBody>
@@ -1023,7 +1032,7 @@ export const SettingsPage = () => {
                       onChange={(e) => setPasswordForm({ ...passwordForm, password_confirmation: e.target.value })}
                       placeholder="Confirm new password"
                     />
-                  </div>
+                </div>
                   <Button
                     variant="outline"
                     onClick={() => {

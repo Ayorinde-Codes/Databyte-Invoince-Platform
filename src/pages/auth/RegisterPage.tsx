@@ -22,7 +22,9 @@ const registerSchema = z.object({
   confirm_password: z.string(),
   phone: z.string().min(10, 'Phone number must be at least 10 characters'),
   address: z.string().min(5, 'Address must be at least 5 characters'),
-  tin: z.string().min(8, 'TIN must be at least 8 characters'),
+  tin: z.string()
+    .min(1, 'TIN is required')
+    .regex(/^\d{8}-\d{4}$/, 'TIN must be in format 12345678-1234'),
   primary_service_id: z.string().min(1, 'Please select an ERP service'),
   terms_accepted: z.boolean().refine(val => val === true, 'You must accept the terms and conditions'),
 }).refine((data) => data.password === data.confirm_password, {
@@ -116,7 +118,19 @@ export const RegisterPage = () => {
       toast.success('Registration successful! Welcome to Databyte.');
       navigate('/dashboard');
     } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : 'Registration failed. Please try again.';
+      // Extract error message from various error formats
+      let errorMessage = 'Registration failed. Please try again.';
+      
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      } else if (error && typeof error === 'object') {
+        // Handle ApiError structure from apiService
+        const apiError = error as { message?: string; statusCode?: number; data?: unknown };
+        if (apiError.message) {
+          errorMessage = apiError.message;
+        }
+      }
+      
       toast.error(errorMessage);
     } finally {
       setIsLoading(false);

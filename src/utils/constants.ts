@@ -84,6 +84,7 @@ export const API_ENDPOINTS = {
     update: '/settings/erp/:id',
     delete: '/settings/erp/:id',
     test: '/settings/erp/:id/test',
+    testBeforeCreate: '/settings/erp/test', // Test connection before creating setting
     sync: '/settings/erp/:id/sync',
     syncAll: '/settings/erp/:id/sync-all',
     syncStatus: '/settings/erp/:id/sync-status',

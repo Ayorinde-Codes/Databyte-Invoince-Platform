@@ -218,7 +218,20 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       return response.data;
     } catch (error: unknown) {
       console.error('Registration error:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Registration failed. Please try again.';
+      
+      // Extract error message from various error formats
+      let errorMessage = 'Registration failed. Please try again.';
+      
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      } else if (error && typeof error === 'object') {
+        // Handle ApiError structure from apiService
+        const apiError = error as { message?: string; statusCode?: number; data?: unknown };
+        if (apiError.message) {
+          errorMessage = apiError.message;
+        }
+      }
+      
       throw new Error(errorMessage);
     } finally {
       setIsLoading(false);

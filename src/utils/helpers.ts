@@ -193,8 +193,8 @@ export const isValidPhone = (phone: string): boolean => {
 };
 
 export const isValidTIN = (tin: string): boolean => {
-  // Nigerian TIN format: 8-10 digits
-  const tinRegex = /^\d{8,10}$/;
+  // Nigerian TIN format: 12345678-1234 (8 digits, dash, 4 digits)
+  const tinRegex = /^\d{8}-\d{4}$/;
   return tinRegex.test(tin);
 };
 
