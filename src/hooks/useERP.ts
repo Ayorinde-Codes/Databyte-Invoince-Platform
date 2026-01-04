@@ -92,15 +92,54 @@ export const useDeleteERPSetting = () => {
   });
 };
 
-// Mutation hook for testing ERP connection
+// Mutation hook for testing ERP connection (existing setting)
 export const useTestERPConnection = () => {
   return useMutation({
-    mutationFn: (id: number) => apiService.testERPConnection(id),
-    onSuccess: () => {
-      toast.success('Connection test successful');
+    mutationFn: ({ id, connectionType }: { id: number; connectionType?: 'api' | 'database' }) =>
+      apiService.testERPConnection(id, connectionType),
+    onSuccess: (_, variables) => {
+      const connectionType = variables.connectionType 
+        ? variables.connectionType === 'api' ? 'API ' : 'Database '
+        : '';
+      toast.success(`${connectionType}Connection test successful`, {
+        duration: 4000, // Auto-dismiss after 4 seconds
+        closeButton: true, // Show close button
+      });
     },
-    onError: (error: unknown) => {
-      toast.error(extractErrorMessage(error, 'Connection test failed'));
+    onError: (error: unknown, variables) => {
+      const connectionType = variables.connectionType 
+        ? variables.connectionType === 'api' ? 'API ' : 'Database '
+        : '';
+      toast.error(extractErrorMessage(error, `${connectionType}Connection test failed`), {
+        duration: 5000, // Auto-dismiss after 5 seconds
+        closeButton: true, // Show close button
+      });
+    },
+  });
+};
+
+// Mutation hook for testing ERP connection before creation (doesn't save anything)
+export const useTestERPConnectionBeforeCreate = () => {
+  return useMutation({
+    mutationFn: (data: Parameters<typeof apiService.testERPConnectionBeforeCreate>[0]) =>
+      apiService.testERPConnectionBeforeCreate(data),
+    onSuccess: (_, variables) => {
+      const connectionType = variables.connection_type 
+        ? variables.connection_type === 'api' ? 'API ' : 'Database '
+        : '';
+      toast.success(`${connectionType}Connection test successful`, {
+        duration: 4000, // Auto-dismiss after 4 seconds
+        closeButton: true, // Show close button
+      });
+    },
+    onError: (error: unknown, variables) => {
+      const connectionType = variables.connection_type 
+        ? variables.connection_type === 'api' ? 'API ' : 'Database '
+        : '';
+      toast.error(extractErrorMessage(error, `${connectionType}Connection test failed`), {
+        duration: 5000, // Auto-dismiss after 5 seconds
+        closeButton: true, // Show close button
+      });
     },
   });
 };
