@@ -1039,9 +1039,24 @@ class ApiService {
     });
   }
 
-  async testERPConnection(id: number) {
+  async testERPConnection(id: number, connectionType?: 'api' | 'database') {
+    const body = connectionType ? { connection_type: connectionType } : undefined;
     return this.makeRequest(API_ENDPOINTS.erp.test.replace(':id', id.toString()), {
       method: 'POST',
+      body,
+    });
+  }
+
+  async testERPConnectionBeforeCreate(data: {
+    erp_type: string;
+    setting_value: Record<string, unknown>;
+    connection_type?: 'api' | 'database';
+  }) {
+    const { connection_type, ...requestData } = data;
+    const body = connection_type ? { ...requestData, connection_type } : requestData;
+    return this.makeRequest(API_ENDPOINTS.erp.testBeforeCreate, {
+      method: 'POST',
+      body,
     });
   }
 
@@ -1298,7 +1313,6 @@ class ApiService {
   async signInvoice(data: {
     invoice_id: number;
     invoice_type: 'ar' | 'ap';
-    validate_with_hoptool?: boolean;
   }) {
     return this.makeRequest(API_ENDPOINTS.firs.sign, {
       method: 'POST',
