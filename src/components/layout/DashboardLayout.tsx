@@ -7,7 +7,6 @@ import {
   User,
   Database,
   LogOut,
-  Bell,
   Search,
   Menu,
   X,
@@ -22,7 +21,6 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Badge } from '@/components/ui/badge';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -33,6 +31,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { useAuth } from '../../hooks/useAuth';
 import { usePermissions } from '../../hooks/usePermissions';
+import NotificationDropdown from './NotificationDropdown';
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -281,68 +280,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
 
             <div className="flex items-center space-x-4">
               {/* Notifications */}
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="relative hover:bg-gray-100 transition-colors"
-                  >
-                    <Bell className="w-5 h-5" />
-                    <Badge className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center p-0 text-xs bg-red-500 hover:bg-red-600">
-                      3
-                    </Badge>
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-80">
-                  <DropdownMenuLabel>Notifications</DropdownMenuLabel>
-                  <DropdownMenuSeparator />
-                  <div className="space-y-2 p-2">
-                    <div className="flex items-start space-x-3 p-2 hover:bg-gray-50 rounded-md cursor-pointer">
-                      <div className="w-2 h-2 bg-blue-500 rounded-full mt-2"></div>
-                      <div className="flex-1">
-                        <p className="text-sm font-medium">
-                          New invoice submitted
-                        </p>
-                        <p className="text-xs text-gray-500">
-                          Invoice #INV-2024-001 submitted to FIRS
-                        </p>
-                        <p className="text-xs text-gray-400">2 minutes ago</p>
-                      </div>
-                    </div>
-                    <div className="flex items-start space-x-3 p-2 hover:bg-gray-50 rounded-md cursor-pointer">
-                      <div className="w-2 h-2 bg-green-500 rounded-full mt-2"></div>
-                      <div className="flex-1">
-                        <p className="text-sm font-medium">
-                          FIRS approval received
-                        </p>
-                        <p className="text-xs text-gray-500">
-                          Invoice #INV-2024-002 approved by FIRS
-                        </p>
-                        <p className="text-xs text-gray-400">1 hour ago</p>
-                      </div>
-                    </div>
-                    <div className="flex items-start space-x-3 p-2 hover:bg-gray-50 rounded-md cursor-pointer">
-                      <div className="w-2 h-2 bg-yellow-500 rounded-full mt-2"></div>
-                      <div className="flex-1">
-                        <p className="text-sm font-medium">
-                          ERP sync completed
-                        </p>
-                        <p className="text-xs text-gray-500">
-                          Successfully synced 15 new invoices
-                        </p>
-                        <p className="text-xs text-gray-400">3 hours ago</p>
-                      </div>
-                    </div>
-                  </div>
-                  <DropdownMenuSeparator />
-                  <div className="p-2">
-                    <Button variant="ghost" className="w-full text-sm">
-                      View all notifications
-                    </Button>
-                  </div>
-                </DropdownMenuContent>
-              </DropdownMenu>
+              <NotificationDropdown />
 
               {/* User menu */}
               <DropdownMenu>
