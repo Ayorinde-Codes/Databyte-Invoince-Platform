@@ -1448,6 +1448,48 @@ class ApiService {
       method: 'DELETE',
     });
   }
+
+  // ==================== NOTIFICATIONS ====================
+
+  async getNotifications(params?: {
+    read?: boolean;
+    type?: string;
+    per_page?: number;
+    page?: number;
+  }) {
+    const queryParams = new URLSearchParams();
+    if (params?.read !== undefined) queryParams.append('read', params.read.toString());
+    if (params?.type) queryParams.append('type', params.type);
+    if (params?.per_page) queryParams.append('per_page', params.per_page.toString());
+    if (params?.page) queryParams.append('page', params.page.toString());
+    
+    const endpoint = queryParams.toString() 
+      ? `${API_ENDPOINTS.notifications.list}?${queryParams}`
+      : API_ENDPOINTS.notifications.list;
+    return this.makeRequest(endpoint);
+  }
+
+  async getUnreadNotificationCount() {
+    return this.makeRequest(API_ENDPOINTS.notifications.unreadCount);
+  }
+
+  async markNotificationAsRead(id: number) {
+    return this.makeRequest(API_ENDPOINTS.notifications.markAsRead.replace(':id', id.toString()), {
+      method: 'POST',
+    });
+  }
+
+  async markAllNotificationsAsRead() {
+    return this.makeRequest(API_ENDPOINTS.notifications.markAllRead, {
+      method: 'POST',
+    });
+  }
+
+  async deleteNotification(id: number) {
+    return this.makeRequest(API_ENDPOINTS.notifications.delete.replace(':id', id.toString()), {
+      method: 'DELETE',
+    });
+  }
 }
 
 // Export singleton instance
