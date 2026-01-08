@@ -3,6 +3,7 @@ import { getLocalStorage, removeLocalStorage } from '../utils/helpers';
 import { AUTH_CONFIG } from '../utils/constants';
 import { AuthApiResponse } from '../types/auth';
 import { DashboardApiResponse } from '../types/dashboard';
+import { NotificationApiResponse, UnreadCountApiResponse } from '../types/notification';
 
 // API Response Types
 export interface ApiResponse<T = unknown> {
@@ -1445,6 +1446,48 @@ class ApiService {
 
   async deleteService(id: number) {
     return this.makeRequest(API_ENDPOINTS.services.delete.replace(':id', id.toString()), {
+      method: 'DELETE',
+    });
+  }
+
+  // ==================== NOTIFICATIONS ====================
+
+  async getNotifications(params?: {
+    read?: boolean;
+    type?: string;
+    per_page?: number;
+    page?: number;
+  }): Promise<NotificationApiResponse> {
+    const queryParams = new URLSearchParams();
+    if (params?.read !== undefined) queryParams.append('read', params.read.toString());
+    if (params?.type) queryParams.append('type', params.type);
+    if (params?.per_page) queryParams.append('per_page', params.per_page.toString());
+    if (params?.page) queryParams.append('page', params.page.toString());
+    
+    const endpoint = queryParams.toString() 
+      ? `${API_ENDPOINTS.notifications.list}?${queryParams}`
+      : API_ENDPOINTS.notifications.list;
+    return this.makeRequest<NotificationApiResponse['data']>(endpoint) as Promise<NotificationApiResponse>;
+  }
+
+  async getUnreadNotificationCount(): Promise<UnreadCountApiResponse> {
+    return this.makeRequest<UnreadCountApiResponse['data']>(API_ENDPOINTS.notifications.unreadCount) as Promise<UnreadCountApiResponse>;
+  }
+
+  async markNotificationAsRead(id: number) {
+    return this.makeRequest(API_ENDPOINTS.notifications.markAsRead.replace(':id', id.toString()), {
+      method: 'POST',
+    });
+  }
+
+  async markAllNotificationsAsRead() {
+    return this.makeRequest(API_ENDPOINTS.notifications.markAllRead, {
+      method: 'POST',
+    });
+  }
+
+  async deleteNotification(id: number) {
+    return this.makeRequest(API_ENDPOINTS.notifications.delete.replace(':id', id.toString()), {
       method: 'DELETE',
     });
   }

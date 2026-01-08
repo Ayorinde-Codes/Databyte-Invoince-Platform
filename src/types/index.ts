@@ -4,6 +4,7 @@ export * from './erp';
 export * from './firs';
 export * from './invoice';
 export * from './dashboard';
+export * from './notification';
 
 // Common utility types
 export interface ApiResponse<T = unknown> {
