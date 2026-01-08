@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiService } from '../services/api';
-import { Notification, NotificationApiResponse, NotificationType } from '../types/notification';
+import { Notification, NotificationApiResponse, NotificationType, UnreadCountApiResponse } from '../types/notification';
 import { formatDistanceToNow } from 'date-fns';
 
 export const useNotifications = (params?: {
@@ -24,7 +24,7 @@ export const useNotifications = (params?: {
   });
 
   // Fetch unread count
-  const { data: unreadCountData } = useQuery({
+  const { data: unreadCountData } = useQuery<UnreadCountApiResponse>({
     queryKey: ['notifications', 'unread-count'],
     queryFn: () => apiService.getUnreadNotificationCount(),
     refetchInterval: 30000,

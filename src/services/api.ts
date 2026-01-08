@@ -3,6 +3,7 @@ import { getLocalStorage, removeLocalStorage } from '../utils/helpers';
 import { AUTH_CONFIG } from '../utils/constants';
 import { AuthApiResponse } from '../types/auth';
 import { DashboardApiResponse } from '../types/dashboard';
+import { NotificationApiResponse, UnreadCountApiResponse } from '../types/notification';
 
 // API Response Types
 export interface ApiResponse<T = unknown> {
@@ -1456,7 +1457,7 @@ class ApiService {
     type?: string;
     per_page?: number;
     page?: number;
-  }) {
+  }): Promise<NotificationApiResponse> {
     const queryParams = new URLSearchParams();
     if (params?.read !== undefined) queryParams.append('read', params.read.toString());
     if (params?.type) queryParams.append('type', params.type);
@@ -1466,11 +1467,11 @@ class ApiService {
     const endpoint = queryParams.toString() 
       ? `${API_ENDPOINTS.notifications.list}?${queryParams}`
       : API_ENDPOINTS.notifications.list;
-    return this.makeRequest(endpoint);
+    return this.makeRequest<NotificationApiResponse['data']>(endpoint) as Promise<NotificationApiResponse>;
   }
 
-  async getUnreadNotificationCount() {
-    return this.makeRequest(API_ENDPOINTS.notifications.unreadCount);
+  async getUnreadNotificationCount(): Promise<UnreadCountApiResponse> {
+    return this.makeRequest<UnreadCountApiResponse['data']>(API_ENDPOINTS.notifications.unreadCount) as Promise<UnreadCountApiResponse>;
   }
 
   async markNotificationAsRead(id: number) {

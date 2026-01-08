@@ -46,3 +46,13 @@ export interface NotificationApiResponse {
   message: string;
   data: NotificationsResponse;
 }
+
+export interface UnreadCountResponse {
+  unread_count: number;
+}
+
+export interface UnreadCountApiResponse {
+  status: boolean;
+  message: string;
+  data: UnreadCountResponse;
+}
