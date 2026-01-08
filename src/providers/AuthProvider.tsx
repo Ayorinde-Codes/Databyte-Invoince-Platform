@@ -252,10 +252,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       removeLocalStorage(AUTH_CONFIG.company_key);
       removeLocalStorage(AUTH_CONFIG.refresh_token_key);
       
-      // Redirect to login page
-      if (window.location.pathname !== '/auth/login') {
-        window.location.href = '/auth/login';
-      }
+      // Redirect to login page using window.location to ensure clean state
+      window.location.href = '/auth/login';
     }
   }, []);
 

@@ -83,7 +83,7 @@ export const LoginPage = () => {
               <div className="w-12 h-12 bg-primary-foreground/20 rounded-xl flex items-center justify-center">
                 <FileText className="w-7 h-7" />
               </div>
-              <span className="text-3xl font-bold">Databyte</span>
+              <span className="text-3xl font-bold">Databytes</span>
             </div>
             <h1 className="text-4xl font-bold mb-4">
               Welcome back to your invoice management platform

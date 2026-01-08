@@ -155,6 +155,13 @@ export const API_ENDPOINTS = {
     assignRole: '/auth/assign-role',
     acceptInvitation: '/auth/accept-invitation',
   },
+  notifications: {
+    list: '/notifications',
+    unreadCount: '/notifications/unread-count',
+    markAsRead: '/notifications/:id/read',
+    markAllRead: '/notifications/mark-all-read',
+    delete: '/notifications/:id',
+  },
 } as const;
 
 // Authentication

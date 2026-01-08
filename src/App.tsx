@@ -28,6 +28,7 @@ import { SettingsPage } from './pages/dashboard/SettingsPage';
 import { ReportsPage } from './pages/dashboard/ReportsPage';
 import { ProfilePage } from './pages/dashboard/ProfilePage';
 import { ERPConfigPage } from './pages/dashboard/ERPConfigPage';
+import { NotificationsPage } from './pages/dashboard/NotificationsPage';
 
 // Providers
 import { AuthProvider, useAuth } from './providers/AuthProvider';
@@ -164,6 +165,14 @@ const App = () => (
                   element={
                     <ProtectedRoute>
                       <ProfilePage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/dashboard/notifications"
+                  element={
+                    <ProtectedRoute>
+                      <NotificationsPage />
                     </ProtectedRoute>
                   }
                 />
