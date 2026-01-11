@@ -3,6 +3,7 @@ import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { usePermissions } from '@/hooks/usePermissions';
 import { Role, Permission } from '@/hooks/usePermissions';
+import { LoadingPage } from '@/components/ui/loading';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -30,11 +31,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
 
   // Show loading state
   if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary"></div>
-      </div>
-    );
+    return <LoadingPage message="Checking authentication..." />;
   }
 
   // Check authentication
