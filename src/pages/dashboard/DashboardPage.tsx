@@ -330,15 +330,6 @@ export const DashboardPage = () => {
       count: statusCounts[status].count,
     }));
 
-    // Debug logging (remove in production)
-    if (process.env.NODE_ENV === 'development') {
-      console.log('Status Chart Data:', {
-        allInvoicesCount: allInvoices.length,
-        statusCounts,
-        chartData,
-      });
-    }
-
     return chartData;
   }, [arInvoicesResponse, apInvoicesResponse, isLoadingAR, isLoadingAP]);
 

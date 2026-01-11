@@ -291,13 +291,11 @@ export const ERPConfigPage = () => {
 
   const { canManageERP, isSuperAdmin } = usePermissions();
   
-  // Fetch company profile to get primary_service_id
   const { data: companyProfileResponse } = useCompanyProfile();
   const companyProfile = (companyProfileResponse?.data && typeof companyProfileResponse.data === 'object' && 'company' in companyProfileResponse.data)
     ? (companyProfileResponse.data as { company?: { primary_service_id?: number } }).company
     : null;
   
-  // Fetch ERP services and settings
   const { data: erpServicesResponse, isLoading: isLoadingServices } = useERPServices();
   const { data: erpSettingsResponse, isLoading: isLoadingSettings, refetch: refetchSettings } = useERPSettings();
   const { data: erpSettingResponse, isLoading: isLoadingERPSetting } = useERPSetting(showEditDialog);
@@ -310,7 +308,6 @@ export const ERPConfigPage = () => {
   const syncData = useSyncERPData();
   const syncAll = useSyncAllERPData();
   
-  // Get sync status for the currently selected ERP (if sync dialog is open)
   const syncStatusQuery = useERPSyncStatus(showSyncDialog);
   const syncStatusData = syncStatusQuery.data?.data;
   const syncStatus: ERPSyncStatus | null = 
@@ -318,10 +315,8 @@ export const ERPConfigPage = () => {
       ? (syncStatusData as ERPSyncStatus)
       : null;
 
-  // Auto-close dialog and refresh when sync completes
   useEffect(() => {
     if (showSyncDialog && syncStatus && !syncStatus.has_pending_jobs && syncStatusQuery.dataUpdatedAt > 0) {
-      // Sync completed - show success and close dialog
       const timer = setTimeout(() => {
         toast.success('Sync completed successfully');
         setShowSyncDialog(null);
@@ -330,19 +325,17 @@ export const ERPConfigPage = () => {
         setSyncDateTo('');
         setIncrementalSync(false);
         refetchSettings();
-      }, 1500); // Wait 1.5 seconds to show completion message
+      }, 1500);
       
       return () => clearTimeout(timer);
     }
   }, [showSyncDialog, syncStatus, syncStatusQuery.dataUpdatedAt, refetchSettings]);
   
-  // FIRS Configuration hooks
   const { data: firsConfigResponse, isLoading: isLoadingFIRS } = useFIRSConfiguration();
   const createFIRSConfig = useCreateFIRSConfiguration();
   const updateFIRSConfig = useUpdateFIRSConfiguration();
   const testFIRSConnection = useTestFIRSConnection();
   
-  // Access Point Provider hooks
   const { data: availableProvidersResponse, isLoading: isLoadingProviders } = useAvailableAccessPointProviders();
   const { data: activeProviderResponse, refetch: refetchActiveProvider } = useActiveAccessPointProvider(false);
   const activateProvider = useActivateAccessPointProvider();
@@ -365,7 +358,6 @@ export const ERPConfigPage = () => {
     ? (firsConfigData as FIRSConfigResponse).configuration || null
     : null;
 
-  // Parse ERP services
   const erpServicesData = erpServicesResponse?.data;
   const erpServices = toERPServiceSummaryArray(
     erpServicesData && typeof erpServicesData === 'object' && 'services' in erpServicesData
@@ -373,10 +365,8 @@ export const ERPConfigPage = () => {
       : undefined
   );
   
-  // Pre-select primary service when dialog opens
   useEffect(() => {
     if (showAddDialog && companyProfile?.primary_service_id && erpServices.length > 0) {
-      // Find the ERP service that matches the primary_service_id
       const primaryService = erpServices.find(
         (service) => service.id === companyProfile.primary_service_id
       );
@@ -385,28 +375,23 @@ export const ERPConfigPage = () => {
         setSelectedERP(primaryService.code);
       }
     } else if (!showAddDialog) {
-      // Reset selection when dialog closes
       setSelectedERP('');
     }
   }, [showAddDialog, companyProfile?.primary_service_id, erpServices]);
   
-  // Parse ERP settings - handle multiple possible response structures
   const erpSettingsData = erpSettingsResponse?.data;
   let settingsArray: unknown = undefined;
   
   if (erpSettingsData) {
     if (Array.isArray(erpSettingsData)) {
-      // Direct array response: [...]
       settingsArray = erpSettingsData;
     } else if (typeof erpSettingsData === 'object') {
-      // Check for nested structure: { data: { settings: [...] } }
       if ('data' in erpSettingsData && typeof erpSettingsData.data === 'object' && erpSettingsData.data !== null) {
         const nestedData = erpSettingsData.data as { settings?: unknown };
         if ('settings' in nestedData && Array.isArray(nestedData.settings)) {
           settingsArray = nestedData.settings;
         }
       }
-      // Check for direct settings: { settings: [...] }
       else if ('settings' in erpSettingsData && Array.isArray((erpSettingsData as { settings?: unknown }).settings)) {
         settingsArray = (erpSettingsData as { settings?: unknown }).settings;
       }
@@ -415,18 +400,15 @@ export const ERPConfigPage = () => {
   
   const erpConfigurations = toERPConfigurationArray(settingsArray);
 
-  // Parse ERP setting for edit dialog
   const erpSettingData = erpSettingResponse?.data;
   const erpSetting: ERPSetting | null = (erpSettingData && typeof erpSettingData === 'object' && 'setting' in erpSettingData)
     ? (erpSettingData as { setting?: ERPSetting | unknown }).setting as ERPSetting | null
     : null;
 
-  // Update edit form when ERP setting is loaded
   useEffect(() => {
     if (erpSetting && showEditDialog) {
       const settingValue = { ...(erpSetting.setting_value || {}) };
       
-      // Ensure schema exists for Sage X3
       if (erpSetting.erp_type === 'sage_x3' && settingValue.server_details) {
         const serverDetails = settingValue.server_details;
         if (serverDetails && typeof serverDetails === 'object' && !Array.isArray(serverDetails)) {
@@ -440,7 +422,6 @@ export const ERPConfigPage = () => {
         }
       }
       
-      // Ensure api_credentials exists for Sage 300 and Sage X3
       if ((erpSetting.erp_type === 'sage_300' || erpSetting.erp_type === 'sage_x3') && !settingValue.api_credentials) {
         settingValue.api_credentials = {
           username: '',
@@ -448,7 +429,6 @@ export const ERPConfigPage = () => {
         };
       }
       
-      // Ensure pool_alias exists for Sage X3
       if (erpSetting.erp_type === 'sage_x3' && settingValue.server_details) {
         const serverDetails = settingValue.server_details;
         if (serverDetails && typeof serverDetails === 'object' && !Array.isArray(serverDetails)) {
@@ -462,7 +442,6 @@ export const ERPConfigPage = () => {
         }
       }
       
-      // Ensure api_version exists for Sage 300
       if (erpSetting.erp_type === 'sage_300' && settingValue.server_details) {
         const serverDetails = settingValue.server_details;
         if (serverDetails && typeof serverDetails === 'object' && !Array.isArray(serverDetails)) {
@@ -483,7 +462,6 @@ export const ERPConfigPage = () => {
     }
   }, [erpSetting, showEditDialog]);
 
-  // Parse Access Point Providers
   const availableProvidersData = availableProvidersResponse?.data;
   const availableProviders = (availableProvidersData && typeof availableProvidersData === 'object' && 'providers' in availableProvidersData)
     ? (availableProvidersData as { providers?: unknown[] }).providers || []
@@ -494,13 +472,8 @@ export const ERPConfigPage = () => {
     ? (activeProviderData as { provider?: { id: number; name: string; code: string; is_active?: boolean; has_credentials?: boolean } | null }).provider
     : null;
 
-  // Get sync status for each ERP (if needed)
-  // Note: We can add useERPSyncStatus hook calls here if needed for real-time status
-
-  // Determine status from API data
   const getERPStatus = (setting: ERPConfigurationRecord) => {
     if (!setting.is_active) return 'disconnected';
-    // Check if connection test was successful
     const testResult = setting.last_connection_test_result;
     if (testResult === 'success' || (typeof testResult === 'object' && testResult?.success === true)) {
       return 'connected';
@@ -508,17 +481,15 @@ export const ERPConfigPage = () => {
     if (testResult === 'failed' || (typeof testResult === 'object' && testResult?.success === false)) {
       return 'error';
     }
-    // If no test result but is active, show as disconnected (needs testing)
     return 'disconnected';
   };
 
-  // Handlers
   const handleTestConnection = async (id: number, connectionType?: 'api' | 'database') => {
     try {
       await testConnection.mutateAsync({ id, connectionType });
       await refetchSettings();
-    } catch (error) {
-      // Error handled by hook
+    // eslint-disable-next-line no-empty
+    } catch {
     }
   };
 
@@ -533,11 +504,9 @@ export const ERPConfigPage = () => {
           options: options || {},
         },
       });
-      // Don't close dialog immediately - let user see status
-      // Status polling will happen automatically via useERPSyncStatus
       await refetchSettings();
-    } catch (error) {
-      // Error handled by hook
+    // eslint-disable-next-line no-empty
+    } catch {
     }
   };
 
@@ -551,8 +520,8 @@ export const ERPConfigPage = () => {
         },
       });
       await refetchSettings();
-    } catch (error) {
-      // Error handled by hook
+    // eslint-disable-next-line no-empty
+    } catch {
     }
   };
 
@@ -569,7 +538,6 @@ export const ERPConfigPage = () => {
     const hasApiCredentials = erpCreateForm.setting_value.api_credentials?.username && erpCreateForm.setting_value.api_credentials?.password;
     const hasDbCredentials = erpCreateForm.setting_value.credentials?.username && erpCreateForm.setting_value.credentials?.password;
     
-    // Validate based on connection type
     if (connectionType === 'api') {
       if (!hasApiCredentials) {
         toast.error('Please provide API credentials to test API connection');
@@ -592,7 +560,6 @@ export const ERPConfigPage = () => {
         toast.error('Please provide both Database username and password');
         return;
       }
-      // For Sage X3, database is in credentials, not server_details
       const databaseRequired = erpCreateForm.erp_type === 'sage_x3' 
         ? erpCreateForm.setting_value.credentials?.database 
         : erpCreateForm.setting_value.server_details.database;
@@ -601,8 +568,6 @@ export const ERPConfigPage = () => {
         return;
       }
     } else {
-      // Test both - check basic requirements
-      // For Sage X3, database is in credentials, not server_details
       const databaseRequired = erpCreateForm.erp_type === 'sage_x3' 
         ? erpCreateForm.setting_value.credentials?.database 
         : erpCreateForm.setting_value.server_details.database;
@@ -611,13 +576,11 @@ export const ERPConfigPage = () => {
         return;
       }
       
-      // For Sage X3, check pool_alias if API credentials are provided
       if (erpType === 'sage_x3' && hasApiCredentials && !erpCreateForm.setting_value.server_details.pool_alias) {
         toast.error('Pool alias is required for Sage X3 API connections');
         return;
       }
       
-      // Check that at least one set of credentials is provided
       if (!hasApiCredentials && !hasDbCredentials) {
         toast.error('Please provide either API credentials or Database credentials');
         return;
@@ -628,9 +591,6 @@ export const ERPConfigPage = () => {
     setTestResult(null);
 
     try {
-      // Test the connection directly without creating a setting
-      // This endpoint validates credentials but doesn't save anything
-      // Prepare setting value - remove database from server_details for Sage X3 if empty
       const settingValue = { ...erpCreateForm.setting_value };
       if (erpCreateForm.erp_type === 'sage_x3' && settingValue.server_details) {
         const serverDetails = { ...settingValue.server_details };
@@ -659,20 +619,17 @@ export const ERPConfigPage = () => {
   };
 
   const handleCreateERP = async () => {
-    setFormErrors({}); // Clear previous errors
+    setFormErrors({});
     try {
-      // Prepare setting value - remove database from server_details for Sage X3 if empty
       const settingValue = { ...erpCreateForm.setting_value };
       if (erpCreateForm.erp_type === 'sage_x3' && settingValue.server_details) {
         const serverDetails = { ...settingValue.server_details };
-        // Remove database from server_details for Sage X3 (it's in credentials instead)
         if (serverDetails.database === '' || !serverDetails.database) {
           delete serverDetails.database;
         }
         settingValue.server_details = serverDetails;
       }
       
-      // Always create a new setting (test connection doesn't save anymore)
       await createERPSetting.mutateAsync({
         ...erpCreateForm,
         setting_value: settingValue,
@@ -719,24 +676,17 @@ export const ERPConfigPage = () => {
       setTestResult(null);
       await refetchSettings();
     } catch (error: unknown) {
-      // Extract validation errors from the response
       const errors: Record<string, string> = {};
       
       if (error && typeof error === 'object') {
-        // Check for Laravel validation error structure
         if ('response' in error && error.response && typeof error.response === 'object') {
           const response = error.response as { data?: { errors?: Record<string, string[]> } };
           if (response.data?.errors) {
-            // Map Laravel validation errors to form fields
             Object.entries(response.data.errors).forEach(([key, messages]) => {
-              // Convert Laravel field names to form field names
-              // e.g., "setting_value.server_details.database" -> "database"
-              // e.g., "setting_value.credentials.username" -> "credentials.username" or "username"
               const parts = key.split('.');
               const fieldName = parts.pop() || key;
               const parent = parts[parts.length - 1];
               
-              // Store both the full path and the field name for flexibility
               errors[key] = Array.isArray(messages) ? messages[0] : String(messages);
               if (parent === 'credentials' || parent === 'api_credentials') {
                 errors[`${parent}.${fieldName}`] = Array.isArray(messages) ? messages[0] : String(messages);
@@ -745,7 +695,6 @@ export const ERPConfigPage = () => {
             });
           }
         }
-        // Also check for direct errors object
         if ('errors' in error && error.errors && typeof error.errors === 'object') {
           const errorObj = error.errors as Record<string, string[]>;
           Object.entries(errorObj).forEach(([key, messages]) => {
@@ -753,7 +702,6 @@ export const ERPConfigPage = () => {
             const fieldName = parts.pop() || key;
             const parent = parts[parts.length - 1];
             
-            // Store both the full path and the field name for flexibility
             errors[key] = Array.isArray(messages) ? messages[0] : String(messages);
             if (parent === 'credentials' || parent === 'api_credentials') {
               errors[`${parent}.${fieldName}`] = Array.isArray(messages) ? messages[0] : String(messages);
@@ -764,11 +712,6 @@ export const ERPConfigPage = () => {
       }
       
       setFormErrors(errors);
-      
-      // Still show toast for general error message
-      if (Object.keys(errors).length === 0) {
-        // Error handled by hook
-      }
     }
   };
 
@@ -776,14 +719,13 @@ export const ERPConfigPage = () => {
     try {
       await deleteERPSetting.mutateAsync(id);
       setShowDeleteDialog(null);
-    } catch (error) {
-      // Error handled by hook
+    // eslint-disable-next-line no-empty
+    } catch {
     }
   };
 
   const handleUpdateERP = async (id: number) => {
     try {
-      // Ensure schema is included for Sage X3 if not present
       const updateData = { ...erpEditForm };
       if (erpSetting?.erp_type === 'sage_x3' && updateData.setting_value?.server_details) {
         const serverDetails = updateData.setting_value.server_details;
@@ -802,12 +744,11 @@ export const ERPConfigPage = () => {
       setShowEditDialog(null);
       setErpEditForm({ is_active: true, setting_value: {} });
       await refetchSettings();
-    } catch (error) {
-      // Error handled by hook
+    // eslint-disable-next-line no-empty
+    } catch {
     }
   };
 
-  // Access Point Provider handlers
   const handleActivateProvider = async (providerId: number, credentials?: { 'x-api-key'?: string; 'x-api-secret'?: string; 'participant-id'?: string }) => {
     try {
       const provider = availableProviders.find((p: AccessPointProvider) => p.id === providerId) as AccessPointProvider | undefined;
@@ -817,7 +758,6 @@ export const ERPConfigPage = () => {
       
       if (credentials) {
         if (provider?.code === 'cryptware') {
-          // Cryptware requires participant-id and x-api-key
           if (credentials['participant-id'] && credentials['x-api-key']) {
             payload.credentials = {
               'participant-id': credentials['participant-id'],
@@ -825,7 +765,6 @@ export const ERPConfigPage = () => {
             };
           }
         } else {
-          // Hoptool requires x-api-key and x-api-secret
           if (credentials['x-api-key'] && credentials['x-api-secret']) {
             payload.credentials = {
               'x-api-key': credentials['x-api-key'],
@@ -846,8 +785,8 @@ export const ERPConfigPage = () => {
           setAccessPointProviderForm({ 'x-api-key': '', 'x-api-secret': '', 'participant-id': '' });
         }
       }
-    } catch (error) {
-      // Error handled by hook
+    // eslint-disable-next-line no-empty
+    } catch {
     }
   };
 
@@ -857,13 +796,11 @@ export const ERPConfigPage = () => {
       let credentialsToSend: Record<string, string> | { 'x-api-key': string; 'x-api-secret': string } | { 'participant-id': string; 'x-api-key': string } = {};
       
       if (provider?.code === 'cryptware') {
-        // Cryptware requires participant-id and x-api-key
         credentialsToSend = {
           'participant-id': accessPointProviderForm['participant-id'],
           'x-api-key': accessPointProviderForm['x-api-key'],
         };
       } else {
-        // Hoptool requires x-api-key and x-api-secret
         credentialsToSend = {
           'x-api-key': accessPointProviderForm['x-api-key'],
           'x-api-secret': accessPointProviderForm['x-api-secret'],
@@ -883,8 +820,8 @@ export const ERPConfigPage = () => {
       } else {
         setAccessPointProviderForm({ 'x-api-key': '', 'x-api-secret': '', 'participant-id': '' });
       }
-    } catch (error) {
-      // Error handled by hook
+    // eslint-disable-next-line no-empty
+    } catch {
     }
   };
 
@@ -892,16 +829,16 @@ export const ERPConfigPage = () => {
     try {
       await deactivateProvider.mutateAsync();
       await refetchActiveProvider();
-    } catch (error) {
-      // Error handled by hook
+    // eslint-disable-next-line no-empty
+    } catch {
     }
   };
 
   const handleResyncFirsProfile = async () => {
     try {
       await resyncFirsProfile.mutateAsync();
-    } catch (error) {
-      // Error handled by hook
+    // eslint-disable-next-line no-empty
+    } catch {
     }
   };
 
@@ -911,10 +848,8 @@ export const ERPConfigPage = () => {
     setShowApiSecret(false);
     setShowParticipantId(false);
     
-    // If updating existing provider, fetch unmasked credentials
     if (activeProvider?.id === providerId && activeProvider?.has_credentials) {
       try {
-        // Fetch unmasked credentials directly
         const unmaskedResponse = await apiService.getActiveAccessPointProvider(true);
         const unmaskedData = unmaskedResponse.data;
         const unmaskedProvider = (unmaskedData && typeof unmaskedData === 'object' && 'provider' in unmaskedData)
@@ -922,18 +857,7 @@ export const ERPConfigPage = () => {
           : null;
         
         if (unmaskedProvider?.credentials) {
-          // Map credentials - ensure we're using the correct keys from the response
           const credentials = unmaskedProvider.credentials;
-          
-          // Log for debugging (can be removed later)
-          if (process.env.NODE_ENV === 'development') {
-            console.log('Credentials received:', credentials);
-            console.log('All keys in credentials:', Object.keys(credentials));
-          }
-          
-          // Map the credentials to form fields based on provider type
-          // Cryptware: { "participant-id": "...", "x-api-key": "..." }
-          // Hoptool: { "x-api-key": "...", "x-api-secret": "..." }
           const provider = availableProviders.find((p: AccessPointProvider) => p.id === providerId) as AccessPointProvider | undefined;
           if (provider?.code === 'cryptware') {
             setAccessPointProviderForm({
@@ -957,7 +881,6 @@ export const ERPConfigPage = () => {
           }
         }
       } catch (error) {
-        // If fetching unmasked fails, just use empty form
         const provider = availableProviders.find((p: AccessPointProvider) => p.id === providerId) as AccessPointProvider | undefined;
         if (provider?.code === 'cryptware') {
           setAccessPointProviderForm({ 'participant-id': '', 'x-api-key': '', 'x-api-secret': '' });
@@ -1085,10 +1008,8 @@ export const ERPConfigPage = () => {
                       <Button
                         onClick={() => {
                           if (selectedERP) {
-                            // Find the selected ERP service to get its details
                             const selectedService = erpServices.find(s => s.code === selectedERP);
                             if (selectedService) {
-                              // Initialize create form with selected ERP type
                               setErpCreateForm({
                                 erp_type: selectedERP,
                                 setting_value: {
@@ -1124,7 +1045,6 @@ export const ERPConfigPage = () => {
                                 },
                                 is_active: true,
                               });
-                              // Close add dialog and open create dialog
                           setShowAddDialog(false);
                               setShowCreateDialog(true);
                               setSelectedERP('');
@@ -1488,10 +1408,8 @@ export const ERPConfigPage = () => {
                                         checked={isActive}
                                         onCheckedChange={(checked) => {
                                           if (checked) {
-                                            // Always open dialog to ensure credentials are provided
                                             handleOpenCredentialsDialog(provider.id);
                                           } else {
-                                            // Deactivate
                                             handleDeactivateProvider();
                                           }
                                         }}
@@ -1876,8 +1794,8 @@ export const ERPConfigPage = () => {
                         irn_service_id: '',
                         is_active: true,
                       });
-                    } catch (error) {
-                      // Error handled by hook
+                    // eslint-disable-next-line no-empty
+                    } catch {
                     }
                   }}
                   disabled={createFIRSConfig.isPending || updateFIRSConfig.isPending || !firsConfigForm.business_id || !firsConfigForm.service_id}
@@ -2220,10 +2138,8 @@ export const ERPConfigPage = () => {
                   onClick={() => {
                     if (showAccessPointProviderDialog) {
                       if (activeProvider?.id === showAccessPointProviderDialog) {
-                        // Update credentials
                         handleUpdateCredentials(showAccessPointProviderDialog);
                       } else {
-                        // Activate with credentials
                         handleActivateProvider(showAccessPointProviderDialog, accessPointProviderForm);
                       }
                     }
@@ -2380,7 +2296,6 @@ export const ERPConfigPage = () => {
                               }
                               if (newSettingValue.server_details && typeof newSettingValue.server_details === 'object' && !Array.isArray(newSettingValue.server_details)) {
                                 (newSettingValue.server_details as Record<string, unknown>).protocol = value;
-                                // Reset ssl_verify when switching to HTTP
                                 if (value === 'http') {
                                   (newSettingValue.server_details as Record<string, unknown>).ssl_verify = false;
                                 }
@@ -2940,7 +2855,6 @@ export const ERPConfigPage = () => {
         <Dialog open={showCreateDialog} onOpenChange={(open) => {
           setShowCreateDialog(open);
           if (!open) {
-            // Reset test result when dialog closes
             setTestResult(null);
           }
         }}>
@@ -3017,7 +2931,6 @@ export const ERPConfigPage = () => {
                             server_details: {
                               ...erpCreateForm.setting_value.server_details,
                               protocol: value,
-                              // Reset ssl_verify when switching to HTTP
                               ssl_verify: value === 'https' ? erpCreateForm.setting_value.server_details.ssl_verify : false,
                             },
                           },
@@ -3142,7 +3055,6 @@ export const ERPConfigPage = () => {
                           },
                         },
                       });
-                      // Clear error when user types
                       if (formErrors.database) {
                         setFormErrors({ ...formErrors, database: '' });
                       }
@@ -3330,7 +3242,6 @@ export const ERPConfigPage = () => {
                             },
                           },
                         });
-                        // Clear error when user types
                         if (formErrors['credentials.database'] || formErrors.database) {
                           setFormErrors({ ...formErrors, 'credentials.database': '', database: '' });
                         }
@@ -3705,8 +3616,6 @@ export const ERPConfigPage = () => {
                     !erpCreateForm.setting_value.server_details.host ||
                     (erpCreateForm.erp_type === 'sage_300' && !erpCreateForm.setting_value.server_details.database) ||
                     !erpCreateForm.erp_type ||
-                    // For Sage 300/X3: require either API credentials OR database credentials
-                    // For other ERPs: require database credentials
                     (erpCreateForm.erp_type === 'sage_300' || erpCreateForm.erp_type === 'sage_x3'
                       ? !(
                           (erpCreateForm.setting_value.api_credentials?.username && erpCreateForm.setting_value.api_credentials?.password) ||

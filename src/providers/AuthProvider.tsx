@@ -114,13 +114,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
     try {
       const response = await apiService.login(credentials);
-      
-      // Log response for debugging
-      console.log('Login API response:', response);
 
       if (!response.status || !response.data) {
         const errorMsg = response.message || 'Login failed';
-        console.error('Login failed - API response:', { status: response.status, message: response.message, data: response.data });
         throw new Error(errorMsg);
       }
 
@@ -151,8 +147,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         if (apiError.message) {
           errorMessage = apiError.message;
         }
-        // Log full error for debugging
-        console.error('Full API error:', apiError);
       }
       
       throw new Error(errorMessage);
