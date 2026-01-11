@@ -35,6 +35,10 @@ import { AuthProvider, useAuth } from './providers/AuthProvider';
 
 // Auth Components
 import { ProtectedRoute } from './components/auth/ProtectedRoute';
+import { LoadingPage } from './components/ui/loading';
+
+// Error Handling
+import { ErrorBoundary } from './components/ErrorBoundary';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -52,11 +56,7 @@ const PublicRoute = ({ children }: { children: React.ReactNode }) => {
   const { isAuthenticated, isLoading } = useAuth();
 
   if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary"></div>
-      </div>
-    );
+    return <LoadingPage message="Loading..." />;
   }
 
   if (isAuthenticated) {
@@ -70,12 +70,18 @@ const App = () => (
   <QueryClientProvider client={queryClient}>
     <ThemeProvider attribute="class" defaultTheme="light" enableSystem>
       <AuthProvider>
-        <TooltipProvider>
-          <Toaster />
-          <Sonner />
-          <BrowserRouter>
-            <div className="min-h-screen bg-background">
-              <Routes>
+        <ErrorBoundary>
+          <TooltipProvider>
+            <Toaster />
+            <Sonner />
+            <BrowserRouter
+              future={{
+                v7_startTransition: true,
+                v7_relativeSplatPath: true,
+              }}
+            >
+              <div className="min-h-screen bg-background">
+                <Routes>
                 {/* Landing Pages */}
                 <Route path="/" element={<Index />} />
                 <Route path="/about" element={<AboutPage />} />
@@ -180,10 +186,11 @@ const App = () => (
                 {/* Error Pages */}
                 <Route path="/404" element={<NotFound />} />
                 <Route path="*" element={<Navigate to="/404" replace />} />
-              </Routes>
-            </div>
-          </BrowserRouter>
-        </TooltipProvider>
+                </Routes>
+              </div>
+            </BrowserRouter>
+          </TooltipProvider>
+        </ErrorBoundary>
       </AuthProvider>
     </ThemeProvider>
   </QueryClientProvider>

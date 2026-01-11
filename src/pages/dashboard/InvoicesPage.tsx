@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import {
@@ -423,30 +423,11 @@ export const InvoicesPage = () => {
     return matchesFirs && matchesSearch;
   });
   
-  // Debug: Log filtering results
-  if (process.env.NODE_ENV === 'development' && invoices.length > 0) {
-    console.log('Invoice Filtering:', {
-      totalInvoices: invoices.length,
-      filteredInvoices: filteredInvoices.length,
-      firsFilter,
-      searchTerm,
-      activeTab,
-    });
-  }
 
   // Quick fix handlers
   const handleQuickFix = (fix: QuickFix) => {
-    // Debug: Log the fix being handled
-    console.log('handleQuickFix called:', { 
-      action: fix.action, 
-      type: fix.type, 
-      invoice_id: validationResult?.invoice_id,
-      invoice_type: validationResult?.invoice_type 
-    });
-    
     // Handle FIRS fields action - open FIRS fields dialog instead of quick fix dialog
     if (fix.action === 'update_firs_fields' && validationResult?.invoice_id && validationResult?.invoice_type) {
-      console.log('Opening FIRS fields dialog for invoice:', validationResult.invoice_id);
       // Close validation dialog first and wait a bit to ensure it closes
       setShowValidationDialog(false);
       // Small delay to ensure validation dialog closes before opening FIRS fields dialog
@@ -780,17 +761,6 @@ export const InvoicesPage = () => {
             : response.data && typeof response.data === 'object' && ('errors' in response.data || 'warnings' in response.data)
             ? (response.data as ValidationDetails)
             : undefined;
-
-        // Debug: Log validation data to see what we're receiving
-        if (validationData) {
-          console.log('Validation Data Received:', {
-            errors: validationData.errors?.length,
-            warnings: validationData.warnings?.length,
-            suggestions: validationData.suggestions?.length,
-            quick_fixes: validationData.quick_fixes?.length,
-            quick_fixes_data: validationData.quick_fixes,
-          });
-        }
 
         if (
           validationData &&
@@ -1590,9 +1560,8 @@ export const InvoicesPage = () => {
                             const hasItems = invoice.items && invoice.items.length > 0;
 
                             return (
-                              <>
+                              <React.Fragment key={invoice.id}>
                                 <TableRow
-                                  key={invoice.id}
                                   className={`cursor-pointer hover:bg-muted/50 transition-colors ${
                                     isExpanded ? 'bg-muted/30' : ''
                                   }`}
@@ -2037,7 +2006,7 @@ export const InvoicesPage = () => {
                                   </TableCell>
                                 </TableRow>
                               )}
-                            </>
+                            </React.Fragment>
                             );
                           })}
                 </TableBody>
