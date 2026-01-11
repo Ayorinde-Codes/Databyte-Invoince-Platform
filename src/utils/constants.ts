@@ -1,3 +1,5 @@
+import { env } from './env';
+
 // Application Constants
 export const APP_CONFIG = {
   name: 'Databyte Invoice Platform',
@@ -9,9 +11,8 @@ export const APP_CONFIG = {
 } as const;
 
 // API Configuration
-
 export const API_CONFIG = {
-  base_url: import.meta.env.VITE_DATABYTES_BACKEND_BASE_URL || 'http://192.168.191.230:8000/api',
+  base_url: env.VITE_DATABYTES_BACKEND_BASE_URL,
   timeout: 30000,
   retry_attempts: 3,
   retry_delay: 1000,
