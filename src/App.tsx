@@ -71,17 +71,17 @@ const App = () => (
     <ThemeProvider attribute="class" defaultTheme="light" enableSystem>
       <AuthProvider>
         <ErrorBoundary>
-          <TooltipProvider>
-            <Toaster />
-            <Sonner />
+        <TooltipProvider>
+          <Toaster />
+          <Sonner />
             <BrowserRouter
               future={{
                 v7_startTransition: true,
                 v7_relativeSplatPath: true,
               }}
             >
-              <div className="min-h-screen bg-background">
-                <Routes>
+            <div className="min-h-screen bg-background">
+              <Routes>
                 {/* Landing Pages */}
                 <Route path="/" element={<Index />} />
                 <Route path="/about" element={<AboutPage />} />
@@ -186,10 +186,10 @@ const App = () => (
                 {/* Error Pages */}
                 <Route path="/404" element={<NotFound />} />
                 <Route path="*" element={<Navigate to="/404" replace />} />
-                </Routes>
-              </div>
-            </BrowserRouter>
-          </TooltipProvider>
+              </Routes>
+            </div>
+          </BrowserRouter>
+        </TooltipProvider>
         </ErrorBoundary>
       </AuthProvider>
     </ThemeProvider>

@@ -1078,6 +1078,18 @@ class ApiService {
     return this.makeRequest(API_ENDPOINTS.erp.syncStatus.replace(':id', id.toString()));
   }
 
+  async getERPSyncProgress(id: number) {
+    return this.makeRequest(API_ENDPOINTS.erp.syncProgress.replace(':id', id.toString()));
+  }
+
+  async getERPSyncProgressById(id: number, progressId: number) {
+    return this.makeRequest(
+      API_ENDPOINTS.erp.syncProgressById
+        .replace(':id', id.toString())
+        .replace(':progressId', progressId.toString())
+    );
+  }
+
   async batchSyncERPData(id: number, data: {
     data_types: Array<'customers' | 'vendors' | 'products' | 'invoices' | 'tax_categories'>;
     options?: {
