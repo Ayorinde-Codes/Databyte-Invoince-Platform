@@ -89,6 +89,8 @@ export const API_ENDPOINTS = {
     sync: '/settings/erp/:id/sync',
     syncAll: '/settings/erp/:id/sync-all',
     syncStatus: '/settings/erp/:id/sync-status',
+    syncProgress: '/settings/erp/:id/sync-progress',
+    syncProgressById: '/settings/erp/:id/sync-progress/:progressId',
     batchSync: '/settings/erp/:id/batch-sync',
   },
   firs: {

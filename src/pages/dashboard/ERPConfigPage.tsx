@@ -69,6 +69,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Progress } from '@/components/ui/progress';
 import { formatDate } from '../../utils/helpers';
 import { DashboardLayout } from '../../components/layout/DashboardLayout';
 import { toast } from 'sonner';
@@ -85,6 +86,7 @@ import {
   useSyncERPData,
   useSyncAllERPData,
   useERPSyncStatus,
+  useERPSyncProgress,
   useAvailableAccessPointProviders,
   useActiveAccessPointProvider,
   useActivateAccessPointProvider,
@@ -170,6 +172,70 @@ type AccessPointProvider = {
   code: string;
   is_active?: boolean;
   has_credentials?: boolean;
+};
+
+type SyncProgressData = {
+  id: number;
+  status: 'queued' | 'processing' | 'completed' | 'failed';
+  current_step: string | null;
+  current_step_index: number;
+  total_steps: number;
+  progress_percentage: number;
+  step_results: Record<string, unknown> | null;
+  error_message: string | null;
+  started_at: string | null;
+  completed_at: string | null;
+};
+
+// Sub-component to display sync progress for an ERP setting
+const ERPSyncProgressDisplay = ({ erpId }: { erpId: number }) => {
+  const { data: progressResponse } = useERPSyncProgress(erpId);
+  const progressData = progressResponse?.data as SyncProgressData | undefined;
+  const [lastStatus, setLastStatus] = useState<string | null>(null);
+
+  // Show toast when sync status changes to completed or failed
+  useEffect(() => {
+    if (progressData?.status && progressData.status !== lastStatus) {
+      if (lastStatus === 'processing' || lastStatus === 'queued') {
+        if (progressData.status === 'completed') {
+          toast.success('ERP sync completed successfully!');
+        } else if (progressData.status === 'failed') {
+          toast.error(progressData.error_message || 'ERP sync failed');
+        }
+      }
+      setLastStatus(progressData.status);
+    }
+  }, [progressData?.status, lastStatus, progressData?.error_message]);
+
+  // Only show if there's an active sync
+  if (!progressData || (progressData.status !== 'queued' && progressData.status !== 'processing')) {
+    return null;
+  }
+
+  const stepLabels: Record<string, string> = {
+    vendors: 'Vendors',
+    customers: 'Customers',
+    products: 'Products',
+    invoices: 'Invoices',
+  };
+
+  const displayPercentage = progressData.current_step === null
+    ? progressData.progress_percentage
+    : Math.min(progressData.progress_percentage, 99);
+
+  return (
+    <div className="mt-2 space-y-1">
+      <div className="flex items-center justify-between text-xs">
+        <span className="text-muted-foreground">
+          {progressData.status === 'queued' ? 'Waiting to start...' : (
+            <>Syncing: <span className="font-medium">{stepLabels[progressData.current_step || ''] || progressData.current_step}</span></>
+          )}
+        </span>
+        <span className="font-medium">{displayPercentage}%</span>
+      </div>
+      <Progress value={displayPercentage} className="h-2" />
+    </div>
+  );
 };
 
 const toERPServiceSummaryArray = (value: unknown): ERPServiceSummary[] => {
@@ -1234,6 +1300,7 @@ export const ERPConfigPage = () => {
                                   ) : (
                                     <span className="text-muted-foreground">Never</span>
                                   )}
+                                  <ERPSyncProgressDisplay erpId={erp.id} />
                             </div>
                           </TableCell>
                           <TableCell>
@@ -1294,7 +1361,7 @@ export const ERPConfigPage = () => {
                                       >
                                 <Settings className="w-4 h-4" />
                               </Button>
-                                      <Button
+                                      {/* <Button
                                         variant="ghost"
                                         size="sm"
                                         onClick={() => handleOpenSyncDialog(erp.id)}
@@ -1306,7 +1373,7 @@ export const ERPConfigPage = () => {
                                         ) : (
                                 <RefreshCw className="w-4 h-4" />
                                         )}
-                              </Button>
+                              </Button> */}
                               <Button
                                 variant="ghost"
                                 size="sm"
