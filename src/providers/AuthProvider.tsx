@@ -114,7 +114,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
     try {
       const response = await apiService.login(credentials);
-
+      
       if (!response.status || !response.data) {
         const errorMsg = response.message || 'Login failed';
         throw new Error(errorMsg);

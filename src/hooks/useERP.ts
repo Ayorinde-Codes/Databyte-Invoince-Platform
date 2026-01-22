@@ -207,11 +207,30 @@ export const useSyncAllERPData = () => {
       apiService.syncAllERPData(id, data),
     onSuccess: (response, variables) => {
       toast.success('Full sync queued. Processing in correct order...');
-      // Invalidate sync status to trigger polling
+      // Invalidate sync status and progress to trigger polling
       queryClient.invalidateQueries({ queryKey: ['erp', 'settings', variables.id, 'sync-status'] });
+      queryClient.invalidateQueries({ queryKey: ['erp', 'settings', variables.id, 'sync-progress'] });
     },
     onError: (error: unknown) => {
       toast.error(extractErrorMessage(error, 'Sync all failed'));
+    },
+  });
+};
+
+// Query hook for ERP sync progress
+export const useERPSyncProgress = (id: number | null, enabled = true) => {
+  return useQuery({
+    queryKey: ['erp', 'settings', id, 'sync-progress'],
+    queryFn: () => apiService.getERPSyncProgress(id!),
+    enabled: !!id && enabled,
+    refetchInterval: (query) => {
+      // Poll every 2 seconds if sync is in progress, otherwise every 30 seconds
+      const data = query.state.data?.data;
+      if (data && typeof data === 'object' && 'status' in data) {
+        const status = (data as { status?: string }).status;
+        return status === 'processing' || status === 'queued' ? 2000 : 30000;
+      }
+      return 30000;
     },
   });
 };

@@ -31,7 +31,11 @@ import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import {
   Select,
@@ -69,6 +73,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Progress } from '@/components/ui/progress';
 import { formatDate } from '../../utils/helpers';
 import { DashboardLayout } from '../../components/layout/DashboardLayout';
 import { toast } from 'sonner';
@@ -85,6 +90,7 @@ import {
   useSyncERPData,
   useSyncAllERPData,
   useERPSyncStatus,
+  useERPSyncProgress,
   useAvailableAccessPointProviders,
   useActiveAccessPointProvider,
   useActivateAccessPointProvider,
@@ -137,7 +143,12 @@ type RawERPConfigurationRecord = Omit<ERPConfigurationRecord, 'is_active'> & {
   is_active: boolean | number;
 };
 
-type SyncDataType = 'customers' | 'vendors' | 'products' | 'invoices' | 'tax_categories';
+type SyncDataType =
+  | 'customers'
+  | 'vendors'
+  | 'products'
+  | 'invoices'
+  | 'tax_categories';
 
 type SyncOptions = {
   date_from?: string;
@@ -172,6 +183,82 @@ type AccessPointProvider = {
   has_credentials?: boolean;
 };
 
+type SyncProgressData = {
+  id: number;
+  status: 'queued' | 'processing' | 'completed' | 'failed';
+  current_step: string | null;
+  current_step_index: number;
+  total_steps: number;
+  progress_percentage: number;
+  step_results: Record<string, unknown> | null;
+  error_message: string | null;
+  started_at: string | null;
+  completed_at: string | null;
+};
+
+// Sub-component to display sync progress for an ERP setting
+const ERPSyncProgressDisplay = ({ erpId }: { erpId: number }) => {
+  const { data: progressResponse } = useERPSyncProgress(erpId);
+  const progressData = progressResponse?.data as SyncProgressData | undefined;
+  const [lastStatus, setLastStatus] = useState<string | null>(null);
+
+  // Show toast when sync status changes to completed or failed
+  useEffect(() => {
+    if (progressData?.status && progressData.status !== lastStatus) {
+      if (lastStatus === 'processing' || lastStatus === 'queued') {
+        if (progressData.status === 'completed') {
+          toast.success('ERP sync completed successfully!');
+        } else if (progressData.status === 'failed') {
+          toast.error(progressData.error_message || 'ERP sync failed');
+        }
+      }
+      setLastStatus(progressData.status);
+    }
+  }, [progressData?.status, lastStatus, progressData?.error_message]);
+
+  // Only show if there's an active sync
+  if (
+    !progressData ||
+    (progressData.status !== 'queued' && progressData.status !== 'processing')
+  ) {
+    return null;
+  }
+
+  const stepLabels: Record<string, string> = {
+    vendors: 'Vendors',
+    customers: 'Customers',
+    products: 'Products',
+    invoices: 'Invoices',
+  };
+
+  const displayPercentage =
+    progressData.current_step === null
+      ? progressData.progress_percentage
+      : Math.min(progressData.progress_percentage, 99);
+
+  return (
+    <div className="mt-2 space-y-1">
+      <div className="flex items-center justify-between text-xs">
+        <span className="text-muted-foreground">
+          {progressData.status === 'queued' ? (
+            'Waiting to start...'
+          ) : (
+            <>
+              Syncing:{' '}
+              <span className="font-medium">
+                {stepLabels[progressData.current_step || ''] ||
+                  progressData.current_step}
+              </span>
+            </>
+          )}
+        </span>
+        <span className="font-medium">{displayPercentage}%</span>
+      </div>
+      <Progress value={displayPercentage} className="h-2" />
+    </div>
+  );
+};
+
 const toERPServiceSummaryArray = (value: unknown): ERPServiceSummary[] => {
   if (!Array.isArray(value)) {
     return [];
@@ -183,7 +270,9 @@ const toERPServiceSummaryArray = (value: unknown): ERPServiceSummary[] => {
     }
 
     const candidate = item as Partial<ERPServiceSummary>;
-    return typeof candidate.code === 'string' && typeof candidate.name === 'string';
+    return (
+      typeof candidate.code === 'string' && typeof candidate.name === 'string'
+    );
     // Note: id is optional, so we don't require it in the type guard
   });
 };
@@ -203,7 +292,8 @@ const toERPConfigurationArray = (value: unknown): ERPConfigurationRecord[] => {
       // Accept both number (0/1) and boolean for is_active
       return (
         typeof candidate.id === 'number' &&
-        (typeof candidate.is_active === 'boolean' || typeof candidate.is_active === 'number')
+        (typeof candidate.is_active === 'boolean' ||
+          typeof candidate.is_active === 'number')
       );
     })
     .map((item): ERPConfigurationRecord => {
@@ -256,7 +346,11 @@ export const ERPConfigPage = () => {
     is_active: true,
   });
   const [testingConnection, setTestingConnection] = useState(false);
-  const [testResult, setTestResult] = useState<{ success: boolean; message?: string; connectionType?: 'api' | 'database' } | null>(null);
+  const [testResult, setTestResult] = useState<{
+    success: boolean;
+    message?: string;
+    connectionType?: 'api' | 'database';
+  } | null>(null);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [showDeleteDialog, setShowDeleteDialog] = useState<number | null>(null);
   const [showSyncDialog, setShowSyncDialog] = useState<number | null>(null);
@@ -271,7 +365,8 @@ export const ERPConfigPage = () => {
     irn_service_id: '',
     is_active: true,
   });
-  const [showAccessPointProviderDialog, setShowAccessPointProviderDialog] = useState<number | null>(null);
+  const [showAccessPointProviderDialog, setShowAccessPointProviderDialog] =
+    useState<number | null>(null);
   const [accessPointProviderForm, setAccessPointProviderForm] = useState({
     'x-api-key': '',
     'x-api-secret': '',
@@ -287,19 +382,34 @@ export const ERPConfigPage = () => {
     is_active: true,
     setting_value: {},
   });
-  const [passwordVisibility, setPasswordVisibility] = useState<Record<string, boolean>>({});
+  const [passwordVisibility, setPasswordVisibility] = useState<
+    Record<string, boolean>
+  >({});
 
   const { canManageERP, isSuperAdmin } = usePermissions();
-  
+
   const { data: companyProfileResponse } = useCompanyProfile();
-  const companyProfile = (companyProfileResponse?.data && typeof companyProfileResponse.data === 'object' && 'company' in companyProfileResponse.data)
-    ? (companyProfileResponse.data as { company?: { primary_service_id?: number } }).company
-    : null;
-  
-  const { data: erpServicesResponse, isLoading: isLoadingServices } = useERPServices();
-  const { data: erpSettingsResponse, isLoading: isLoadingSettings, refetch: refetchSettings } = useERPSettings();
-  const { data: erpSettingResponse, isLoading: isLoadingERPSetting } = useERPSetting(showEditDialog);
-  
+  const companyProfile =
+    companyProfileResponse?.data &&
+    typeof companyProfileResponse.data === 'object' &&
+    'company' in companyProfileResponse.data
+      ? (
+          companyProfileResponse.data as {
+            company?: { primary_service_id?: number };
+          }
+        ).company
+      : null;
+
+  const { data: erpServicesResponse, isLoading: isLoadingServices } =
+    useERPServices();
+  const {
+    data: erpSettingsResponse,
+    isLoading: isLoadingSettings,
+    refetch: refetchSettings,
+  } = useERPSettings();
+  const { data: erpSettingResponse, isLoading: isLoadingERPSetting } =
+    useERPSetting(showEditDialog);
+
   const createERPSetting = useCreateERPSetting();
   const updateERPSetting = useUpdateERPSetting();
   const deleteERPSetting = useDeleteERPSetting();
@@ -307,16 +417,23 @@ export const ERPConfigPage = () => {
   const testConnectionBeforeCreate = useTestERPConnectionBeforeCreate();
   const syncData = useSyncERPData();
   const syncAll = useSyncAllERPData();
-  
+
   const syncStatusQuery = useERPSyncStatus(showSyncDialog);
   const syncStatusData = syncStatusQuery.data?.data;
-  const syncStatus: ERPSyncStatus | null = 
-    syncStatusData && typeof syncStatusData === 'object' && 'has_pending_jobs' in syncStatusData
+  const syncStatus: ERPSyncStatus | null =
+    syncStatusData &&
+    typeof syncStatusData === 'object' &&
+    'has_pending_jobs' in syncStatusData
       ? (syncStatusData as ERPSyncStatus)
       : null;
 
   useEffect(() => {
-    if (showSyncDialog && syncStatus && !syncStatus.has_pending_jobs && syncStatusQuery.dataUpdatedAt > 0) {
+    if (
+      showSyncDialog &&
+      syncStatus &&
+      !syncStatus.has_pending_jobs &&
+      syncStatusQuery.dataUpdatedAt > 0
+    ) {
       const timer = setTimeout(() => {
         toast.success('Sync completed successfully');
         setShowSyncDialog(null);
@@ -326,23 +443,31 @@ export const ERPConfigPage = () => {
         setIncrementalSync(false);
         refetchSettings();
       }, 1500);
-      
+
       return () => clearTimeout(timer);
     }
-  }, [showSyncDialog, syncStatus, syncStatusQuery.dataUpdatedAt, refetchSettings]);
-  
-  const { data: firsConfigResponse, isLoading: isLoadingFIRS } = useFIRSConfiguration();
+  }, [
+    showSyncDialog,
+    syncStatus,
+    syncStatusQuery.dataUpdatedAt,
+    refetchSettings,
+  ]);
+
+  const { data: firsConfigResponse, isLoading: isLoadingFIRS } =
+    useFIRSConfiguration();
   const createFIRSConfig = useCreateFIRSConfiguration();
   const updateFIRSConfig = useUpdateFIRSConfiguration();
   const testFIRSConnection = useTestFIRSConnection();
-  
-  const { data: availableProvidersResponse, isLoading: isLoadingProviders } = useAvailableAccessPointProviders();
-  const { data: activeProviderResponse, refetch: refetchActiveProvider } = useActiveAccessPointProvider(false);
+
+  const { data: availableProvidersResponse, isLoading: isLoadingProviders } =
+    useAvailableAccessPointProviders();
+  const { data: activeProviderResponse, refetch: refetchActiveProvider } =
+    useActiveAccessPointProvider(false);
   const activateProvider = useActivateAccessPointProvider();
   const updateCredentials = useUpdateAccessPointProviderCredentials();
   const deactivateProvider = useDeactivateAccessPointProvider();
   const resyncFirsProfile = useResyncFirsProfile();
-  
+
   interface FIRSConfigResponse {
     configuration?: {
       id?: number | string;
@@ -354,23 +479,32 @@ export const ERPConfigPage = () => {
   }
 
   const firsConfigData = firsConfigResponse?.data;
-  const firsConfiguration = (firsConfigData && typeof firsConfigData === 'object' && 'configuration' in firsConfigData)
-    ? (firsConfigData as FIRSConfigResponse).configuration || null
-    : null;
+  const firsConfiguration =
+    firsConfigData &&
+    typeof firsConfigData === 'object' &&
+    'configuration' in firsConfigData
+      ? (firsConfigData as FIRSConfigResponse).configuration || null
+      : null;
 
   const erpServicesData = erpServicesResponse?.data;
   const erpServices = toERPServiceSummaryArray(
-    erpServicesData && typeof erpServicesData === 'object' && 'services' in erpServicesData
+    erpServicesData &&
+      typeof erpServicesData === 'object' &&
+      'services' in erpServicesData
       ? (erpServicesData as { services?: unknown }).services
       : undefined
   );
-  
+
   useEffect(() => {
-    if (showAddDialog && companyProfile?.primary_service_id && erpServices.length > 0) {
+    if (
+      showAddDialog &&
+      companyProfile?.primary_service_id &&
+      erpServices.length > 0
+    ) {
       const primaryService = erpServices.find(
         (service) => service.id === companyProfile.primary_service_id
       );
-      
+
       if (primaryService) {
         setSelectedERP(primaryService.code);
       }
@@ -378,40 +512,54 @@ export const ERPConfigPage = () => {
       setSelectedERP('');
     }
   }, [showAddDialog, companyProfile?.primary_service_id, erpServices]);
-  
+
   const erpSettingsData = erpSettingsResponse?.data;
   let settingsArray: unknown = undefined;
-  
+
   if (erpSettingsData) {
     if (Array.isArray(erpSettingsData)) {
       settingsArray = erpSettingsData;
     } else if (typeof erpSettingsData === 'object') {
-      if ('data' in erpSettingsData && typeof erpSettingsData.data === 'object' && erpSettingsData.data !== null) {
+      if (
+        'data' in erpSettingsData &&
+        typeof erpSettingsData.data === 'object' &&
+        erpSettingsData.data !== null
+      ) {
         const nestedData = erpSettingsData.data as { settings?: unknown };
         if ('settings' in nestedData && Array.isArray(nestedData.settings)) {
           settingsArray = nestedData.settings;
         }
-      }
-      else if ('settings' in erpSettingsData && Array.isArray((erpSettingsData as { settings?: unknown }).settings)) {
+      } else if (
+        'settings' in erpSettingsData &&
+        Array.isArray((erpSettingsData as { settings?: unknown }).settings)
+      ) {
         settingsArray = (erpSettingsData as { settings?: unknown }).settings;
       }
     }
   }
-  
+
   const erpConfigurations = toERPConfigurationArray(settingsArray);
 
   const erpSettingData = erpSettingResponse?.data;
-  const erpSetting: ERPSetting | null = (erpSettingData && typeof erpSettingData === 'object' && 'setting' in erpSettingData)
-    ? (erpSettingData as { setting?: ERPSetting | unknown }).setting as ERPSetting | null
-    : null;
+  const erpSetting: ERPSetting | null =
+    erpSettingData &&
+    typeof erpSettingData === 'object' &&
+    'setting' in erpSettingData
+      ? ((erpSettingData as { setting?: ERPSetting | unknown })
+          .setting as ERPSetting | null)
+      : null;
 
   useEffect(() => {
     if (erpSetting && showEditDialog) {
       const settingValue = { ...(erpSetting.setting_value || {}) };
-      
+
       if (erpSetting.erp_type === 'sage_x3' && settingValue.server_details) {
         const serverDetails = settingValue.server_details;
-        if (serverDetails && typeof serverDetails === 'object' && !Array.isArray(serverDetails)) {
+        if (
+          serverDetails &&
+          typeof serverDetails === 'object' &&
+          !Array.isArray(serverDetails)
+        ) {
           const details = serverDetails as Record<string, unknown>;
           if (!details.schema) {
             settingValue.server_details = {
@@ -421,17 +569,25 @@ export const ERPConfigPage = () => {
           }
         }
       }
-      
-      if ((erpSetting.erp_type === 'sage_300' || erpSetting.erp_type === 'sage_x3') && !settingValue.api_credentials) {
+
+      if (
+        (erpSetting.erp_type === 'sage_300' ||
+          erpSetting.erp_type === 'sage_x3') &&
+        !settingValue.api_credentials
+      ) {
         settingValue.api_credentials = {
           username: '',
           password: '',
         };
       }
-      
+
       if (erpSetting.erp_type === 'sage_x3' && settingValue.server_details) {
         const serverDetails = settingValue.server_details;
-        if (serverDetails && typeof serverDetails === 'object' && !Array.isArray(serverDetails)) {
+        if (
+          serverDetails &&
+          typeof serverDetails === 'object' &&
+          !Array.isArray(serverDetails)
+        ) {
           const details = serverDetails as Record<string, unknown>;
           if (!details.pool_alias) {
             settingValue.server_details = {
@@ -441,10 +597,14 @@ export const ERPConfigPage = () => {
           }
         }
       }
-      
+
       if (erpSetting.erp_type === 'sage_300' && settingValue.server_details) {
         const serverDetails = settingValue.server_details;
-        if (serverDetails && typeof serverDetails === 'object' && !Array.isArray(serverDetails)) {
+        if (
+          serverDetails &&
+          typeof serverDetails === 'object' &&
+          !Array.isArray(serverDetails)
+        ) {
           const details = serverDetails as Record<string, unknown>;
           if (!details.api_version) {
             settingValue.server_details = {
@@ -454,7 +614,7 @@ export const ERPConfigPage = () => {
           }
         }
       }
-      
+
       setErpEditForm({
         is_active: erpSetting.is_active ?? true,
         setting_value: settingValue,
@@ -463,37 +623,66 @@ export const ERPConfigPage = () => {
   }, [erpSetting, showEditDialog]);
 
   const availableProvidersData = availableProvidersResponse?.data;
-  const availableProviders = (availableProvidersData && typeof availableProvidersData === 'object' && 'providers' in availableProvidersData)
-    ? (availableProvidersData as { providers?: unknown[] }).providers || []
-    : [];
-  
+  const availableProviders =
+    availableProvidersData &&
+    typeof availableProvidersData === 'object' &&
+    'providers' in availableProvidersData
+      ? (availableProvidersData as { providers?: unknown[] }).providers || []
+      : [];
+
   const activeProviderData = activeProviderResponse?.data;
-  const activeProvider = (activeProviderData && typeof activeProviderData === 'object' && 'provider' in activeProviderData)
-    ? (activeProviderData as { provider?: { id: number; name: string; code: string; is_active?: boolean; has_credentials?: boolean } | null }).provider
-    : null;
+  const activeProvider =
+    activeProviderData &&
+    typeof activeProviderData === 'object' &&
+    'provider' in activeProviderData
+      ? (
+          activeProviderData as {
+            provider?: {
+              id: number;
+              name: string;
+              code: string;
+              is_active?: boolean;
+              has_credentials?: boolean;
+            } | null;
+          }
+        ).provider
+      : null;
 
   const getERPStatus = (setting: ERPConfigurationRecord) => {
     if (!setting.is_active) return 'disconnected';
     const testResult = setting.last_connection_test_result;
-    if (testResult === 'success' || (typeof testResult === 'object' && testResult?.success === true)) {
+    if (
+      testResult === 'success' ||
+      (typeof testResult === 'object' && testResult?.success === true)
+    ) {
       return 'connected';
     }
-    if (testResult === 'failed' || (typeof testResult === 'object' && testResult?.success === false)) {
+    if (
+      testResult === 'failed' ||
+      (typeof testResult === 'object' && testResult?.success === false)
+    ) {
       return 'error';
     }
     return 'disconnected';
   };
 
-  const handleTestConnection = async (id: number, connectionType?: 'api' | 'database') => {
+  const handleTestConnection = async (
+    id: number,
+    connectionType?: 'api' | 'database'
+  ) => {
     try {
       await testConnection.mutateAsync({ id, connectionType });
       await refetchSettings();
-    // eslint-disable-next-line no-empty
-    } catch {
-    }
+      // eslint-disable-next-line no-empty
+    } catch {}
   };
 
-  const handleSyncData = async (id: number, dataType: SyncDataType, options?: SyncOptions, incremental = false) => {
+  const handleSyncData = async (
+    id: number,
+    dataType: SyncDataType,
+    options?: SyncOptions,
+    incremental = false
+  ) => {
     try {
       await syncData.mutateAsync({
         id,
@@ -505,9 +694,8 @@ export const ERPConfigPage = () => {
         },
       });
       await refetchSettings();
-    // eslint-disable-next-line no-empty
-    } catch {
-    }
+      // eslint-disable-next-line no-empty
+    } catch {}
   };
 
   const handleSyncAll = async (id: number, incremental = false) => {
@@ -520,9 +708,8 @@ export const ERPConfigPage = () => {
         },
       });
       await refetchSettings();
-    // eslint-disable-next-line no-empty
-    } catch {
-    }
+      // eslint-disable-next-line no-empty
+    } catch {}
   };
 
   const handleOpenSyncDialog = (id: number) => {
@@ -533,56 +720,89 @@ export const ERPConfigPage = () => {
     setIncrementalSync(false);
   };
 
-  const handleTestConnectionForCreate = async (connectionType?: 'api' | 'database') => {
+  const handleTestConnectionForCreate = async (
+    connectionType?: 'api' | 'database'
+  ) => {
     const erpType = erpCreateForm.erp_type;
-    const hasApiCredentials = erpCreateForm.setting_value.api_credentials?.username && erpCreateForm.setting_value.api_credentials?.password;
-    const hasDbCredentials = erpCreateForm.setting_value.credentials?.username && erpCreateForm.setting_value.credentials?.password;
-    
+    const hasApiCredentials =
+      erpCreateForm.setting_value.api_credentials?.username &&
+      erpCreateForm.setting_value.api_credentials?.password;
+    const hasDbCredentials =
+      erpCreateForm.setting_value.credentials?.username &&
+      erpCreateForm.setting_value.credentials?.password;
+
     if (connectionType === 'api') {
       if (!hasApiCredentials) {
         toast.error('Please provide API credentials to test API connection');
         return;
       }
-      if (!erpCreateForm.setting_value.api_credentials?.username || !erpCreateForm.setting_value.api_credentials?.password) {
+      if (
+        !erpCreateForm.setting_value.api_credentials?.username ||
+        !erpCreateForm.setting_value.api_credentials?.password
+      ) {
         toast.error('Please provide both API username and password');
         return;
       }
-      if (erpType === 'sage_x3' && !erpCreateForm.setting_value.server_details.pool_alias) {
+      if (
+        erpType === 'sage_x3' &&
+        !erpCreateForm.setting_value.server_details.pool_alias
+      ) {
         toast.error('Pool alias is required for Sage X3 API connections');
         return;
       }
     } else if (connectionType === 'database') {
       if (!hasDbCredentials) {
-        toast.error('Please provide Database credentials to test database connection');
+        toast.error(
+          'Please provide Database credentials to test database connection'
+        );
         return;
       }
-      if (!erpCreateForm.setting_value.credentials?.username || !erpCreateForm.setting_value.credentials?.password) {
+      if (
+        !erpCreateForm.setting_value.credentials?.username ||
+        !erpCreateForm.setting_value.credentials?.password
+      ) {
         toast.error('Please provide both Database username and password');
         return;
       }
-      const databaseRequired = erpCreateForm.erp_type === 'sage_x3' 
-        ? erpCreateForm.setting_value.credentials?.database 
-        : erpCreateForm.setting_value.server_details.database;
-      if (!erpCreateForm.setting_value.server_details.host || !databaseRequired) {
-        toast.error('Please fill in all required server details (host and database)');
+      const databaseRequired =
+        erpCreateForm.erp_type === 'sage_x3'
+          ? erpCreateForm.setting_value.credentials?.database
+          : erpCreateForm.setting_value.server_details.database;
+      if (
+        !erpCreateForm.setting_value.server_details.host ||
+        !databaseRequired
+      ) {
+        toast.error(
+          'Please fill in all required server details (host and database)'
+        );
         return;
       }
     } else {
-      const databaseRequired = erpCreateForm.erp_type === 'sage_x3' 
-        ? erpCreateForm.setting_value.credentials?.database 
-        : erpCreateForm.setting_value.server_details.database;
-      if (!erpCreateForm.setting_value.server_details.host || !databaseRequired) {
+      const databaseRequired =
+        erpCreateForm.erp_type === 'sage_x3'
+          ? erpCreateForm.setting_value.credentials?.database
+          : erpCreateForm.setting_value.server_details.database;
+      if (
+        !erpCreateForm.setting_value.server_details.host ||
+        !databaseRequired
+      ) {
         toast.error('Please fill in all required server details');
         return;
       }
-      
-      if (erpType === 'sage_x3' && hasApiCredentials && !erpCreateForm.setting_value.server_details.pool_alias) {
+
+      if (
+        erpType === 'sage_x3' &&
+        hasApiCredentials &&
+        !erpCreateForm.setting_value.server_details.pool_alias
+      ) {
         toast.error('Pool alias is required for Sage X3 API connections');
         return;
       }
-      
+
       if (!hasApiCredentials && !hasDbCredentials) {
-        toast.error('Please provide either API credentials or Database credentials');
+        toast.error(
+          'Please provide either API credentials or Database credentials'
+        );
         return;
       }
     }
@@ -600,19 +820,38 @@ export const ERPConfigPage = () => {
         }
         settingValue.server_details = serverDetails;
       }
-      
+
       await testConnectionBeforeCreate.mutateAsync({
         erp_type: erpCreateForm.erp_type,
         setting_value: settingValue,
         connection_type: connectionType,
       });
-      
-      const connectionTypeLabel = connectionType === 'api' ? 'API ' : connectionType === 'database' ? 'Database ' : '';
-      setTestResult({ success: true, message: `${connectionTypeLabel}Connection test successful! Configuration is valid.`, connectionType });
+
+      const connectionTypeLabel =
+        connectionType === 'api'
+          ? 'API '
+          : connectionType === 'database'
+            ? 'Database '
+            : '';
+      setTestResult({
+        success: true,
+        message: `${connectionTypeLabel}Connection test successful! Configuration is valid.`,
+        connectionType,
+      });
     } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : 'Connection test failed';
-      const connectionTypeLabel = connectionType === 'api' ? 'API ' : connectionType === 'database' ? 'Database ' : '';
-      setTestResult({ success: false, message: `${connectionTypeLabel}${errorMessage}`, connectionType });
+      const errorMessage =
+        error instanceof Error ? error.message : 'Connection test failed';
+      const connectionTypeLabel =
+        connectionType === 'api'
+          ? 'API '
+          : connectionType === 'database'
+            ? 'Database '
+            : '';
+      setTestResult({
+        success: false,
+        message: `${connectionTypeLabel}${errorMessage}`,
+        connectionType,
+      });
     } finally {
       setTestingConnection(false);
     }
@@ -629,7 +868,7 @@ export const ERPConfigPage = () => {
         }
         settingValue.server_details = serverDetails;
       }
-      
+
       await createERPSetting.mutateAsync({
         ...erpCreateForm,
         setting_value: settingValue,
@@ -677,40 +916,62 @@ export const ERPConfigPage = () => {
       await refetchSettings();
     } catch (error: unknown) {
       const errors: Record<string, string> = {};
-      
+
       if (error && typeof error === 'object') {
-        if ('response' in error && error.response && typeof error.response === 'object') {
-          const response = error.response as { data?: { errors?: Record<string, string[]> } };
+        if (
+          'response' in error &&
+          error.response &&
+          typeof error.response === 'object'
+        ) {
+          const response = error.response as {
+            data?: { errors?: Record<string, string[]> };
+          };
           if (response.data?.errors) {
             Object.entries(response.data.errors).forEach(([key, messages]) => {
               const parts = key.split('.');
               const fieldName = parts.pop() || key;
               const parent = parts[parts.length - 1];
-              
-              errors[key] = Array.isArray(messages) ? messages[0] : String(messages);
+
+              errors[key] = Array.isArray(messages)
+                ? messages[0]
+                : String(messages);
               if (parent === 'credentials' || parent === 'api_credentials') {
-                errors[`${parent}.${fieldName}`] = Array.isArray(messages) ? messages[0] : String(messages);
+                errors[`${parent}.${fieldName}`] = Array.isArray(messages)
+                  ? messages[0]
+                  : String(messages);
               }
-              errors[fieldName] = Array.isArray(messages) ? messages[0] : String(messages);
+              errors[fieldName] = Array.isArray(messages)
+                ? messages[0]
+                : String(messages);
             });
           }
         }
-        if ('errors' in error && error.errors && typeof error.errors === 'object') {
+        if (
+          'errors' in error &&
+          error.errors &&
+          typeof error.errors === 'object'
+        ) {
           const errorObj = error.errors as Record<string, string[]>;
           Object.entries(errorObj).forEach(([key, messages]) => {
             const parts = key.split('.');
             const fieldName = parts.pop() || key;
             const parent = parts[parts.length - 1];
-            
-            errors[key] = Array.isArray(messages) ? messages[0] : String(messages);
+
+            errors[key] = Array.isArray(messages)
+              ? messages[0]
+              : String(messages);
             if (parent === 'credentials' || parent === 'api_credentials') {
-              errors[`${parent}.${fieldName}`] = Array.isArray(messages) ? messages[0] : String(messages);
+              errors[`${parent}.${fieldName}`] = Array.isArray(messages)
+                ? messages[0]
+                : String(messages);
             }
-            errors[fieldName] = Array.isArray(messages) ? messages[0] : String(messages);
+            errors[fieldName] = Array.isArray(messages)
+              ? messages[0]
+              : String(messages);
           });
         }
       }
-      
+
       setFormErrors(errors);
     }
   };
@@ -719,24 +980,30 @@ export const ERPConfigPage = () => {
     try {
       await deleteERPSetting.mutateAsync(id);
       setShowDeleteDialog(null);
-    // eslint-disable-next-line no-empty
-    } catch {
-    }
+      // eslint-disable-next-line no-empty
+    } catch {}
   };
 
   const handleUpdateERP = async (id: number) => {
     try {
       const updateData = { ...erpEditForm };
-      if (erpSetting?.erp_type === 'sage_x3' && updateData.setting_value?.server_details) {
+      if (
+        erpSetting?.erp_type === 'sage_x3' &&
+        updateData.setting_value?.server_details
+      ) {
         const serverDetails = updateData.setting_value.server_details;
-        if (serverDetails && typeof serverDetails === 'object' && !Array.isArray(serverDetails)) {
+        if (
+          serverDetails &&
+          typeof serverDetails === 'object' &&
+          !Array.isArray(serverDetails)
+        ) {
           const details = serverDetails as Record<string, unknown>;
           if (!details.schema) {
             details.schema = 'SEED';
           }
         }
       }
-      
+
       await updateERPSetting.mutateAsync({
         id,
         data: updateData,
@@ -744,18 +1011,32 @@ export const ERPConfigPage = () => {
       setShowEditDialog(null);
       setErpEditForm({ is_active: true, setting_value: {} });
       await refetchSettings();
-    // eslint-disable-next-line no-empty
-    } catch {
-    }
+      // eslint-disable-next-line no-empty
+    } catch {}
   };
 
-  const handleActivateProvider = async (providerId: number, credentials?: { 'x-api-key'?: string; 'x-api-secret'?: string; 'participant-id'?: string }) => {
+  const handleActivateProvider = async (
+    providerId: number,
+    credentials?: {
+      'x-api-key'?: string;
+      'x-api-secret'?: string;
+      'participant-id'?: string;
+    }
+  ) => {
     try {
-      const provider = availableProviders.find((p: AccessPointProvider) => p.id === providerId) as AccessPointProvider | undefined;
-      const payload: { access_point_provider_id: number; credentials?: Record<string, string> | { 'x-api-key': string; 'x-api-secret': string } | { 'participant-id': string; 'x-api-key': string } } = {
+      const provider = availableProviders.find(
+        (p: AccessPointProvider) => p.id === providerId
+      ) as AccessPointProvider | undefined;
+      const payload: {
+        access_point_provider_id: number;
+        credentials?:
+          | Record<string, string>
+          | { 'x-api-key': string; 'x-api-secret': string }
+          | { 'participant-id': string; 'x-api-key': string };
+      } = {
         access_point_provider_id: providerId,
       };
-      
+
       if (credentials) {
         if (provider?.code === 'cryptware') {
           if (credentials['participant-id'] && credentials['x-api-key']) {
@@ -773,28 +1054,47 @@ export const ERPConfigPage = () => {
           }
         }
       }
-      
-      await activateProvider.mutateAsync(payload as { access_point_provider_id: number; credentials?: { 'x-api-key': string; 'x-api-secret': string } });
+
+      await activateProvider.mutateAsync(
+        payload as {
+          access_point_provider_id: number;
+          credentials?: { 'x-api-key': string; 'x-api-secret': string };
+        }
+      );
       await refetchActiveProvider();
       if (showAccessPointProviderDialog) {
         setShowAccessPointProviderDialog(null);
-        const provider = availableProviders.find((p: AccessPointProvider) => p.id === providerId) as AccessPointProvider | undefined;
+        const provider = availableProviders.find(
+          (p: AccessPointProvider) => p.id === providerId
+        ) as AccessPointProvider | undefined;
         if (provider?.code === 'cryptware') {
-          setAccessPointProviderForm({ 'participant-id': '', 'x-api-key': '', 'x-api-secret': '' });
+          setAccessPointProviderForm({
+            'participant-id': '',
+            'x-api-key': '',
+            'x-api-secret': '',
+          });
         } else {
-          setAccessPointProviderForm({ 'x-api-key': '', 'x-api-secret': '', 'participant-id': '' });
+          setAccessPointProviderForm({
+            'x-api-key': '',
+            'x-api-secret': '',
+            'participant-id': '',
+          });
         }
       }
-    // eslint-disable-next-line no-empty
-    } catch {
-    }
+      // eslint-disable-next-line no-empty
+    } catch {}
   };
 
   const handleUpdateCredentials = async (providerId: number) => {
     try {
-      const provider = availableProviders.find((p: AccessPointProvider) => p.id === providerId) as AccessPointProvider | undefined;
-      let credentialsToSend: Record<string, string> | { 'x-api-key': string; 'x-api-secret': string } | { 'participant-id': string; 'x-api-key': string } = {};
-      
+      const provider = availableProviders.find(
+        (p: AccessPointProvider) => p.id === providerId
+      ) as AccessPointProvider | undefined;
+      let credentialsToSend:
+        | Record<string, string>
+        | { 'x-api-key': string; 'x-api-secret': string }
+        | { 'participant-id': string; 'x-api-key': string } = {};
+
       if (provider?.code === 'cryptware') {
         credentialsToSend = {
           'participant-id': accessPointProviderForm['participant-id'],
@@ -806,40 +1106,48 @@ export const ERPConfigPage = () => {
           'x-api-secret': accessPointProviderForm['x-api-secret'],
         };
       }
-      
+
       await updateCredentials.mutateAsync({
         id: providerId,
         data: {
-          credentials: credentialsToSend as { 'x-api-key': string; 'x-api-secret': string },
+          credentials: credentialsToSend as {
+            'x-api-key': string;
+            'x-api-secret': string;
+          },
         },
       });
       await refetchActiveProvider();
       setShowAccessPointProviderDialog(null);
       if (provider?.code === 'cryptware') {
-        setAccessPointProviderForm({ 'participant-id': '', 'x-api-key': '', 'x-api-secret': '' });
+        setAccessPointProviderForm({
+          'participant-id': '',
+          'x-api-key': '',
+          'x-api-secret': '',
+        });
       } else {
-        setAccessPointProviderForm({ 'x-api-key': '', 'x-api-secret': '', 'participant-id': '' });
+        setAccessPointProviderForm({
+          'x-api-key': '',
+          'x-api-secret': '',
+          'participant-id': '',
+        });
       }
-    // eslint-disable-next-line no-empty
-    } catch {
-    }
+      // eslint-disable-next-line no-empty
+    } catch {}
   };
 
   const handleDeactivateProvider = async () => {
     try {
       await deactivateProvider.mutateAsync();
       await refetchActiveProvider();
-    // eslint-disable-next-line no-empty
-    } catch {
-    }
+      // eslint-disable-next-line no-empty
+    } catch {}
   };
 
   const handleResyncFirsProfile = async () => {
     try {
       await resyncFirsProfile.mutateAsync();
-    // eslint-disable-next-line no-empty
-    } catch {
-    }
+      // eslint-disable-next-line no-empty
+    } catch {}
   };
 
   const handleOpenCredentialsDialog = async (providerId: number) => {
@@ -847,18 +1155,28 @@ export const ERPConfigPage = () => {
     setShowApiKey(false);
     setShowApiSecret(false);
     setShowParticipantId(false);
-    
+
     if (activeProvider?.id === providerId && activeProvider?.has_credentials) {
       try {
-        const unmaskedResponse = await apiService.getActiveAccessPointProvider(true);
+        const unmaskedResponse =
+          await apiService.getActiveAccessPointProvider(true);
         const unmaskedData = unmaskedResponse.data;
-        const unmaskedProvider = (unmaskedData && typeof unmaskedData === 'object' && 'provider' in unmaskedData)
-          ? (unmaskedData as { provider?: { credentials?: Record<string, string> } | null }).provider
-          : null;
-        
+        const unmaskedProvider =
+          unmaskedData &&
+          typeof unmaskedData === 'object' &&
+          'provider' in unmaskedData
+            ? (
+                unmaskedData as {
+                  provider?: { credentials?: Record<string, string> } | null;
+                }
+              ).provider
+            : null;
+
         if (unmaskedProvider?.credentials) {
           const credentials = unmaskedProvider.credentials;
-          const provider = availableProviders.find((p: AccessPointProvider) => p.id === providerId) as AccessPointProvider | undefined;
+          const provider = availableProviders.find(
+            (p: AccessPointProvider) => p.id === providerId
+          ) as AccessPointProvider | undefined;
           if (provider?.code === 'cryptware') {
             setAccessPointProviderForm({
               'participant-id': credentials['participant-id'] || '',
@@ -873,31 +1191,60 @@ export const ERPConfigPage = () => {
             });
           }
         } else {
-          const provider = availableProviders.find((p: AccessPointProvider) => p.id === providerId) as AccessPointProvider | undefined;
+          const provider = availableProviders.find(
+            (p: AccessPointProvider) => p.id === providerId
+          ) as AccessPointProvider | undefined;
           if (provider?.code === 'cryptware') {
-            setAccessPointProviderForm({ 'participant-id': '', 'x-api-key': '', 'x-api-secret': '' });
+            setAccessPointProviderForm({
+              'participant-id': '',
+              'x-api-key': '',
+              'x-api-secret': '',
+            });
           } else {
-            setAccessPointProviderForm({ 'x-api-key': '', 'x-api-secret': '', 'participant-id': '' });
+            setAccessPointProviderForm({
+              'x-api-key': '',
+              'x-api-secret': '',
+              'participant-id': '',
+            });
           }
         }
       } catch (error) {
-        const provider = availableProviders.find((p: AccessPointProvider) => p.id === providerId) as AccessPointProvider | undefined;
+        const provider = availableProviders.find(
+          (p: AccessPointProvider) => p.id === providerId
+        ) as AccessPointProvider | undefined;
         if (provider?.code === 'cryptware') {
-          setAccessPointProviderForm({ 'participant-id': '', 'x-api-key': '', 'x-api-secret': '' });
+          setAccessPointProviderForm({
+            'participant-id': '',
+            'x-api-key': '',
+            'x-api-secret': '',
+          });
         } else {
-          setAccessPointProviderForm({ 'x-api-key': '', 'x-api-secret': '', 'participant-id': '' });
+          setAccessPointProviderForm({
+            'x-api-key': '',
+            'x-api-secret': '',
+            'participant-id': '',
+          });
         }
       }
     } else {
-      const provider = availableProviders.find((p: AccessPointProvider) => p.id === providerId) as AccessPointProvider | undefined;
+      const provider = availableProviders.find(
+        (p: AccessPointProvider) => p.id === providerId
+      ) as AccessPointProvider | undefined;
       if (provider?.code === 'cryptware') {
-        setAccessPointProviderForm({ 'participant-id': '', 'x-api-key': '', 'x-api-secret': '' });
+        setAccessPointProviderForm({
+          'participant-id': '',
+          'x-api-key': '',
+          'x-api-secret': '',
+        });
       } else {
-        setAccessPointProviderForm({ 'x-api-key': '', 'x-api-secret': '', 'participant-id': '' });
+        setAccessPointProviderForm({
+          'x-api-key': '',
+          'x-api-secret': '',
+          'participant-id': '',
+        });
       }
     }
   };
-
 
   const getStatusBadge = (setting: ERPConfigurationRecord) => {
     const status = getERPStatus(setting);
@@ -937,7 +1284,6 @@ export const ERPConfigPage = () => {
     );
   };
 
-
   return (
     <DashboardLayout>
       <div className="space-y-6">
@@ -955,47 +1301,50 @@ export const ERPConfigPage = () => {
           <div className="flex items-center gap-3">
             {canManageERP() && (
               <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
-              <DialogTrigger asChild>
-                <Button size="sm">
-                  <Plus className="w-4 h-4 mr-2" />
-                  Add ERP System
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="max-w-md">
-                <DialogHeader>
-                  <DialogTitle>Add ERP System</DialogTitle>
-                  <DialogDescription>
-                    Select an ERP system to integrate with your platform
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="space-y-4">
+                <DialogTrigger asChild>
+                  <Button size="sm">
+                    <Plus className="w-4 h-4 mr-2" />
+                    Add ERP System
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="max-w-md">
+                  <DialogHeader>
+                    <DialogTitle>Add ERP System</DialogTitle>
+                    <DialogDescription>
+                      Select an ERP system to integrate with your platform
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-4">
                     {isLoadingServices ? (
                       <div className="space-y-2">
                         <Skeleton className="h-10 w-full" />
                       </div>
                     ) : (
-                  <div className="space-y-2">
-                    <Label htmlFor="erp-select">ERP System</Label>
-                    <Select value={selectedERP} onValueChange={setSelectedERP}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select ERP system" />
-                      </SelectTrigger>
-                      <SelectContent>
+                      <div className="space-y-2">
+                        <Label htmlFor="erp-select">ERP System</Label>
+                        <Select
+                          value={selectedERP}
+                          onValueChange={setSelectedERP}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select ERP system" />
+                          </SelectTrigger>
+                          <SelectContent>
                             {erpServices.map((erp) => (
                               <SelectItem key={erp.code} value={erp.code}>
-                            <div>
-                              <div className="font-medium">{erp.name}</div>
-                              <div className="text-sm text-muted-foreground">
+                                <div>
+                                  <div className="font-medium">{erp.name}</div>
+                                  <div className="text-sm text-muted-foreground">
                                     {erp.description || erp.connection_type}
-                              </div>
-                            </div>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+                                  </div>
+                                </div>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
                     )}
-                  <div className="flex justify-end space-x-2">
+                    <div className="flex justify-end space-x-2">
                       <Button
                         variant="outline"
                         onClick={() => {
@@ -1008,25 +1357,39 @@ export const ERPConfigPage = () => {
                       <Button
                         onClick={() => {
                           if (selectedERP) {
-                            const selectedService = erpServices.find(s => s.code === selectedERP);
+                            const selectedService = erpServices.find(
+                              (s) => s.code === selectedERP
+                            );
                             if (selectedService) {
                               setErpCreateForm({
                                 erp_type: selectedERP,
                                 setting_value: {
                                   server_details: {
                                     host: '',
-                                    port: selectedERP === 'sage_300' || selectedERP === 'sage_x3' ? 1433 : 5432,
+                                    port:
+                                      selectedERP === 'sage_300' ||
+                                      selectedERP === 'sage_x3'
+                                        ? 1433
+                                        : 5432,
                                     protocol: 'http' as 'http' | 'https',
                                     ssl_verify: false,
                                     database: '',
-                                    ...(selectedERP === 'sage_x3' && { schema: 'SEED' }),
-                                    ...(selectedERP === 'sage_x3' && { pool_alias: '' }),
-                                    ...(selectedERP === 'sage_300' && { api_version: 'v1.0' }),
+                                    ...(selectedERP === 'sage_x3' && {
+                                      schema: 'SEED',
+                                    }),
+                                    ...(selectedERP === 'sage_x3' && {
+                                      pool_alias: '',
+                                    }),
+                                    ...(selectedERP === 'sage_300' && {
+                                      api_version: 'v1.0',
+                                    }),
                                   },
                                   credentials: {
                                     username: '',
                                     password: '',
-                                    ...(selectedERP === 'sage_x3' && { database: '' }),
+                                    ...(selectedERP === 'sage_x3' && {
+                                      database: '',
+                                    }),
                                   },
                                   api_credentials: {
                                     username: '',
@@ -1045,7 +1408,7 @@ export const ERPConfigPage = () => {
                                 },
                                 is_active: true,
                               });
-                          setShowAddDialog(false);
+                              setShowAddDialog(false);
                               setShowCreateDialog(true);
                               setSelectedERP('');
                             }
@@ -1055,20 +1418,26 @@ export const ERPConfigPage = () => {
                       >
                         Continue Setup
                       </Button>
+                    </div>
                   </div>
-                </div>
-              </DialogContent>
-            </Dialog>
+                </DialogContent>
+              </Dialog>
             )}
           </div>
         </div>
 
         <Tabs defaultValue="configurations" className="space-y-6">
-          <TabsList className={`grid w-full ${isSuperAdmin ? 'grid-cols-4' : 'grid-cols-3'}`}>
+          <TabsList
+            className={`grid w-full ${isSuperAdmin ? 'grid-cols-4' : 'grid-cols-3'}`}
+          >
             <TabsTrigger value="configurations">Configurations</TabsTrigger>
-            <TabsTrigger value="access-point-providers">Access Point Providers</TabsTrigger>
+            <TabsTrigger value="access-point-providers">
+              Access Point Providers
+            </TabsTrigger>
             <TabsTrigger value="settings">Settings</TabsTrigger>
-            {isSuperAdmin && <TabsTrigger value="sync-logs">Sync Logs</TabsTrigger>}
+            {isSuperAdmin && (
+              <TabsTrigger value="sync-logs">Sync Logs</TabsTrigger>
+            )}
           </TabsList>
 
           {/* Configurations Tab */}
@@ -1115,9 +1484,7 @@ export const ERPConfigPage = () => {
 
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">
-                    Active
-                  </CardTitle>
+                  <CardTitle className="text-sm font-medium">Active</CardTitle>
                   <Activity className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
@@ -1141,13 +1508,21 @@ export const ERPConfigPage = () => {
                   <div className="text-2xl font-bold">
                     {(() => {
                       const lastSync = erpConfigurations
-                        .map(erp => erp.last_sync_at ? new Date(erp.last_sync_at).getTime() : 0)
-                        .filter(time => time > 0)
+                        .map((erp) =>
+                          erp.last_sync_at
+                            ? new Date(erp.last_sync_at).getTime()
+                            : 0
+                        )
+                        .filter((time) => time > 0)
                         .sort((a, b) => b - a)[0];
-                      return lastSync ? formatDate(new Date(lastSync).toISOString()) : 'Never';
+                      return lastSync
+                        ? formatDate(new Date(lastSync).toISOString())
+                        : 'Never';
                     })()}
                   </div>
-                  <p className="text-xs text-muted-foreground">Most recent sync</p>
+                  <p className="text-xs text-muted-foreground">
+                    Most recent sync
+                  </p>
                 </CardContent>
               </Card>
             </div>
@@ -1170,131 +1545,170 @@ export const ERPConfigPage = () => {
                 ) : erpConfigurations.length === 0 ? (
                   <Alert>
                     <AlertDescription>
-                      No ERP configurations found. Add your first ERP system to get started.
+                      No ERP configurations found. Add your first ERP system to
+                      get started.
                     </AlertDescription>
                   </Alert>
                 ) : (
-                <div className="rounded-md border">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
+                  <div className="rounded-md border">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
                           {isSuperAdmin && <TableHead>Company</TableHead>}
-                        <TableHead>System</TableHead>
-                        <TableHead>Status</TableHead>
+                          <TableHead>System</TableHead>
+                          <TableHead>Status</TableHead>
                           <TableHead>Type</TableHead>
-                        <TableHead>Last Sync</TableHead>
+                          <TableHead>Last Sync</TableHead>
                           <TableHead>Last Test</TableHead>
                           <TableHead className="text-center">Actions</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {erpConfigurations.map((erp) => (
-                        <TableRow key={erp.id}>
-                              {isSuperAdmin && (
-                          <TableCell>
-                            <div>
-                                    <div className="font-medium">{erp.company?.name || 'N/A'}</div>
-                              <div className="text-sm text-muted-foreground">
-                                      {erp.company?.email || ''}
-                              </div>
-                            </div>
-                          </TableCell>
-                              )}
-                          <TableCell>
-                            <div>
-                                  <div className="font-medium">{erp.erp_name || erp.erp_type}</div>
-                              <div className="text-sm text-muted-foreground">
-                                    {erp.connection_type || 'N/A'}
-                              </div>
-                            </div>
-                          </TableCell>
-                              <TableCell>{getStatusBadge(erp)}</TableCell>
-                          <TableCell>
-                                <Badge variant="outline">{erp.erp_type}</Badge>
-                          </TableCell>
-                          <TableCell>
-                            <div className="text-sm">
-                                  {erp.last_sync_at ? (
-                                    <div>
-                                      <div className="font-medium">{formatDate(erp.last_sync_at)}</div>
-                                      <div className="text-xs text-muted-foreground">
-                                        {(() => {
-                                          const syncDate = new Date(erp.last_sync_at);
-                                          const now = new Date();
-                                          const diffMs = now.getTime() - syncDate.getTime();
-                                          const diffMins = Math.floor(diffMs / 60000);
-                                          const diffHours = Math.floor(diffMs / 3600000);
-                                          const diffDays = Math.floor(diffMs / 86400000);
-                                          if (diffMins < 60) return `${diffMins} min ago`;
-                                          if (diffHours < 24) return `${diffHours} hr ago`;
-                                          return `${diffDays} days ago`;
-                                        })()}
-                                      </div>
-                                    </div>
-                                  ) : (
-                                    <span className="text-muted-foreground">Never</span>
-                                  )}
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                                <div className="text-sm">
-                                  {erp.last_connection_test_at ? (
-                                    <div>
-                                      <div className="font-medium">{formatDate(erp.last_connection_test_at)}</div>
-                                      <div className="text-xs text-muted-foreground">
-                                        {erp.last_connection_test_result === 'success' ? (
-                                          <span className="text-green-600">Success</span>
-                                        ) : erp.last_connection_test_result === 'failed' ? (
-                                          <span className="text-red-600">Failed</span>
-                                        ) : (
-                                          'Unknown'
-                                        )}
-                                      </div>
-                                    </div>
-                                  ) : (
-                                    <span className="text-muted-foreground">Never tested</span>
-                                  )}
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {erpConfigurations.map((erp) => (
+                          <TableRow key={erp.id}>
+                            {isSuperAdmin && (
+                              <TableCell>
+                                <div>
+                                  <div className="font-medium">
+                                    {erp.company?.name || 'N/A'}
+                                  </div>
+                                  <div className="text-sm text-muted-foreground">
+                                    {erp.company?.email || ''}
+                                  </div>
                                 </div>
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <div className="flex justify-end space-x-2">
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => handleTestConnection(erp.id)}
-                                    disabled={testConnection.isPending}
-                                    title="Test Connection"
-                                  >
-                                    {testConnection.isPending ? (
-                                      <Loader2 className="w-4 h-4 animate-spin" />
-                                    ) : (
-                                <TestTube className="w-4 h-4" />
-                                    )}
-                              </Button>
-                                  {canManageERP() && (
-                                    <>
-                                      <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        onClick={() => handleSyncAll(erp.id, false)}
-                                        disabled={syncAll.isPending || (syncStatus?.has_pending_jobs && showSyncDialog === erp.id)}
-                                        title="Sync All Data (in correct order)"
-                                      >
-                                        {syncAll.isPending || (syncStatus?.has_pending_jobs && showSyncDialog === erp.id) ? (
-                                          <Loader2 className="w-4 h-4 animate-spin" />
-                                        ) : (
-                                          <Download className="w-4 h-4" />
-                                        )}
-                                      </Button>
-                                      <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        onClick={() => setShowEditDialog(erp.id)}
-                                        title="Edit"
-                                      >
-                                <Settings className="w-4 h-4" />
-                              </Button>
-                                      <Button
+                              </TableCell>
+                            )}
+                            <TableCell>
+                              <div>
+                                <div className="font-medium">
+                                  {erp.erp_name || erp.erp_type}
+                                </div>
+                                <div className="text-sm text-muted-foreground">
+                                  {erp.connection_type || 'N/A'}
+                                </div>
+                              </div>
+                            </TableCell>
+                            <TableCell>{getStatusBadge(erp)}</TableCell>
+                            <TableCell>
+                              <Badge variant="outline">{erp.erp_type}</Badge>
+                            </TableCell>
+                            <TableCell>
+                              <div className="text-sm">
+                                {erp.last_sync_at ? (
+                                  <div>
+                                    <div className="font-medium">
+                                      {formatDate(erp.last_sync_at)}
+                                    </div>
+                                    <div className="text-xs text-muted-foreground">
+                                      {(() => {
+                                        const syncDate = new Date(
+                                          erp.last_sync_at
+                                        );
+                                        const now = new Date();
+                                        const diffMs =
+                                          now.getTime() - syncDate.getTime();
+                                        const diffMins = Math.floor(
+                                          diffMs / 60000
+                                        );
+                                        const diffHours = Math.floor(
+                                          diffMs / 3600000
+                                        );
+                                        const diffDays = Math.floor(
+                                          diffMs / 86400000
+                                        );
+                                        if (diffMins < 60)
+                                          return `${diffMins} min ago`;
+                                        if (diffHours < 24)
+                                          return `${diffHours} hr ago`;
+                                        return `${diffDays} days ago`;
+                                      })()}
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <span className="text-muted-foreground">
+                                    Never
+                                  </span>
+                                )}
+                                <ERPSyncProgressDisplay erpId={erp.id} />
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <div className="text-sm">
+                                {erp.last_connection_test_at ? (
+                                  <div>
+                                    <div className="font-medium">
+                                      {formatDate(erp.last_connection_test_at)}
+                                    </div>
+                                    <div className="text-xs text-muted-foreground">
+                                      {erp.last_connection_test_result ===
+                                      'success' ? (
+                                        <span className="text-green-600">
+                                          Success
+                                        </span>
+                                      ) : erp.last_connection_test_result ===
+                                        'failed' ? (
+                                        <span className="text-red-600">
+                                          Failed
+                                        </span>
+                                      ) : (
+                                        'Unknown'
+                                      )}
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <span className="text-muted-foreground">
+                                    Never tested
+                                  </span>
+                                )}
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <div className="flex justify-end space-x-2">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleTestConnection(erp.id)}
+                                  disabled={testConnection.isPending}
+                                  title="Test Connection"
+                                >
+                                  {testConnection.isPending ? (
+                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                  ) : (
+                                    <TestTube className="w-4 h-4" />
+                                  )}
+                                </Button>
+                                {canManageERP() && (
+                                  <>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() =>
+                                        handleSyncAll(erp.id, false)
+                                      }
+                                      disabled={
+                                        syncAll.isPending ||
+                                        (syncStatus?.has_pending_jobs &&
+                                          showSyncDialog === erp.id)
+                                      }
+                                      title="Sync All Data (in correct order)"
+                                    >
+                                      {syncAll.isPending ||
+                                      (syncStatus?.has_pending_jobs &&
+                                        showSyncDialog === erp.id) ? (
+                                        <Loader2 className="w-4 h-4 animate-spin" />
+                                      ) : (
+                                        <Download className="w-4 h-4" />
+                                      )}
+                                    </Button>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => setShowEditDialog(erp.id)}
+                                      title="Edit"
+                                    >
+                                      <Settings className="w-4 h-4" />
+                                    </Button>
+                                    {/* <Button
                                         variant="ghost"
                                         size="sm"
                                         onClick={() => handleOpenSyncDialog(erp.id)}
@@ -1306,101 +1720,119 @@ export const ERPConfigPage = () => {
                                         ) : (
                                 <RefreshCw className="w-4 h-4" />
                                         )}
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="text-red-600"
-                                        onClick={() => setShowDeleteDialog(erp.id)}
-                                        title="Delete"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </Button>
-                                    </>
-                                  )}
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
+                              </Button> */}
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="text-red-600"
+                                      onClick={() =>
+                                        setShowDeleteDialog(erp.id)
+                                      }
+                                      title="Delete"
+                                    >
+                                      <Trash2 className="w-4 h-4" />
+                                    </Button>
+                                  </>
+                                )}
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
                 )}
               </CardContent>
             </Card>
           </TabsContent>
 
-            {/* Access Point Providers Tab */}
-            <TabsContent value="access-point-providers" className="space-y-6">
+          {/* Access Point Providers Tab */}
+          <TabsContent value="access-point-providers" className="space-y-6">
             <Card>
               <CardHeader>
-                  <CardTitle>Access Point Providers</CardTitle>
-                    <CardDescription>
-                    Manage your Access Point Provider credentials (Hoptool, Flick, etc.) for FIRS integration
-                    </CardDescription>
+                <CardTitle>Access Point Providers</CardTitle>
+                <CardDescription>
+                  Manage your Access Point Provider credentials (Hoptool, Flick,
+                  etc.) for FIRS integration
+                </CardDescription>
               </CardHeader>
               <CardContent>
-                  {isLoadingProviders ? (
-                    <div className="space-y-4">
-                      <Skeleton className="h-12 w-full" />
-                      <Skeleton className="h-12 w-full" />
-                    </div>
-                  ) : availableProviders.length === 0 ? (
-                    <Alert>
-                      <AlertDescription>
-                        No Access Point Providers available.
-                      </AlertDescription>
-                    </Alert>
-                  ) : (
-                <div className="rounded-md border">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                            <TableHead>Provider</TableHead>
-                        <TableHead>Status</TableHead>
-                            <TableHead>Credentials</TableHead>
-                            <TableHead>Enable/Disable</TableHead>
-                            <TableHead className="text-right">Actions</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                          {availableProviders.map((provider: AccessPointProvider) => {
+                {isLoadingProviders ? (
+                  <div className="space-y-4">
+                    <Skeleton className="h-12 w-full" />
+                    <Skeleton className="h-12 w-full" />
+                  </div>
+                ) : availableProviders.length === 0 ? (
+                  <Alert>
+                    <AlertDescription>
+                      No Access Point Providers available.
+                    </AlertDescription>
+                  </Alert>
+                ) : (
+                  <div className="rounded-md border">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Provider</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead>Credentials</TableHead>
+                          <TableHead>Enable/Disable</TableHead>
+                          <TableHead className="text-right">Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {availableProviders.map(
+                          (provider: AccessPointProvider) => {
                             const isActive = provider.id === activeProvider?.id;
-                            const hasCredentials = activeProvider?.has_credentials || false;
-                            
+                            const hasCredentials =
+                              activeProvider?.has_credentials || false;
+
                             return (
                               <TableRow key={provider.id}>
-                          <TableCell>
+                                <TableCell>
                                   <div>
-                                    <div className="font-medium">{provider.name}</div>
+                                    <div className="font-medium">
+                                      {provider.name}
+                                    </div>
                                     <div className="text-sm text-muted-foreground">
                                       {provider.code}
                                     </div>
-                            </div>
-                          </TableCell>
-                          <TableCell>
+                                  </div>
+                                </TableCell>
+                                <TableCell>
                                   {isActive ? (
-                                    <Badge variant="outline" className="bg-green-100 text-green-800 border-green-200">
+                                    <Badge
+                                      variant="outline"
+                                      className="bg-green-100 text-green-800 border-green-200"
+                                    >
                                       <CheckCircle className="w-3 h-3 mr-1" />
                                       Active
                                     </Badge>
                                   ) : (
-                                    <Badge variant="outline" className="bg-gray-100 text-gray-800 border-gray-200">
+                                    <Badge
+                                      variant="outline"
+                                      className="bg-gray-100 text-gray-800 border-gray-200"
+                                    >
                                       <Unlink className="w-3 h-3 mr-1" />
                                       Inactive
                                     </Badge>
                                   )}
-                          </TableCell>
-                          <TableCell>
+                                </TableCell>
+                                <TableCell>
                                   {isActive && hasCredentials ? (
-                                    <Badge variant="outline" className="bg-blue-100 text-blue-800 border-blue-200">
+                                    <Badge
+                                      variant="outline"
+                                      className="bg-blue-100 text-blue-800 border-blue-200"
+                                    >
                                       Configured
                                     </Badge>
                                   ) : (
-                                    <span className="text-sm text-muted-foreground">Not configured</span>
+                                    <span className="text-sm text-muted-foreground">
+                                      Not configured
+                                    </span>
                                   )}
-                          </TableCell>
-                          <TableCell>
+                                </TableCell>
+                                <TableCell>
                                   {canManageERP() ? (
                                     <div className="flex items-center space-x-2">
                                       <Switch
@@ -1408,14 +1840,22 @@ export const ERPConfigPage = () => {
                                         checked={isActive}
                                         onCheckedChange={(checked) => {
                                           if (checked) {
-                                            handleOpenCredentialsDialog(provider.id);
+                                            handleOpenCredentialsDialog(
+                                              provider.id
+                                            );
                                           } else {
                                             handleDeactivateProvider();
                                           }
                                         }}
-                                        disabled={activateProvider.isPending || deactivateProvider.isPending}
+                                        disabled={
+                                          activateProvider.isPending ||
+                                          deactivateProvider.isPending
+                                        }
                                       />
-                                      <Label htmlFor={`provider-toggle-${provider.id}`} className="cursor-pointer text-sm">
+                                      <Label
+                                        htmlFor={`provider-toggle-${provider.id}`}
+                                        className="cursor-pointer text-sm"
+                                      >
                                         {isActive ? 'Enabled' : 'Disabled'}
                                       </Label>
                                     </div>
@@ -1424,7 +1864,7 @@ export const ERPConfigPage = () => {
                                       {isActive ? 'Enabled' : 'Disabled'}
                                     </span>
                                   )}
-                          </TableCell>
+                                </TableCell>
                                 <TableCell className="text-right">
                                   <div className="flex justify-end items-center gap-2">
                                     {canManageERP() && (
@@ -1435,9 +1875,13 @@ export const ERPConfigPage = () => {
                                               <Button
                                                 variant="ghost"
                                                 size="sm"
-                                                onClick={handleResyncFirsProfile}
+                                                onClick={
+                                                  handleResyncFirsProfile
+                                                }
                                                 title="Resync FIRS Profile"
-                                                disabled={resyncFirsProfile.isPending}
+                                                disabled={
+                                                  resyncFirsProfile.isPending
+                                                }
                                               >
                                                 {resyncFirsProfile.isPending ? (
                                                   <Loader2 className="w-4 h-4 animate-spin" />
@@ -1449,9 +1893,16 @@ export const ERPConfigPage = () => {
                                             <Button
                                               variant="ghost"
                                               size="sm"
-                                              onClick={() => handleOpenCredentialsDialog(provider.id)}
+                                              onClick={() =>
+                                                handleOpenCredentialsDialog(
+                                                  provider.id
+                                                )
+                                              }
                                               title="Update Credentials"
-                                              disabled={activateProvider.isPending || updateCredentials.isPending}
+                                              disabled={
+                                                activateProvider.isPending ||
+                                                updateCredentials.isPending
+                                              }
                                             >
                                               {updateCredentials.isPending ? (
                                                 <Loader2 className="w-4 h-4 animate-spin" />
@@ -1465,209 +1916,245 @@ export const ERPConfigPage = () => {
                                           <Button
                                             variant="ghost"
                                             size="sm"
-                                            onClick={() => handleOpenCredentialsDialog(provider.id)}
+                                            onClick={() =>
+                                              handleOpenCredentialsDialog(
+                                                provider.id
+                                              )
+                                            }
                                             title="Configure Credentials"
-                                            disabled={activateProvider.isPending}
+                                            disabled={
+                                              activateProvider.isPending
+                                            }
                                           >
                                             <Settings className="w-4 h-4" />
                                           </Button>
                                         )}
                                       </>
                                     )}
-                            </div>
-                          </TableCell>
-                        </TableRow>
+                                  </div>
+                                </TableCell>
+                              </TableRow>
                             );
-                          })}
-                    </TableBody>
-                  </Table>
-                </div>
+                          }
+                        )}
+                      </TableBody>
+                    </Table>
+                  </div>
                 )}
               </CardContent>
             </Card>
           </TabsContent>
 
-            {/* Settings Tab */}
-            <TabsContent value="settings" className="space-y-6">
+          {/* Settings Tab */}
+          <TabsContent value="settings" className="space-y-6">
             <Card>
               <CardHeader>
-                  <div className="flex justify-between items-center">
-                    <div>
-                      <CardTitle>FIRS Configuration</CardTitle>
-                <CardDescription>
-                        Configure your FIRS (Federal Inland Revenue Service) e-invoicing settings
-                </CardDescription>
-                    </div>
-                    {canManageERP() && (
-                      <Button
-                        onClick={() => {
-                          if (firsConfiguration) {
-                            setFirsConfigForm({
-                              business_id: firsConfiguration.business_id || '',
-                              service_id: firsConfiguration.service_id || '',
-                              irn_service_id: firsConfiguration.irn_service_id || '',
-                              is_active: firsConfiguration.is_active ?? true,
-                            });
-                          } else {
-                            setFirsConfigForm({
-                              business_id: '',
-                              service_id: '',
-                              irn_service_id: '',
-                              is_active: true,
-                            });
-                          }
-                          setShowFIRSConfigDialog(true);
-                        }}
-                        size="sm"
-                      >
-                        {firsConfiguration ? (
-                          <>
-                            <Settings className="w-4 h-4 mr-2" />
-                            Edit Configuration
-                          </>
-                        ) : (
-                          <>
-                            <Plus className="w-4 h-4 mr-2" />
-                            Add Configuration
-                          </>
-                        )}
-                      </Button>
-                    )}
+                <div className="flex justify-between items-center">
+                  <div>
+                    <CardTitle>FIRS Configuration</CardTitle>
+                    <CardDescription>
+                      Configure your FIRS (Federal Inland Revenue Service)
+                      e-invoicing settings
+                    </CardDescription>
                   </div>
+                  {canManageERP() && (
+                    <Button
+                      onClick={() => {
+                        if (firsConfiguration) {
+                          setFirsConfigForm({
+                            business_id: firsConfiguration.business_id || '',
+                            service_id: firsConfiguration.service_id || '',
+                            irn_service_id:
+                              firsConfiguration.irn_service_id || '',
+                            is_active: firsConfiguration.is_active ?? true,
+                          });
+                        } else {
+                          setFirsConfigForm({
+                            business_id: '',
+                            service_id: '',
+                            irn_service_id: '',
+                            is_active: true,
+                          });
+                        }
+                        setShowFIRSConfigDialog(true);
+                      }}
+                      size="sm"
+                    >
+                      {firsConfiguration ? (
+                        <>
+                          <Settings className="w-4 h-4 mr-2" />
+                          Edit Configuration
+                        </>
+                      ) : (
+                        <>
+                          <Plus className="w-4 h-4 mr-2" />
+                          Add Configuration
+                        </>
+                      )}
+                    </Button>
+                  )}
+                </div>
               </CardHeader>
               <CardContent>
-                  {isLoadingFIRS ? (
-                    <div className="space-y-4">
-                      <Skeleton className="h-20 w-full" />
-                      <Skeleton className="h-20 w-full" />
-                    </div>
-                  ) : firsConfiguration ? (
-                <div className="space-y-6">
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="rounded-lg border bg-card p-4">
-                          <div className="flex items-center justify-between mb-2">
-                          <Label className="text-sm font-medium text-muted-foreground">Business ID</Label>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-6 w-6 p-0"
-                              onClick={() => {
-                                if (firsConfiguration.business_id) {
-                                  navigator.clipboard.writeText(firsConfiguration.business_id);
-                                  toast.success('Business ID copied to clipboard');
-                                }
-                              }}
-                            >
-                              <Copy className="h-3 w-3" />
-                            </Button>
-                        </div>
-                          <div className="mt-1 font-mono text-sm break-all text-foreground">
-                            {firsConfiguration.business_id || 'N/A'}
-                        </div>
-                          </div>
-                        <div className="rounded-lg border bg-card p-4">
-                          <div className="flex items-center justify-between mb-2">
-                            <Label className="text-sm font-medium text-muted-foreground">Service ID (Entity ID)</Label>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-6 w-6 p-0"
-                              onClick={() => {
-                                if (firsConfiguration.service_id) {
-                                  navigator.clipboard.writeText(firsConfiguration.service_id);
-                                  toast.success('Service ID copied to clipboard');
-                                }
-                              }}
-                            >
-                              <Copy className="h-3 w-3" />
-                            </Button>
-                        </div>
-                          <div className="mt-1 font-mono text-sm break-all text-foreground">
-                            {firsConfiguration.service_id || 'N/A'}
-                          </div>
-                        </div>
-                        <div className="rounded-lg border bg-card p-4">
-                          <div className="flex items-center justify-between mb-2">
-                            <Label className="text-sm font-medium text-muted-foreground">IRN Service ID</Label>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-6 w-6 p-0"
-                              onClick={() => {
-                                if (firsConfiguration.irn_service_id) {
-                                  navigator.clipboard.writeText(firsConfiguration.irn_service_id);
-                                  toast.success('IRN Service ID copied to clipboard');
-                                }
-                              }}
-                            >
-                              <Copy className="h-3 w-3" />
-                            </Button>
-                          </div>
-                          <div className="mt-1 font-mono text-sm break-all text-foreground">
-                            {firsConfiguration.irn_service_id || 'N/A'}
-                          </div>
-                        </div>
-                      </div>
-                      <div className="flex items-center justify-between rounded-lg border bg-card p-4">
-                        <div>
-                          <Label className="text-sm font-medium text-muted-foreground mb-2 block">Status</Label>
-                          <Badge variant={firsConfiguration.is_active ? 'default' : 'secondary'} className="text-sm">
-                            {firsConfiguration.is_active ? (
-                              <>
-                                <CheckCircle className="w-3 h-3 mr-1 inline" />
-                                Active
-                              </>
-                            ) : (
-                              <>
-                                <XCircle className="w-3 h-3 mr-1 inline" />
-                                Inactive
-                              </>
-                            )}
-                          </Badge>
-                      </div>
-                      {canManageERP() && (
+                {isLoadingFIRS ? (
+                  <div className="space-y-4">
+                    <Skeleton className="h-20 w-full" />
+                    <Skeleton className="h-20 w-full" />
+                  </div>
+                ) : firsConfiguration ? (
+                  <div className="space-y-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="rounded-lg border bg-card p-4">
+                        <div className="flex items-center justify-between mb-2">
+                          <Label className="text-sm font-medium text-muted-foreground">
+                            Business ID
+                          </Label>
                           <Button
-                            variant="outline"
+                            variant="ghost"
+                            size="sm"
+                            className="h-6 w-6 p-0"
                             onClick={() => {
-                              if (firsConfiguration?.id) {
-                                const configId = typeof firsConfiguration.id === 'string' 
-                                  ? Number.parseInt(firsConfiguration.id, 10) 
-                                  : firsConfiguration.id;
-                                if (!Number.isNaN(configId)) {
-                                  testFIRSConnection.mutate(configId);
-                                }
+                              if (firsConfiguration.business_id) {
+                                navigator.clipboard.writeText(
+                                  firsConfiguration.business_id
+                                );
+                                toast.success(
+                                  'Business ID copied to clipboard'
+                                );
                               }
                             }}
-                            disabled={testFIRSConnection.isPending}
                           >
-                            {testFIRSConnection.isPending ? (
-                              <>
-                                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                                Testing...
-                              </>
-                            ) : (
-                              <>
-                                <TestTube className="w-4 h-4 mr-2" />
-                                Test Connection
-                              </>
-                            )}
+                            <Copy className="h-3 w-3" />
                           </Button>
-                      )}
+                        </div>
+                        <div className="mt-1 font-mono text-sm break-all text-foreground">
+                          {firsConfiguration.business_id || 'N/A'}
+                        </div>
+                      </div>
+                      <div className="rounded-lg border bg-card p-4">
+                        <div className="flex items-center justify-between mb-2">
+                          <Label className="text-sm font-medium text-muted-foreground">
+                            Service ID (Entity ID)
+                          </Label>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-6 w-6 p-0"
+                            onClick={() => {
+                              if (firsConfiguration.service_id) {
+                                navigator.clipboard.writeText(
+                                  firsConfiguration.service_id
+                                );
+                                toast.success('Service ID copied to clipboard');
+                              }
+                            }}
+                          >
+                            <Copy className="h-3 w-3" />
+                          </Button>
+                        </div>
+                        <div className="mt-1 font-mono text-sm break-all text-foreground">
+                          {firsConfiguration.service_id || 'N/A'}
+                        </div>
+                      </div>
+                      <div className="rounded-lg border bg-card p-4">
+                        <div className="flex items-center justify-between mb-2">
+                          <Label className="text-sm font-medium text-muted-foreground">
+                            IRN Service ID
+                          </Label>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-6 w-6 p-0"
+                            onClick={() => {
+                              if (firsConfiguration.irn_service_id) {
+                                navigator.clipboard.writeText(
+                                  firsConfiguration.irn_service_id
+                                );
+                                toast.success(
+                                  'IRN Service ID copied to clipboard'
+                                );
+                              }
+                            }}
+                          >
+                            <Copy className="h-3 w-3" />
+                          </Button>
+                        </div>
+                        <div className="mt-1 font-mono text-sm break-all text-foreground">
+                          {firsConfiguration.irn_service_id || 'N/A'}
+                        </div>
                       </div>
                     </div>
-                  ) : (
-                    <Alert>
-                      <AlertDescription>
-                        No FIRS configuration found. Click "Add Configuration" to set up your FIRS integration.
-                      </AlertDescription>
-                    </Alert>
-                  )}
-                </CardContent>
-              </Card>
-            </TabsContent>
+                    <div className="flex items-center justify-between rounded-lg border bg-card p-4">
+                      <div>
+                        <Label className="text-sm font-medium text-muted-foreground mb-2 block">
+                          Status
+                        </Label>
+                        <Badge
+                          variant={
+                            firsConfiguration.is_active
+                              ? 'default'
+                              : 'secondary'
+                          }
+                          className="text-sm"
+                        >
+                          {firsConfiguration.is_active ? (
+                            <>
+                              <CheckCircle className="w-3 h-3 mr-1 inline" />
+                              Active
+                            </>
+                          ) : (
+                            <>
+                              <XCircle className="w-3 h-3 mr-1 inline" />
+                              Inactive
+                            </>
+                          )}
+                        </Badge>
+                      </div>
+                      {canManageERP() && (
+                        <Button
+                          variant="outline"
+                          onClick={() => {
+                            if (firsConfiguration?.id) {
+                              const configId =
+                                typeof firsConfiguration.id === 'string'
+                                  ? Number.parseInt(firsConfiguration.id, 10)
+                                  : firsConfiguration.id;
+                              if (!Number.isNaN(configId)) {
+                                testFIRSConnection.mutate(configId);
+                              }
+                            }
+                          }}
+                          disabled={testFIRSConnection.isPending}
+                        >
+                          {testFIRSConnection.isPending ? (
+                            <>
+                              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                              Testing...
+                            </>
+                          ) : (
+                            <>
+                              <TestTube className="w-4 h-4 mr-2" />
+                              Test Connection
+                            </>
+                          )}
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <Alert>
+                    <AlertDescription>
+                      No FIRS configuration found. Click "Add Configuration" to
+                      set up your FIRS integration.
+                    </AlertDescription>
+                  </Alert>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
 
-            {/* Sync Logs Tab - Only for Super Admin */}
-            {isSuperAdmin && (
+          {/* Sync Logs Tab - Only for Super Admin */}
+          {isSuperAdmin && (
             <TabsContent value="sync-logs" className="space-y-6">
               <Card>
                 <CardHeader>
@@ -1675,7 +2162,8 @@ export const ERPConfigPage = () => {
                     <div>
                       <CardTitle>Synchronization Logs</CardTitle>
                       <CardDescription>
-                        View detailed logs of all ERP synchronization activities across all companies
+                        View detailed logs of all ERP synchronization activities
+                        across all companies
                       </CardDescription>
                     </div>
                     <div className="flex space-x-2">
@@ -1683,7 +2171,11 @@ export const ERPConfigPage = () => {
                         <Download className="w-4 h-4 mr-2" />
                         Export Logs
                       </Button>
-                      <Button variant="outline" size="sm" onClick={() => refetchSettings()}>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => refetchSettings()}
+                      >
                         <RefreshCw className="w-4 h-4 mr-2" />
                         Refresh
                       </Button>
@@ -1693,7 +2185,8 @@ export const ERPConfigPage = () => {
                 <CardContent>
                   <Alert>
                     <AlertDescription>
-                      Sync logs feature coming soon. This will show synchronization activities across all companies.
+                      Sync logs feature coming soon. This will show
+                      synchronization activities across all companies.
                     </AlertDescription>
                   </Alert>
                 </CardContent>
@@ -1703,33 +2196,48 @@ export const ERPConfigPage = () => {
         </Tabs>
 
         {/* FIRS Configuration Dialog */}
-        <Dialog open={showFIRSConfigDialog} onOpenChange={setShowFIRSConfigDialog}>
+        <Dialog
+          open={showFIRSConfigDialog}
+          onOpenChange={setShowFIRSConfigDialog}
+        >
           <DialogContent className="max-w-2xl">
             <DialogHeader>
               <DialogTitle>
-                {firsConfiguration ? 'Edit FIRS Configuration' : 'Add FIRS Configuration'}
+                {firsConfiguration
+                  ? 'Edit FIRS Configuration'
+                  : 'Add FIRS Configuration'}
               </DialogTitle>
               <DialogDescription>
                 Configure your FIRS e-invoicing integration settings
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-4">
-                    <div className="space-y-2">
+              <div className="space-y-2">
                 <Label htmlFor="business_id">Business ID *</Label>
                 <Input
                   id="business_id"
                   value={firsConfigForm.business_id}
-                  onChange={(e) => setFirsConfigForm({ ...firsConfigForm, business_id: e.target.value })}
+                  onChange={(e) =>
+                    setFirsConfigForm({
+                      ...firsConfigForm,
+                      business_id: e.target.value,
+                    })
+                  }
                   placeholder="Enter your FIRS Business ID"
                 />
-                    </div>
+              </div>
 
-                    <div className="space-y-2">
+              <div className="space-y-2">
                 <Label htmlFor="service_id">Service ID (Entity ID) *</Label>
                 <Input
                   id="service_id"
                   value={firsConfigForm.service_id}
-                  onChange={(e) => setFirsConfigForm({ ...firsConfigForm, service_id: e.target.value })}
+                  onChange={(e) =>
+                    setFirsConfigForm({
+                      ...firsConfigForm,
+                      service_id: e.target.value,
+                    })
+                  }
                   placeholder="Enter your FIRS Service ID (Entity ID)"
                 />
               </div>
@@ -1739,11 +2247,17 @@ export const ERPConfigPage = () => {
                 <Input
                   id="irn_service_id"
                   value={firsConfigForm.irn_service_id}
-                  onChange={(e) => setFirsConfigForm({ ...firsConfigForm, irn_service_id: e.target.value })}
+                  onChange={(e) =>
+                    setFirsConfigForm({
+                      ...firsConfigForm,
+                      irn_service_id: e.target.value,
+                    })
+                  }
                   placeholder="Enter IRN Service ID (e.g., 1A77F9BA) - Optional"
                 />
                 <p className="text-xs text-muted-foreground">
-                  Service ID code for IRN generation template. Typically 8 alphanumeric characters.
+                  Service ID code for IRN generation template. Typically 8
+                  alphanumeric characters.
                 </p>
               </div>
 
@@ -1751,7 +2265,9 @@ export const ERPConfigPage = () => {
                 <Switch
                   id="is_active"
                   checked={firsConfigForm.is_active}
-                  onCheckedChange={(checked) => setFirsConfigForm({ ...firsConfigForm, is_active: checked })}
+                  onCheckedChange={(checked) =>
+                    setFirsConfigForm({ ...firsConfigForm, is_active: checked })
+                  }
                 />
                 <Label htmlFor="is_active">Active</Label>
               </div>
@@ -1775,14 +2291,15 @@ export const ERPConfigPage = () => {
                   onClick={async () => {
                     try {
                       if (firsConfiguration?.id) {
-                        const configId = typeof firsConfiguration.id === 'string' 
-                          ? Number.parseInt(firsConfiguration.id, 10) 
-                          : firsConfiguration.id;
+                        const configId =
+                          typeof firsConfiguration.id === 'string'
+                            ? Number.parseInt(firsConfiguration.id, 10)
+                            : firsConfiguration.id;
                         if (!Number.isNaN(configId)) {
-                        await updateFIRSConfig.mutateAsync({
+                          await updateFIRSConfig.mutateAsync({
                             id: configId,
-                          data: firsConfigForm,
-                        });
+                            data: firsConfigForm,
+                          });
                         }
                       } else {
                         await createFIRSConfig.mutateAsync(firsConfigForm);
@@ -1794,19 +2311,25 @@ export const ERPConfigPage = () => {
                         irn_service_id: '',
                         is_active: true,
                       });
-                    // eslint-disable-next-line no-empty
-                    } catch {
-                    }
+                      // eslint-disable-next-line no-empty
+                    } catch {}
                   }}
-                  disabled={createFIRSConfig.isPending || updateFIRSConfig.isPending || !firsConfigForm.business_id || !firsConfigForm.service_id}
+                  disabled={
+                    createFIRSConfig.isPending ||
+                    updateFIRSConfig.isPending ||
+                    !firsConfigForm.business_id ||
+                    !firsConfigForm.service_id
+                  }
                 >
-                  {(createFIRSConfig.isPending || updateFIRSConfig.isPending) ? (
+                  {createFIRSConfig.isPending || updateFIRSConfig.isPending ? (
                     <>
                       <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                       {firsConfiguration ? 'Updating...' : 'Creating...'}
                     </>
+                  ) : firsConfiguration ? (
+                    'Update Configuration'
                   ) : (
-                    firsConfiguration ? 'Update Configuration' : 'Create Configuration'
+                    'Create Configuration'
                   )}
                 </Button>
               </div>
@@ -1815,7 +2338,10 @@ export const ERPConfigPage = () => {
         </Dialog>
 
         {/* Sync Data Dialog */}
-        <Dialog open={showSyncDialog !== null} onOpenChange={(open) => !open && setShowSyncDialog(null)}>
+        <Dialog
+          open={showSyncDialog !== null}
+          onOpenChange={(open) => !open && setShowSyncDialog(null)}
+        >
           <DialogContent className="max-w-md">
             <DialogHeader>
               <DialogTitle>Sync ERP Data</DialogTitle>
@@ -1838,27 +2364,35 @@ export const ERPConfigPage = () => {
                 <Label htmlFor="sync-data-type">Data Type</Label>
                 <Select
                   value={syncDataType}
-                  onValueChange={(value) => setSyncDataType(value as SyncDataType)}
+                  onValueChange={(value) =>
+                    setSyncDataType(value as SyncDataType)
+                  }
                 >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select data type" />
-                        </SelectTrigger>
-                        <SelectContent>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select data type" />
+                  </SelectTrigger>
+                  <SelectContent>
                     <SelectItem value="vendors">Vendors</SelectItem>
-                          <SelectItem value="customers">Customers</SelectItem>
-                          <SelectItem value="products">Products</SelectItem>
+                    <SelectItem value="customers">Customers</SelectItem>
+                    <SelectItem value="products">Products</SelectItem>
                     <SelectItem value="invoices">Invoices</SelectItem>
-                    <SelectItem value="tax_categories">Tax Categories</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
+                    <SelectItem value="tax_categories">
+                      Tax Categories
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
 
               {/* Dependency Warning for Invoices */}
               {syncDataType === 'invoices' && (
-                <Alert variant="default" className="bg-yellow-50 border-yellow-200">
+                <Alert
+                  variant="default"
+                  className="bg-yellow-50 border-yellow-200"
+                >
                   <AlertDescription className="text-yellow-800">
-                    <strong>Note:</strong> Make sure vendors, customers, and products are synced first.
-                    Required order: vendors → customers → products → invoices
+                    <strong>Note:</strong> Make sure vendors, customers, and
+                    products are synced first. Required order: vendors →
+                    customers → products → invoices
                   </AlertDescription>
                 </Alert>
               )}
@@ -1873,10 +2407,12 @@ export const ERPConfigPage = () => {
                 <Label htmlFor="incremental" className="cursor-pointer">
                   Sync only new/updated records (incremental)
                 </Label>
-                  </div>
+              </div>
 
-              {(syncDataType === 'invoices' || syncDataType === 'customers' || syncDataType === 'vendors') && (
-                    <div className="space-y-4">
+              {(syncDataType === 'invoices' ||
+                syncDataType === 'customers' ||
+                syncDataType === 'vendors') && (
+                <div className="space-y-4">
                   <div className="space-y-2">
                     <Label>Date From (Optional)</Label>
                     <Popover>
@@ -1886,14 +2422,22 @@ export const ERPConfigPage = () => {
                           className="w-full justify-start text-left font-normal"
                         >
                           <CalendarIcon className="mr-2 h-4 w-4" />
-                          {syncDateFrom ? formatDate(syncDateFrom) : 'Select date'}
+                          {syncDateFrom
+                            ? formatDate(syncDateFrom)
+                            : 'Select date'}
                         </Button>
                       </PopoverTrigger>
                       <PopoverContent className="w-auto p-0" align="start">
                         <Calendar
                           mode="single"
-                          selected={syncDateFrom ? new Date(syncDateFrom) : undefined}
-                          onSelect={(date) => setSyncDateFrom(date ? date.toISOString().split('T')[0] : '')}
+                          selected={
+                            syncDateFrom ? new Date(syncDateFrom) : undefined
+                          }
+                          onSelect={(date) =>
+                            setSyncDateFrom(
+                              date ? date.toISOString().split('T')[0] : ''
+                            )
+                          }
                           initialFocus
                         />
                       </PopoverContent>
@@ -1915,8 +2459,14 @@ export const ERPConfigPage = () => {
                       <PopoverContent className="w-auto p-0" align="start">
                         <Calendar
                           mode="single"
-                          selected={syncDateTo ? new Date(syncDateTo) : undefined}
-                          onSelect={(date) => setSyncDateTo(date ? date.toISOString().split('T')[0] : '')}
+                          selected={
+                            syncDateTo ? new Date(syncDateTo) : undefined
+                          }
+                          onSelect={(date) =>
+                            setSyncDateTo(
+                              date ? date.toISOString().split('T')[0] : ''
+                            )
+                          }
                           initialFocus
                         />
                       </PopoverContent>
@@ -1944,15 +2494,26 @@ export const ERPConfigPage = () => {
                       const options: SyncOptions = {};
                       if (syncDateFrom) options.date_from = syncDateFrom;
                       if (syncDateTo) options.date_to = syncDateTo;
-                      handleSyncData(showSyncDialog, syncDataType, Object.keys(options).length > 0 ? options : undefined, incrementalSync);
+                      handleSyncData(
+                        showSyncDialog,
+                        syncDataType,
+                        Object.keys(options).length > 0 ? options : undefined,
+                        incrementalSync
+                      );
                     }
                   }}
-                  disabled={syncData.isPending || (syncStatus?.has_pending_jobs && showSyncDialog !== null)}
+                  disabled={
+                    syncData.isPending ||
+                    (syncStatus?.has_pending_jobs && showSyncDialog !== null)
+                  }
                 >
-                  {syncData.isPending || (syncStatus?.has_pending_jobs && showSyncDialog !== null) ? (
+                  {syncData.isPending ||
+                  (syncStatus?.has_pending_jobs && showSyncDialog !== null) ? (
                     <>
                       <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      {syncStatus?.has_pending_jobs ? 'Syncing...' : 'Starting...'}
+                      {syncStatus?.has_pending_jobs
+                        ? 'Syncing...'
+                        : 'Starting...'}
                     </>
                   ) : (
                     <>
@@ -1961,17 +2522,24 @@ export const ERPConfigPage = () => {
                     </>
                   )}
                 </Button>
-                          </div>
-                        </div>
+              </div>
+            </div>
           </DialogContent>
         </Dialog>
 
         {/* Access Point Provider Credentials Dialog */}
-        <Dialog open={showAccessPointProviderDialog !== null} onOpenChange={(open) => !open && setShowAccessPointProviderDialog(null)}>
+        <Dialog
+          open={showAccessPointProviderDialog !== null}
+          onOpenChange={(open) =>
+            !open && setShowAccessPointProviderDialog(null)
+          }
+        >
           <DialogContent className="max-w-md">
             <DialogHeader>
               <DialogTitle>
-                {activeProvider?.id === showAccessPointProviderDialog ? 'Update Credentials' : 'Activate & Configure Provider'}
+                {activeProvider?.id === showAccessPointProviderDialog
+                  ? 'Update Credentials'
+                  : 'Activate & Configure Provider'}
               </DialogTitle>
               <DialogDescription>
                 {activeProvider?.id === showAccessPointProviderDialog
@@ -1981,22 +2549,32 @@ export const ERPConfigPage = () => {
             </DialogHeader>
             <div className="space-y-4 py-4">
               {(() => {
-                const provider = availableProviders.find((p: AccessPointProvider) => p.id === showAccessPointProviderDialog) as AccessPointProvider | undefined;
+                const provider = availableProviders.find(
+                  (p: AccessPointProvider) =>
+                    p.id === showAccessPointProviderDialog
+                ) as AccessPointProvider | undefined;
                 const isCryptware = provider?.code === 'cryptware';
-                
+
                 return (
                   <>
                     {isCryptware ? (
                       <>
                         {/* Cryptware: Participant ID */}
                         <div className="space-y-2">
-                          <Label htmlFor="participant-id">Participant ID *</Label>
+                          <Label htmlFor="participant-id">
+                            Participant ID *
+                          </Label>
                           <div className="relative">
                             <Input
                               id="participant-id"
                               type={showParticipantId ? 'text' : 'password'}
                               value={accessPointProviderForm['participant-id']}
-                              onChange={(e) => setAccessPointProviderForm({ ...accessPointProviderForm, 'participant-id': e.target.value })}
+                              onChange={(e) =>
+                                setAccessPointProviderForm({
+                                  ...accessPointProviderForm,
+                                  'participant-id': e.target.value,
+                                })
+                              }
                               placeholder="Enter your Participant ID"
                               className="pr-10"
                             />
@@ -2005,7 +2583,9 @@ export const ERPConfigPage = () => {
                               variant="ghost"
                               size="sm"
                               className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
-                              onClick={() => setShowParticipantId(!showParticipantId)}
+                              onClick={() =>
+                                setShowParticipantId(!showParticipantId)
+                              }
                             >
                               {showParticipantId ? (
                                 <EyeOff className="h-4 w-4 text-muted-foreground" />
@@ -2015,7 +2595,7 @@ export const ERPConfigPage = () => {
                             </Button>
                           </div>
                         </div>
-                        
+
                         {/* Cryptware: API Key */}
                         <div className="space-y-2">
                           <Label htmlFor="x-api-key">API Key *</Label>
@@ -2024,7 +2604,12 @@ export const ERPConfigPage = () => {
                               id="x-api-key"
                               type={showApiKey ? 'text' : 'password'}
                               value={accessPointProviderForm['x-api-key']}
-                              onChange={(e) => setAccessPointProviderForm({ ...accessPointProviderForm, 'x-api-key': e.target.value })}
+                              onChange={(e) =>
+                                setAccessPointProviderForm({
+                                  ...accessPointProviderForm,
+                                  'x-api-key': e.target.value,
+                                })
+                              }
                               placeholder="Enter your API Key"
                               className="pr-10"
                             />
@@ -2054,7 +2639,12 @@ export const ERPConfigPage = () => {
                               id="x-api-key"
                               type={showApiKey ? 'text' : 'password'}
                               value={accessPointProviderForm['x-api-key']}
-                              onChange={(e) => setAccessPointProviderForm({ ...accessPointProviderForm, 'x-api-key': e.target.value })}
+                              onChange={(e) =>
+                                setAccessPointProviderForm({
+                                  ...accessPointProviderForm,
+                                  'x-api-key': e.target.value,
+                                })
+                              }
                               placeholder="Enter your API Key"
                               className="pr-10"
                             />
@@ -2073,7 +2663,7 @@ export const ERPConfigPage = () => {
                             </Button>
                           </div>
                         </div>
-                        
+
                         {/* Hoptool: API Secret */}
                         <div className="space-y-2">
                           <Label htmlFor="x-api-secret">API Secret *</Label>
@@ -2082,7 +2672,12 @@ export const ERPConfigPage = () => {
                               id="x-api-secret"
                               type={showApiSecret ? 'text' : 'password'}
                               value={accessPointProviderForm['x-api-secret']}
-                              onChange={(e) => setAccessPointProviderForm({ ...accessPointProviderForm, 'x-api-secret': e.target.value })}
+                              onChange={(e) =>
+                                setAccessPointProviderForm({
+                                  ...accessPointProviderForm,
+                                  'x-api-secret': e.target.value,
+                                })
+                              }
                               placeholder="Enter your API Secret"
                               className="pr-10"
                             />
@@ -2107,25 +2702,39 @@ export const ERPConfigPage = () => {
                 );
               })()}
 
-              {activeProvider?.id === showAccessPointProviderDialog && activeProvider?.has_credentials && (
-                <Alert>
-                  <AlertDescription className="text-sm text-muted-foreground">
-                    Existing credentials are configured. Enter new values to update them.
-                  </AlertDescription>
-                </Alert>
-              )}
+              {activeProvider?.id === showAccessPointProviderDialog &&
+                activeProvider?.has_credentials && (
+                  <Alert>
+                    <AlertDescription className="text-sm text-muted-foreground">
+                      Existing credentials are configured. Enter new values to
+                      update them.
+                    </AlertDescription>
+                  </Alert>
+                )}
 
               <div className="flex justify-end space-x-2 pt-4">
                 <Button
                   variant="outline"
                   onClick={() => {
                     const currentProviderId = showAccessPointProviderDialog;
-                    const provider = currentProviderId ? availableProviders.find((p: AccessPointProvider) => p.id === currentProviderId) as AccessPointProvider | undefined : null;
+                    const provider = currentProviderId
+                      ? (availableProviders.find(
+                          (p: AccessPointProvider) => p.id === currentProviderId
+                        ) as AccessPointProvider | undefined)
+                      : null;
                     setShowAccessPointProviderDialog(null);
                     if (provider?.code === 'cryptware') {
-                      setAccessPointProviderForm({ 'participant-id': '', 'x-api-key': '', 'x-api-secret': '' });
+                      setAccessPointProviderForm({
+                        'participant-id': '',
+                        'x-api-key': '',
+                        'x-api-secret': '',
+                      });
                     } else {
-                      setAccessPointProviderForm({ 'x-api-key': '', 'x-api-secret': '', 'participant-id': '' });
+                      setAccessPointProviderForm({
+                        'x-api-key': '',
+                        'x-api-secret': '',
+                        'participant-id': '',
+                      });
                     }
                     setShowApiKey(false);
                     setShowApiSecret(false);
@@ -2137,44 +2746,68 @@ export const ERPConfigPage = () => {
                 <Button
                   onClick={() => {
                     if (showAccessPointProviderDialog) {
-                      if (activeProvider?.id === showAccessPointProviderDialog) {
+                      if (
+                        activeProvider?.id === showAccessPointProviderDialog
+                      ) {
                         handleUpdateCredentials(showAccessPointProviderDialog);
                       } else {
-                        handleActivateProvider(showAccessPointProviderDialog, accessPointProviderForm);
+                        handleActivateProvider(
+                          showAccessPointProviderDialog,
+                          accessPointProviderForm
+                        );
                       }
                     }
                   }}
                   disabled={(() => {
-                    const provider = availableProviders.find((p: AccessPointProvider) => p.id === showAccessPointProviderDialog) as AccessPointProvider | undefined;
+                    const provider = availableProviders.find(
+                      (p: AccessPointProvider) =>
+                        p.id === showAccessPointProviderDialog
+                    ) as AccessPointProvider | undefined;
                     const isCryptware = provider?.code === 'cryptware';
-                    
-                    if (activateProvider.isPending || updateCredentials.isPending) {
+
+                    if (
+                      activateProvider.isPending ||
+                      updateCredentials.isPending
+                    ) {
                       return true;
                     }
-                    
+
                     if (isCryptware) {
-                      return !accessPointProviderForm['participant-id'] || !accessPointProviderForm['x-api-key'];
+                      return (
+                        !accessPointProviderForm['participant-id'] ||
+                        !accessPointProviderForm['x-api-key']
+                      );
                     } else {
-                      return !accessPointProviderForm['x-api-key'] || !accessPointProviderForm['x-api-secret'];
+                      return (
+                        !accessPointProviderForm['x-api-key'] ||
+                        !accessPointProviderForm['x-api-secret']
+                      );
                     }
                   })()}
                 >
-                  {(activateProvider.isPending || updateCredentials.isPending) ? (
+                  {activateProvider.isPending || updateCredentials.isPending ? (
                     <>
                       <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      {activeProvider?.id === showAccessPointProviderDialog ? 'Updating...' : 'Activating...'}
+                      {activeProvider?.id === showAccessPointProviderDialog
+                        ? 'Updating...'
+                        : 'Activating...'}
                     </>
+                  ) : activeProvider?.id === showAccessPointProviderDialog ? (
+                    'Update Credentials'
                   ) : (
-                    activeProvider?.id === showAccessPointProviderDialog ? 'Update Credentials' : 'Activate Provider'
+                    'Activate Provider'
                   )}
                 </Button>
-                        </div>
-                      </div>
+              </div>
+            </div>
           </DialogContent>
         </Dialog>
 
         {/* Edit ERP Dialog */}
-        <Dialog open={showEditDialog !== null} onOpenChange={(open) => !open && setShowEditDialog(null)}>
+        <Dialog
+          open={showEditDialog !== null}
+          onOpenChange={(open) => !open && setShowEditDialog(null)}
+        >
           <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Edit ERP Configuration</DialogTitle>
@@ -2187,7 +2820,7 @@ export const ERPConfigPage = () => {
                 <Skeleton className="h-10 w-full" />
                 <Skeleton className="h-10 w-full" />
                 <Skeleton className="h-10 w-full" />
-                    </div>
+              </div>
             ) : erpSetting ? (
               <div className="space-y-4 py-4">
                 <div className="space-y-2">
@@ -2197,7 +2830,7 @@ export const ERPConfigPage = () => {
                     disabled
                     className="bg-muted"
                   />
-                  </div>
+                </div>
 
                 <div className="space-y-2">
                   <Label>Connection Type</Label>
@@ -2206,616 +2839,1471 @@ export const ERPConfigPage = () => {
                     disabled
                     className="bg-muted"
                   />
-                  </div>
+                </div>
 
                 {/* Active Toggle */}
                 <div className="flex items-center space-x-2">
                   <Switch
                     id="erp-is-active"
                     checked={erpEditForm.is_active}
-                    onCheckedChange={(checked) => setErpEditForm({ ...erpEditForm, is_active: checked })}
+                    onCheckedChange={(checked) =>
+                      setErpEditForm({ ...erpEditForm, is_active: checked })
+                    }
                   />
                   <Label htmlFor="erp-is-active" className="cursor-pointer">
                     Active
-                          </Label>
-                          </div>
+                  </Label>
+                </div>
 
                 {/* Dynamic Settings based on ERP type */}
-                {erpSetting.setting_value && Object.keys(erpSetting.setting_value).length > 0 && (
-                  <div className="space-y-4 border-t pt-4">
-                    <Label className="text-base font-semibold">Configuration Settings</Label>
-                    
-                    {/* Server Details */}
-                    {erpSetting.setting_value.server_details && (
-                      <div className="space-y-3 p-4 border rounded-md">
-                        <Label className="text-sm font-semibold">Server Details</Label>
-                        {Object.entries(erpSetting.setting_value.server_details)
-                          .filter(([key]) => key !== 'database' && key !== 'schema' && key !== 'protocol' && key !== 'ssl_verify') // Exclude database, schema, protocol, and ssl_verify (handled separately)
-                          .map(([key, value]: [string, unknown]) => (
-                          <div key={key} className="space-y-2">
-                            <Label htmlFor={`server-${key}`} className="text-xs capitalize">
-                              {key.replace(/_/g, ' ')}
-                              {key === 'schema' && erpSetting.erp_type === 'sage_x3' && (
-                                <span className="text-muted-foreground ml-1">(Optional)</span>
-                              )}
+                {erpSetting.setting_value &&
+                  Object.keys(erpSetting.setting_value).length > 0 && (
+                    <div className="space-y-4 border-t pt-4">
+                      <Label className="text-base font-semibold">
+                        Configuration Settings
+                      </Label>
+
+                      {/* Server Details */}
+                      {erpSetting.setting_value.server_details && (
+                        <div className="space-y-3 p-4 border rounded-md">
+                          <Label className="text-sm font-semibold">
+                            Server Details
+                          </Label>
+                          {Object.entries(
+                            erpSetting.setting_value.server_details
+                          )
+                            .filter(
+                              ([key]) =>
+                                key !== 'database' &&
+                                key !== 'schema' &&
+                                key !== 'protocol' &&
+                                key !== 'ssl_verify'
+                            ) // Exclude database, schema, protocol, and ssl_verify (handled separately)
+                            .map(([key, value]: [string, unknown]) => (
+                              <div key={key} className="space-y-2">
+                                <Label
+                                  htmlFor={`server-${key}`}
+                                  className="text-xs capitalize"
+                                >
+                                  {key.replace(/_/g, ' ')}
+                                  {key === 'schema' &&
+                                    erpSetting.erp_type === 'sage_x3' && (
+                                      <span className="text-muted-foreground ml-1">
+                                        (Optional)
+                                      </span>
+                                    )}
+                                </Label>
+                                <div className="relative">
+                                  <Input
+                                    id={`server-${key}`}
+                                    type={
+                                      key.includes('password') &&
+                                      !passwordVisibility[`server-${key}`]
+                                        ? 'password'
+                                        : key === 'port'
+                                          ? 'number'
+                                          : 'text'
+                                    }
+                                    value={
+                                      erpEditForm.setting_value
+                                        ?.server_details?.[key] ??
+                                      (key === 'schema' &&
+                                      erpSetting.erp_type === 'sage_x3'
+                                        ? 'SEED'
+                                        : value) ??
+                                      ''
+                                    }
+                                    onChange={(e) => {
+                                      const newSettingValue = {
+                                        ...(erpEditForm.setting_value || {}),
+                                      };
+                                      if (!newSettingValue.server_details) {
+                                        const serverDetails =
+                                          erpSetting.setting_value
+                                            ?.server_details;
+                                        newSettingValue.server_details =
+                                          serverDetails &&
+                                          typeof serverDetails === 'object' &&
+                                          !Array.isArray(serverDetails)
+                                            ? {
+                                                ...(serverDetails as Record<
+                                                  string,
+                                                  unknown
+                                                >),
+                                              }
+                                            : {};
+                                      }
+                                      newSettingValue.server_details[key] =
+                                        key === 'port'
+                                          ? parseInt(e.target.value) || 0
+                                          : e.target.value ||
+                                            (key === 'schema' ? 'SEED' : '');
+                                      setErpEditForm({
+                                        ...erpEditForm,
+                                        setting_value: newSettingValue,
+                                      });
+                                    }}
+                                    placeholder={
+                                      key === 'schema' &&
+                                      erpSetting.erp_type === 'sage_x3'
+                                        ? 'SEED (default)'
+                                        : `Enter ${key.replace(/_/g, ' ')}`
+                                    }
+                                    className={
+                                      key.includes('password') ? 'pr-10' : ''
+                                    }
+                                    autoComplete="off"
+                                  />
+                                  {key.includes('password') && (
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="sm"
+                                      className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                                      onClick={() =>
+                                        setPasswordVisibility({
+                                          ...passwordVisibility,
+                                          [`server-${key}`]:
+                                            !passwordVisibility[
+                                              `server-${key}`
+                                            ],
+                                        })
+                                      }
+                                    >
+                                      {passwordVisibility[`server-${key}`] ? (
+                                        <EyeOff className="h-4 w-4 text-muted-foreground" />
+                                      ) : (
+                                        <Eye className="h-4 w-4 text-muted-foreground" />
+                                      )}
+                                    </Button>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+                          {/* Protocol field */}
+                          <div className="space-y-2">
+                            <Label
+                              htmlFor="server-protocol"
+                              className="text-xs"
+                            >
+                              Protocol
                             </Label>
-                            <div className="relative">
-                              <Input
-                                id={`server-${key}`}
-                                type={key.includes('password') && !passwordVisibility[`server-${key}`] ? 'password' : key === 'port' ? 'number' : 'text'}
-                                value={erpEditForm.setting_value?.server_details?.[key] ?? (key === 'schema' && erpSetting.erp_type === 'sage_x3' ? 'SEED' : value) ?? ''}
-                                onChange={(e) => {
-                                  const newSettingValue = { ...(erpEditForm.setting_value || {}) };
-                                  if (!newSettingValue.server_details) {
-                                    const serverDetails = erpSetting.setting_value?.server_details;
-                                    newSettingValue.server_details = (serverDetails && typeof serverDetails === 'object' && !Array.isArray(serverDetails))
-                                      ? { ...serverDetails as Record<string, unknown> }
+                            <Select
+                              value={
+                                erpEditForm.setting_value?.server_details &&
+                                typeof erpEditForm.setting_value
+                                  .server_details === 'object' &&
+                                !Array.isArray(
+                                  erpEditForm.setting_value.server_details
+                                ) &&
+                                'protocol' in
+                                  (erpEditForm.setting_value
+                                    .server_details as Record<string, unknown>)
+                                  ? String(
+                                      (
+                                        erpEditForm.setting_value
+                                          .server_details as Record<
+                                          string,
+                                          unknown
+                                        >
+                                      ).protocol || 'http'
+                                    )
+                                  : erpSetting.setting_value.server_details &&
+                                      typeof erpSetting.setting_value
+                                        .server_details === 'object' &&
+                                      !Array.isArray(
+                                        erpSetting.setting_value.server_details
+                                      ) &&
+                                      'protocol' in
+                                        (erpSetting.setting_value
+                                          .server_details as Record<
+                                          string,
+                                          unknown
+                                        >)
+                                    ? String(
+                                        (
+                                          erpSetting.setting_value
+                                            .server_details as Record<
+                                            string,
+                                            unknown
+                                          >
+                                        ).protocol || 'http'
+                                      )
+                                    : 'http'
+                              }
+                              onValueChange={(value: 'http' | 'https') => {
+                                const newSettingValue = {
+                                  ...(erpEditForm.setting_value || {}),
+                                };
+                                if (!newSettingValue.server_details) {
+                                  const serverDetails =
+                                    erpSetting.setting_value?.server_details;
+                                  newSettingValue.server_details =
+                                    serverDetails &&
+                                    typeof serverDetails === 'object' &&
+                                    !Array.isArray(serverDetails)
+                                      ? {
+                                          ...(serverDetails as Record<
+                                            string,
+                                            unknown
+                                          >),
+                                        }
                                       : {};
+                                }
+                                if (
+                                  newSettingValue.server_details &&
+                                  typeof newSettingValue.server_details ===
+                                    'object' &&
+                                  !Array.isArray(newSettingValue.server_details)
+                                ) {
+                                  (
+                                    newSettingValue.server_details as Record<
+                                      string,
+                                      unknown
+                                    >
+                                  ).protocol = value;
+                                  if (value === 'http') {
+                                    (
+                                      newSettingValue.server_details as Record<
+                                        string,
+                                        unknown
+                                      >
+                                    ).ssl_verify = false;
                                   }
-                                  newSettingValue.server_details[key] = key === 'port' ? (parseInt(e.target.value) || 0) : (e.target.value || (key === 'schema' ? 'SEED' : ''));
-                                  setErpEditForm({ ...erpEditForm, setting_value: newSettingValue });
+                                }
+                                setErpEditForm({
+                                  ...erpEditForm,
+                                  setting_value: newSettingValue,
+                                });
+                              }}
+                            >
+                              <SelectTrigger id="server-protocol">
+                                <SelectValue placeholder="Select protocol" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="http">HTTP</SelectItem>
+                                <SelectItem value="https">HTTPS</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <p className="text-xs text-muted-foreground">
+                              Select HTTP or HTTPS. If host URL includes
+                              protocol (e.g., https://example.com), it will be
+                              auto-detected.
+                            </p>
+                          </div>
+                          {/* SSL Verify field - shown only when HTTPS is selected */}
+                          {((erpEditForm.setting_value?.server_details &&
+                            typeof erpEditForm.setting_value.server_details ===
+                              'object' &&
+                            !Array.isArray(
+                              erpEditForm.setting_value.server_details
+                            ) &&
+                            'protocol' in
+                              (erpEditForm.setting_value
+                                .server_details as Record<string, unknown>) &&
+                            (
+                              erpEditForm.setting_value
+                                .server_details as Record<string, unknown>
+                            ).protocol === 'https') ||
+                            (erpSetting.setting_value.server_details &&
+                              typeof erpSetting.setting_value.server_details ===
+                                'object' &&
+                              !Array.isArray(
+                                erpSetting.setting_value.server_details
+                              ) &&
+                              'protocol' in
+                                (erpSetting.setting_value
+                                  .server_details as Record<string, unknown>) &&
+                              (
+                                erpSetting.setting_value
+                                  .server_details as Record<string, unknown>
+                              ).protocol === 'https')) && (
+                            <div className="space-y-2">
+                              <Label
+                                htmlFor="server-ssl-verify"
+                                className="flex items-center space-x-2 text-xs"
+                              >
+                                <Switch
+                                  id="server-ssl-verify"
+                                  checked={
+                                    erpEditForm.setting_value?.server_details &&
+                                    typeof erpEditForm.setting_value
+                                      .server_details === 'object' &&
+                                    !Array.isArray(
+                                      erpEditForm.setting_value.server_details
+                                    ) &&
+                                    'ssl_verify' in
+                                      (erpEditForm.setting_value
+                                        .server_details as Record<
+                                        string,
+                                        unknown
+                                      >)
+                                      ? Boolean(
+                                          (
+                                            erpEditForm.setting_value
+                                              .server_details as Record<
+                                              string,
+                                              unknown
+                                            >
+                                          ).ssl_verify
+                                        )
+                                      : erpSetting.setting_value
+                                            .server_details &&
+                                          typeof erpSetting.setting_value
+                                            .server_details === 'object' &&
+                                          !Array.isArray(
+                                            erpSetting.setting_value
+                                              .server_details
+                                          ) &&
+                                          'ssl_verify' in
+                                            (erpSetting.setting_value
+                                              .server_details as Record<
+                                              string,
+                                              unknown
+                                            >)
+                                        ? Boolean(
+                                            (
+                                              erpSetting.setting_value
+                                                .server_details as Record<
+                                                string,
+                                                unknown
+                                              >
+                                            ).ssl_verify
+                                          )
+                                        : false
+                                  }
+                                  onCheckedChange={(checked) => {
+                                    const newSettingValue = {
+                                      ...(erpEditForm.setting_value || {}),
+                                    };
+                                    if (!newSettingValue.server_details) {
+                                      const serverDetails =
+                                        erpSetting.setting_value
+                                          ?.server_details;
+                                      newSettingValue.server_details =
+                                        serverDetails &&
+                                        typeof serverDetails === 'object' &&
+                                        !Array.isArray(serverDetails)
+                                          ? {
+                                              ...(serverDetails as Record<
+                                                string,
+                                                unknown
+                                              >),
+                                            }
+                                          : {};
+                                    }
+                                    if (
+                                      newSettingValue.server_details &&
+                                      typeof newSettingValue.server_details ===
+                                        'object' &&
+                                      !Array.isArray(
+                                        newSettingValue.server_details
+                                      )
+                                    ) {
+                                      (
+                                        newSettingValue.server_details as Record<
+                                          string,
+                                          unknown
+                                        >
+                                      ).ssl_verify = checked;
+                                    }
+                                    setErpEditForm({
+                                      ...erpEditForm,
+                                      setting_value: newSettingValue,
+                                    });
+                                  }}
+                                />
+                                <span>Verify SSL Certificate</span>
+                              </Label>
+                              <p className="text-xs text-muted-foreground">
+                                Enable SSL certificate verification. Disable for
+                                self-signed certificates.
+                              </p>
+                            </div>
+                          )}
+                          {/* Add pool_alias field for Sage X3 if it doesn't exist in server_details */}
+                          {erpSetting.erp_type === 'sage_x3' &&
+                            (() => {
+                              const serverDetails =
+                                erpSetting.setting_value.server_details;
+                              const hasPoolAlias =
+                                serverDetails &&
+                                typeof serverDetails === 'object' &&
+                                !Array.isArray(serverDetails) &&
+                                'pool_alias' in
+                                  (serverDetails as Record<string, unknown>);
+                              return !hasPoolAlias;
+                            })() && (
+                              <div className="space-y-2">
+                                <Label
+                                  htmlFor="server-pool-alias"
+                                  className="text-xs capitalize"
+                                >
+                                  Pool Alias{' '}
+                                  <span className="text-red-500">*</span>
+                                </Label>
+                                <Input
+                                  id="server-pool-alias"
+                                  type="text"
+                                  value={
+                                    erpEditForm.setting_value?.server_details &&
+                                    typeof erpEditForm.setting_value
+                                      .server_details === 'object' &&
+                                    !Array.isArray(
+                                      erpEditForm.setting_value.server_details
+                                    ) &&
+                                    'pool_alias' in
+                                      (erpEditForm.setting_value
+                                        .server_details as Record<
+                                        string,
+                                        unknown
+                                      >)
+                                      ? String(
+                                          (
+                                            erpEditForm.setting_value
+                                              .server_details as Record<
+                                              string,
+                                              unknown
+                                            >
+                                          ).pool_alias || ''
+                                        )
+                                      : ''
+                                  }
+                                  onChange={(e) => {
+                                    const newSettingValue = {
+                                      ...(erpEditForm.setting_value || {}),
+                                    };
+                                    if (!newSettingValue.server_details) {
+                                      const serverDetails =
+                                        erpSetting.setting_value
+                                          ?.server_details;
+                                      newSettingValue.server_details =
+                                        serverDetails &&
+                                        typeof serverDetails === 'object' &&
+                                        !Array.isArray(serverDetails)
+                                          ? {
+                                              ...(serverDetails as Record<
+                                                string,
+                                                unknown
+                                              >),
+                                            }
+                                          : {};
+                                    }
+                                    if (
+                                      newSettingValue.server_details &&
+                                      typeof newSettingValue.server_details ===
+                                        'object' &&
+                                      !Array.isArray(
+                                        newSettingValue.server_details
+                                      )
+                                    ) {
+                                      (
+                                        newSettingValue.server_details as Record<
+                                          string,
+                                          unknown
+                                        >
+                                      ).pool_alias = e.target.value;
+                                    }
+                                    setErpEditForm({
+                                      ...erpEditForm,
+                                      setting_value: newSettingValue,
+                                    });
+                                  }}
+                                  placeholder="e.g., Production"
+                                />
+                                <p className="text-xs text-muted-foreground">
+                                  Required for Sage X3 API connections.
+                                  Identifies the Sage X3 environment (e.g.,
+                                  Production, Development).
+                                </p>
+                              </div>
+                            )}
+                          {/* Add api_version field for Sage 300 if it doesn't exist in server_details */}
+                          {erpSetting.erp_type === 'sage_300' &&
+                            (() => {
+                              const serverDetails =
+                                erpSetting.setting_value.server_details;
+                              const hasApiVersion =
+                                serverDetails &&
+                                typeof serverDetails === 'object' &&
+                                !Array.isArray(serverDetails) &&
+                                'api_version' in
+                                  (serverDetails as Record<string, unknown>);
+                              return !hasApiVersion;
+                            })() && (
+                              <div className="space-y-2">
+                                <Label
+                                  htmlFor="server-api-version"
+                                  className="text-xs capitalize"
+                                >
+                                  API Version{' '}
+                                  <span className="text-muted-foreground">
+                                    (Optional)
+                                  </span>
+                                </Label>
+                                <Input
+                                  id="server-api-version"
+                                  type="text"
+                                  value={
+                                    erpEditForm.setting_value?.server_details &&
+                                    typeof erpEditForm.setting_value
+                                      .server_details === 'object' &&
+                                    !Array.isArray(
+                                      erpEditForm.setting_value.server_details
+                                    ) &&
+                                    'api_version' in
+                                      (erpEditForm.setting_value
+                                        .server_details as Record<
+                                        string,
+                                        unknown
+                                      >)
+                                      ? String(
+                                          (
+                                            erpEditForm.setting_value
+                                              .server_details as Record<
+                                              string,
+                                              unknown
+                                            >
+                                          ).api_version || 'v1.0'
+                                        )
+                                      : 'v1.0'
+                                  }
+                                  onChange={(e) => {
+                                    const newSettingValue = {
+                                      ...(erpEditForm.setting_value || {}),
+                                    };
+                                    if (!newSettingValue.server_details) {
+                                      const serverDetails =
+                                        erpSetting.setting_value
+                                          ?.server_details;
+                                      newSettingValue.server_details =
+                                        serverDetails &&
+                                        typeof serverDetails === 'object' &&
+                                        !Array.isArray(serverDetails)
+                                          ? {
+                                              ...(serverDetails as Record<
+                                                string,
+                                                unknown
+                                              >),
+                                            }
+                                          : {};
+                                    }
+                                    if (
+                                      newSettingValue.server_details &&
+                                      typeof newSettingValue.server_details ===
+                                        'object' &&
+                                      !Array.isArray(
+                                        newSettingValue.server_details
+                                      )
+                                    ) {
+                                      (
+                                        newSettingValue.server_details as Record<
+                                          string,
+                                          unknown
+                                        >
+                                      ).api_version = e.target.value || 'v1.0';
+                                    }
+                                    setErpEditForm({
+                                      ...erpEditForm,
+                                      setting_value: newSettingValue,
+                                    });
+                                  }}
+                                  placeholder="v1.0"
+                                />
+                                <p className="text-xs text-muted-foreground">
+                                  Default: v1.0. The version of the Sage 300 Web
+                                  API.
+                                </p>
+                              </div>
+                            )}
+                        </div>
+                      )}
+
+                      {/* API Credentials - Show for Sage 300 and Sage X3 */}
+                      {(erpSetting.erp_type === 'sage_300' ||
+                        erpSetting.erp_type === 'sage_x3') && (
+                        <div className="space-y-3 p-4 border rounded-md bg-blue-50/50 border-blue-200">
+                          <div className="flex items-center justify-between">
+                            <Label className="text-sm font-semibold">
+                              API Credentials
+                            </Label>
+                            <Badge variant="outline" className="text-xs">
+                              Primary Connection
+                            </Badge>
+                          </div>
+                          <Alert className="mb-3">
+                            <AlertDescription className="text-xs">
+                              API credentials are used for the primary API
+                              connection. The system will use API first, then
+                              fall back to database if API is unavailable.
+                            </AlertDescription>
+                          </Alert>
+                          <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                              <Label
+                                htmlFor="edit-api-username"
+                                className="text-xs"
+                              >
+                                API Username{' '}
+                                <span className="text-red-500">*</span>
+                              </Label>
+                              <Input
+                                id="edit-api-username"
+                                type="text"
+                                value={
+                                  (erpEditForm.setting_value?.api_credentials &&
+                                  typeof erpEditForm.setting_value
+                                    .api_credentials === 'object' &&
+                                  'username' in
+                                    erpEditForm.setting_value.api_credentials
+                                    ? String(
+                                        erpEditForm.setting_value
+                                          .api_credentials.username || ''
+                                      )
+                                    : '') ||
+                                  (erpSetting.setting_value?.api_credentials &&
+                                  typeof erpSetting.setting_value
+                                    .api_credentials === 'object' &&
+                                  'username' in
+                                    erpSetting.setting_value.api_credentials
+                                    ? String(
+                                        erpSetting.setting_value.api_credentials
+                                          .username || ''
+                                      )
+                                    : '') ||
+                                  ''
+                                }
+                                onChange={(e) => {
+                                  const newSettingValue = {
+                                    ...(erpEditForm.setting_value || {}),
+                                  };
+                                  if (!newSettingValue.api_credentials) {
+                                    newSettingValue.api_credentials = {};
+                                  }
+                                  if (
+                                    typeof newSettingValue.api_credentials ===
+                                      'object' &&
+                                    !Array.isArray(
+                                      newSettingValue.api_credentials
+                                    )
+                                  ) {
+                                    (
+                                      newSettingValue.api_credentials as Record<
+                                        string,
+                                        unknown
+                                      >
+                                    ).username = e.target.value;
+                                  }
+                                  setErpEditForm({
+                                    ...erpEditForm,
+                                    setting_value: newSettingValue,
+                                  });
                                 }}
-                                placeholder={key === 'schema' && erpSetting.erp_type === 'sage_x3' ? 'SEED (default)' : `Enter ${key.replace(/_/g, ' ')}`}
-                                className={key.includes('password') ? 'pr-10' : ''}
+                                placeholder="API username"
                                 autoComplete="off"
                               />
-                              {key.includes('password') && (
+                            </div>
+                            <div className="space-y-2">
+                              <Label
+                                htmlFor="edit-api-password"
+                                className="text-xs"
+                              >
+                                API Password{' '}
+                                <span className="text-red-500">*</span>
+                              </Label>
+                              <div className="relative">
+                                <Input
+                                  id="edit-api-password"
+                                  type={
+                                    passwordVisibility['edit-api-password']
+                                      ? 'text'
+                                      : 'password'
+                                  }
+                                  value={
+                                    (erpEditForm.setting_value
+                                      ?.api_credentials &&
+                                    typeof erpEditForm.setting_value
+                                      .api_credentials === 'object' &&
+                                    'password' in
+                                      erpEditForm.setting_value.api_credentials
+                                      ? String(
+                                          erpEditForm.setting_value
+                                            .api_credentials.password || ''
+                                        )
+                                      : '') ||
+                                    (erpSetting.setting_value
+                                      ?.api_credentials &&
+                                    typeof erpSetting.setting_value
+                                      .api_credentials === 'object' &&
+                                    'password' in
+                                      erpSetting.setting_value.api_credentials
+                                      ? String(
+                                          erpSetting.setting_value
+                                            .api_credentials.password || ''
+                                        )
+                                      : '') ||
+                                    ''
+                                  }
+                                  onChange={(e) => {
+                                    const newSettingValue = {
+                                      ...(erpEditForm.setting_value || {}),
+                                    };
+                                    if (!newSettingValue.api_credentials) {
+                                      newSettingValue.api_credentials = {};
+                                    }
+                                    if (
+                                      typeof newSettingValue.api_credentials ===
+                                        'object' &&
+                                      !Array.isArray(
+                                        newSettingValue.api_credentials
+                                      )
+                                    ) {
+                                      (
+                                        newSettingValue.api_credentials as Record<
+                                          string,
+                                          unknown
+                                        >
+                                      ).password = e.target.value;
+                                    }
+                                    setErpEditForm({
+                                      ...erpEditForm,
+                                      setting_value: newSettingValue,
+                                    });
+                                  }}
+                                  placeholder="API password"
+                                  className="pr-10"
+                                  autoComplete="off"
+                                />
                                 <Button
                                   type="button"
                                   variant="ghost"
                                   size="sm"
                                   className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
-                                  onClick={() => setPasswordVisibility({ ...passwordVisibility, [`server-${key}`]: !passwordVisibility[`server-${key}`] })}
+                                  onClick={() =>
+                                    setPasswordVisibility({
+                                      ...passwordVisibility,
+                                      'edit-api-password':
+                                        !passwordVisibility[
+                                          'edit-api-password'
+                                        ],
+                                    })
+                                  }
                                 >
-                                  {passwordVisibility[`server-${key}`] ? (
+                                  {passwordVisibility['edit-api-password'] ? (
                                     <EyeOff className="h-4 w-4 text-muted-foreground" />
                                   ) : (
                                     <Eye className="h-4 w-4 text-muted-foreground" />
                                   )}
                                 </Button>
-                              )}
-                        </div>
-                  </div>
-                        ))}
-                        {/* Protocol field */}
-                        <div className="space-y-2">
-                          <Label htmlFor="server-protocol" className="text-xs">Protocol</Label>
-                          <Select
-                            value={(erpEditForm.setting_value?.server_details && typeof erpEditForm.setting_value.server_details === 'object' && !Array.isArray(erpEditForm.setting_value.server_details) && 'protocol' in (erpEditForm.setting_value.server_details as Record<string, unknown>))
-                              ? String((erpEditForm.setting_value.server_details as Record<string, unknown>).protocol || 'http')
-                              : (erpSetting.setting_value.server_details && typeof erpSetting.setting_value.server_details === 'object' && !Array.isArray(erpSetting.setting_value.server_details) && 'protocol' in (erpSetting.setting_value.server_details as Record<string, unknown>))
-                                ? String((erpSetting.setting_value.server_details as Record<string, unknown>).protocol || 'http')
-                                : 'http'}
-                            onValueChange={(value: 'http' | 'https') => {
-                              const newSettingValue = { ...(erpEditForm.setting_value || {}) };
-                              if (!newSettingValue.server_details) {
-                                const serverDetails = erpSetting.setting_value?.server_details;
-                                newSettingValue.server_details = (serverDetails && typeof serverDetails === 'object' && !Array.isArray(serverDetails))
-                                  ? { ...serverDetails as Record<string, unknown> }
-                                  : {};
-                              }
-                              if (newSettingValue.server_details && typeof newSettingValue.server_details === 'object' && !Array.isArray(newSettingValue.server_details)) {
-                                (newSettingValue.server_details as Record<string, unknown>).protocol = value;
-                                if (value === 'http') {
-                                  (newSettingValue.server_details as Record<string, unknown>).ssl_verify = false;
-                                }
-                              }
-                              setErpEditForm({ ...erpEditForm, setting_value: newSettingValue });
-                            }}
-                          >
-                            <SelectTrigger id="server-protocol">
-                              <SelectValue placeholder="Select protocol" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="http">HTTP</SelectItem>
-                              <SelectItem value="https">HTTPS</SelectItem>
-                            </SelectContent>
-                          </Select>
-                          <p className="text-xs text-muted-foreground">
-                            Select HTTP or HTTPS. If host URL includes protocol (e.g., https://example.com), it will be auto-detected.
-                          </p>
-                        </div>
-                        {/* SSL Verify field - shown only when HTTPS is selected */}
-                        {((erpEditForm.setting_value?.server_details && typeof erpEditForm.setting_value.server_details === 'object' && !Array.isArray(erpEditForm.setting_value.server_details) && 'protocol' in (erpEditForm.setting_value.server_details as Record<string, unknown>) && (erpEditForm.setting_value.server_details as Record<string, unknown>).protocol === 'https')
-                          || (erpSetting.setting_value.server_details && typeof erpSetting.setting_value.server_details === 'object' && !Array.isArray(erpSetting.setting_value.server_details) && 'protocol' in (erpSetting.setting_value.server_details as Record<string, unknown>) && (erpSetting.setting_value.server_details as Record<string, unknown>).protocol === 'https')) && (
-                          <div className="space-y-2">
-                            <Label htmlFor="server-ssl-verify" className="flex items-center space-x-2 text-xs">
-                              <Switch
-                                id="server-ssl-verify"
-                                checked={(erpEditForm.setting_value?.server_details && typeof erpEditForm.setting_value.server_details === 'object' && !Array.isArray(erpEditForm.setting_value.server_details) && 'ssl_verify' in (erpEditForm.setting_value.server_details as Record<string, unknown>))
-                                  ? Boolean((erpEditForm.setting_value.server_details as Record<string, unknown>).ssl_verify)
-                                  : (erpSetting.setting_value.server_details && typeof erpSetting.setting_value.server_details === 'object' && !Array.isArray(erpSetting.setting_value.server_details) && 'ssl_verify' in (erpSetting.setting_value.server_details as Record<string, unknown>))
-                                    ? Boolean((erpSetting.setting_value.server_details as Record<string, unknown>).ssl_verify)
-                                    : false}
-                                onCheckedChange={(checked) => {
-                                  const newSettingValue = { ...(erpEditForm.setting_value || {}) };
-                                  if (!newSettingValue.server_details) {
-                                    const serverDetails = erpSetting.setting_value?.server_details;
-                                    newSettingValue.server_details = (serverDetails && typeof serverDetails === 'object' && !Array.isArray(serverDetails))
-                                      ? { ...serverDetails as Record<string, unknown> }
-                                      : {};
-                                  }
-                                  if (newSettingValue.server_details && typeof newSettingValue.server_details === 'object' && !Array.isArray(newSettingValue.server_details)) {
-                                    (newSettingValue.server_details as Record<string, unknown>).ssl_verify = checked;
-                                  }
-                                  setErpEditForm({ ...erpEditForm, setting_value: newSettingValue });
-                                }}
-                              />
-                              <span>Verify SSL Certificate</span>
-                            </Label>
-                            <p className="text-xs text-muted-foreground">
-                              Enable SSL certificate verification. Disable for self-signed certificates.
-                            </p>
+                              </div>
+                            </div>
                           </div>
-                        )}
-                        {/* Add pool_alias field for Sage X3 if it doesn't exist in server_details */}
-                        {erpSetting.erp_type === 'sage_x3' && (() => {
-                          const serverDetails = erpSetting.setting_value.server_details;
-                          const hasPoolAlias = serverDetails && typeof serverDetails === 'object' && !Array.isArray(serverDetails) && 'pool_alias' in (serverDetails as Record<string, unknown>);
-                          return !hasPoolAlias;
-                        })() && (
-                          <div className="space-y-2">
-                            <Label htmlFor="server-pool-alias" className="text-xs capitalize">
-                              Pool Alias <span className="text-red-500">*</span>
-                          </Label>
-                            <Input
-                              id="server-pool-alias"
-                              type="text"
-                              value={(erpEditForm.setting_value?.server_details && typeof erpEditForm.setting_value.server_details === 'object' && !Array.isArray(erpEditForm.setting_value.server_details) && 'pool_alias' in (erpEditForm.setting_value.server_details as Record<string, unknown>))
-                                ? String((erpEditForm.setting_value.server_details as Record<string, unknown>).pool_alias || '')
-                                : ''}
-                              onChange={(e) => {
-                                const newSettingValue = { ...(erpEditForm.setting_value || {}) };
-                                if (!newSettingValue.server_details) {
-                                  const serverDetails = erpSetting.setting_value?.server_details;
-                                  newSettingValue.server_details = (serverDetails && typeof serverDetails === 'object' && !Array.isArray(serverDetails))
-                                    ? { ...serverDetails as Record<string, unknown> }
-                                    : {};
-                                }
-                                if (newSettingValue.server_details && typeof newSettingValue.server_details === 'object' && !Array.isArray(newSettingValue.server_details)) {
-                                  (newSettingValue.server_details as Record<string, unknown>).pool_alias = e.target.value;
-                                }
-                                setErpEditForm({ ...erpEditForm, setting_value: newSettingValue });
-                              }}
-                              placeholder="e.g., Production"
-                            />
-                            <p className="text-xs text-muted-foreground">
-                              Required for Sage X3 API connections. Identifies the Sage X3 environment (e.g., Production, Development).
-                            </p>
                         </div>
-                        )}
-                        {/* Add api_version field for Sage 300 if it doesn't exist in server_details */}
-                        {erpSetting.erp_type === 'sage_300' && (() => {
-                          const serverDetails = erpSetting.setting_value.server_details;
-                          const hasApiVersion = serverDetails && typeof serverDetails === 'object' && !Array.isArray(serverDetails) && 'api_version' in (serverDetails as Record<string, unknown>);
-                          return !hasApiVersion;
-                        })() && (
-                          <div className="space-y-2">
-                            <Label htmlFor="server-api-version" className="text-xs capitalize">
-                              API Version <span className="text-muted-foreground">(Optional)</span>
-                            </Label>
-                            <Input
-                              id="server-api-version"
-                              type="text"
-                              value={(erpEditForm.setting_value?.server_details && typeof erpEditForm.setting_value.server_details === 'object' && !Array.isArray(erpEditForm.setting_value.server_details) && 'api_version' in (erpEditForm.setting_value.server_details as Record<string, unknown>))
-                                ? String((erpEditForm.setting_value.server_details as Record<string, unknown>).api_version || 'v1.0')
-                                : 'v1.0'}
-                              onChange={(e) => {
-                                const newSettingValue = { ...(erpEditForm.setting_value || {}) };
-                                if (!newSettingValue.server_details) {
-                                  const serverDetails = erpSetting.setting_value?.server_details;
-                                  newSettingValue.server_details = (serverDetails && typeof serverDetails === 'object' && !Array.isArray(serverDetails))
-                                    ? { ...serverDetails as Record<string, unknown> }
-                                    : {};
-                                }
-                                if (newSettingValue.server_details && typeof newSettingValue.server_details === 'object' && !Array.isArray(newSettingValue.server_details)) {
-                                  (newSettingValue.server_details as Record<string, unknown>).api_version = e.target.value || 'v1.0';
-                                }
-                                setErpEditForm({ ...erpEditForm, setting_value: newSettingValue });
-                              }}
-                              placeholder="v1.0"
-                            />
-                            <p className="text-xs text-muted-foreground">
-                              Default: v1.0. The version of the Sage 300 Web API.
-                            </p>
-                      </div>
-                        )}
-                      </div>
-                    )}
+                      )}
 
-                    {/* API Credentials - Show for Sage 300 and Sage X3 */}
-                    {(erpSetting.erp_type === 'sage_300' || erpSetting.erp_type === 'sage_x3') && (
-                      <div className="space-y-3 p-4 border rounded-md bg-blue-50/50 border-blue-200">
-                        <div className="flex items-center justify-between">
-                          <Label className="text-sm font-semibold">API Credentials</Label>
-                          <Badge variant="outline" className="text-xs">Primary Connection</Badge>
-                        </div>
-                        <Alert className="mb-3">
-                          <AlertDescription className="text-xs">
-                            API credentials are used for the primary API connection. The system will use API first, then fall back to database if API is unavailable.
-                          </AlertDescription>
-                        </Alert>
-                        <div className="grid grid-cols-2 gap-4">
-                          <div className="space-y-2">
-                            <Label htmlFor="edit-api-username" className="text-xs">
-                              API Username <span className="text-red-500">*</span>
-                          </Label>
-                            <Input
-                              id="edit-api-username"
-                              type="text"
-                              value={(erpEditForm.setting_value?.api_credentials && typeof erpEditForm.setting_value.api_credentials === 'object' && 'username' in erpEditForm.setting_value.api_credentials ? String(erpEditForm.setting_value.api_credentials.username || '') : '') || (erpSetting.setting_value?.api_credentials && typeof erpSetting.setting_value.api_credentials === 'object' && 'username' in erpSetting.setting_value.api_credentials ? String(erpSetting.setting_value.api_credentials.username || '') : '') || ''}
-                              onChange={(e) => {
-                                const newSettingValue = { ...(erpEditForm.setting_value || {}) };
-                                if (!newSettingValue.api_credentials) {
-                                  newSettingValue.api_credentials = {};
-                                }
-                                if (typeof newSettingValue.api_credentials === 'object' && !Array.isArray(newSettingValue.api_credentials)) {
-                                  (newSettingValue.api_credentials as Record<string, unknown>).username = e.target.value;
-                                }
-                                setErpEditForm({ ...erpEditForm, setting_value: newSettingValue });
-                              }}
-                              placeholder="API username"
-                              autoComplete="off"
-                            />
-                          </div>
-                          <div className="space-y-2">
-                            <Label htmlFor="edit-api-password" className="text-xs">
-                              API Password <span className="text-red-500">*</span>
+                      {/* Database Credentials */}
+                      {erpSetting.setting_value.credentials && (
+                        <div className="space-y-3 p-4 border rounded-md bg-amber-50/50 border-amber-200">
+                          <div className="flex items-center justify-between">
+                            <Label className="text-sm font-semibold">
+                              Database Credentials
                             </Label>
-                            <div className="relative">
+                            {(erpSetting.erp_type === 'sage_300' ||
+                              erpSetting.erp_type === 'sage_x3') && (
+                              <Badge variant="outline" className="text-xs">
+                                Fallback Connection
+                              </Badge>
+                            )}
+                          </div>
+                          {(erpSetting.erp_type === 'sage_300' ||
+                            erpSetting.erp_type === 'sage_x3') && (
+                            <Alert className="mb-3">
+                              <AlertDescription className="text-xs">
+                                Database credentials are used as a fallback if
+                                API connection is unavailable. Both API and
+                                Database credentials can be provided.
+                                {erpSetting.erp_type === 'sage_300' &&
+                                  ' Note: Database name is also used for Sage 300 API connections.'}
+                              </AlertDescription>
+                            </Alert>
+                          )}
+
+                          {/* Database Name - Moved from Server Details */}
+                          {erpSetting.setting_value.server_details && (
+                            <div className="space-y-2">
+                              <Label
+                                htmlFor="edit-database"
+                                className="text-xs"
+                              >
+                                Database Name
+                                {erpSetting.erp_type === 'sage_300' && (
+                                  <span className="text-xs text-muted-foreground ml-1">
+                                    (Also used for API)
+                                  </span>
+                                )}
+                              </Label>
                               <Input
-                                id="edit-api-password"
-                                type={passwordVisibility['edit-api-password'] ? 'text' : 'password'}
-                                value={(erpEditForm.setting_value?.api_credentials && typeof erpEditForm.setting_value.api_credentials === 'object' && 'password' in erpEditForm.setting_value.api_credentials ? String(erpEditForm.setting_value.api_credentials.password || '') : '') || (erpSetting.setting_value?.api_credentials && typeof erpSetting.setting_value.api_credentials === 'object' && 'password' in erpSetting.setting_value.api_credentials ? String(erpSetting.setting_value.api_credentials.password || '') : '') || ''}
+                                id="edit-database"
+                                type="text"
+                                value={
+                                  erpEditForm.setting_value?.server_details &&
+                                  typeof erpEditForm.setting_value
+                                    .server_details === 'object' &&
+                                  !Array.isArray(
+                                    erpEditForm.setting_value.server_details
+                                  ) &&
+                                  'database' in
+                                    (erpEditForm.setting_value
+                                      .server_details as Record<
+                                      string,
+                                      unknown
+                                    >)
+                                    ? String(
+                                        (
+                                          erpEditForm.setting_value
+                                            .server_details as Record<
+                                            string,
+                                            unknown
+                                          >
+                                        ).database || ''
+                                      )
+                                    : erpSetting.setting_value.server_details &&
+                                        typeof erpSetting.setting_value
+                                          .server_details === 'object' &&
+                                        !Array.isArray(
+                                          erpSetting.setting_value
+                                            .server_details
+                                        ) &&
+                                        'database' in
+                                          (erpSetting.setting_value
+                                            .server_details as Record<
+                                            string,
+                                            unknown
+                                          >)
+                                      ? String(
+                                          (
+                                            erpSetting.setting_value
+                                              .server_details as Record<
+                                              string,
+                                              unknown
+                                            >
+                                          ).database || ''
+                                        )
+                                      : ''
+                                }
                                 onChange={(e) => {
-                                  const newSettingValue = { ...(erpEditForm.setting_value || {}) };
-                                  if (!newSettingValue.api_credentials) {
-                                    newSettingValue.api_credentials = {};
+                                  const newSettingValue = {
+                                    ...(erpEditForm.setting_value || {}),
+                                  };
+                                  if (!newSettingValue.server_details) {
+                                    const serverDetails =
+                                      erpSetting.setting_value?.server_details;
+                                    newSettingValue.server_details =
+                                      serverDetails &&
+                                      typeof serverDetails === 'object' &&
+                                      !Array.isArray(serverDetails)
+                                        ? {
+                                            ...(serverDetails as Record<
+                                              string,
+                                              unknown
+                                            >),
+                                          }
+                                        : {};
                                   }
-                                  if (typeof newSettingValue.api_credentials === 'object' && !Array.isArray(newSettingValue.api_credentials)) {
-                                    (newSettingValue.api_credentials as Record<string, unknown>).password = e.target.value;
+                                  if (
+                                    newSettingValue.server_details &&
+                                    typeof newSettingValue.server_details ===
+                                      'object' &&
+                                    !Array.isArray(
+                                      newSettingValue.server_details
+                                    )
+                                  ) {
+                                    (
+                                      newSettingValue.server_details as Record<
+                                        string,
+                                        unknown
+                                      >
+                                    ).database = e.target.value;
                                   }
-                                  setErpEditForm({ ...erpEditForm, setting_value: newSettingValue });
+                                  setErpEditForm({
+                                    ...erpEditForm,
+                                    setting_value: newSettingValue,
+                                  });
                                 }}
-                                placeholder="API password"
-                                className="pr-10"
+                                placeholder="Database name"
                                 autoComplete="off"
                               />
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
-                                onClick={() => setPasswordVisibility({ ...passwordVisibility, 'edit-api-password': !passwordVisibility['edit-api-password'] })}
-                              >
-                                {passwordVisibility['edit-api-password'] ? (
-                                  <EyeOff className="h-4 w-4 text-muted-foreground" />
-                                ) : (
-                                  <Eye className="h-4 w-4 text-muted-foreground" />
-                                )}
-                              </Button>
-                        </div>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Database Credentials */}
-                    {erpSetting.setting_value.credentials && (
-                      <div className="space-y-3 p-4 border rounded-md bg-amber-50/50 border-amber-200">
-                        <div className="flex items-center justify-between">
-                          <Label className="text-sm font-semibold">Database Credentials</Label>
-                          {(erpSetting.erp_type === 'sage_300' || erpSetting.erp_type === 'sage_x3') && (
-                            <Badge variant="outline" className="text-xs">Fallback Connection</Badge>
+                            </div>
                           )}
+
+                          {/* Schema field for Sage X3 - Moved from Server Details */}
+                          {erpSetting.erp_type === 'sage_x3' &&
+                            erpSetting.setting_value.server_details &&
+                            (() => {
+                              const serverDetails =
+                                erpSetting.setting_value.server_details;
+                              const hasSchema =
+                                serverDetails &&
+                                typeof serverDetails === 'object' &&
+                                !Array.isArray(serverDetails) &&
+                                'schema' in
+                                  (serverDetails as Record<string, unknown>);
+                              return hasSchema;
+                            })() && (
+                              <div className="space-y-2">
+                                <Label
+                                  htmlFor="edit-schema"
+                                  className="text-xs"
+                                >
+                                  Schema{' '}
+                                  <span className="text-muted-foreground">
+                                    (Optional)
+                                  </span>
+                                </Label>
+                                <Input
+                                  id="edit-schema"
+                                  type="text"
+                                  value={
+                                    erpEditForm.setting_value?.server_details &&
+                                    typeof erpEditForm.setting_value
+                                      .server_details === 'object' &&
+                                    !Array.isArray(
+                                      erpEditForm.setting_value.server_details
+                                    ) &&
+                                    'schema' in
+                                      (erpEditForm.setting_value
+                                        .server_details as Record<
+                                        string,
+                                        unknown
+                                      >)
+                                      ? String(
+                                          (
+                                            erpEditForm.setting_value
+                                              .server_details as Record<
+                                              string,
+                                              unknown
+                                            >
+                                          ).schema || 'SEED'
+                                        )
+                                      : erpSetting.setting_value
+                                            .server_details &&
+                                          typeof erpSetting.setting_value
+                                            .server_details === 'object' &&
+                                          !Array.isArray(
+                                            erpSetting.setting_value
+                                              .server_details
+                                          ) &&
+                                          'schema' in
+                                            (erpSetting.setting_value
+                                              .server_details as Record<
+                                              string,
+                                              unknown
+                                            >)
+                                        ? String(
+                                            (
+                                              erpSetting.setting_value
+                                                .server_details as Record<
+                                                string,
+                                                unknown
+                                              >
+                                            ).schema || 'SEED'
+                                          )
+                                        : 'SEED'
+                                  }
+                                  onChange={(e) => {
+                                    const newSettingValue = {
+                                      ...(erpEditForm.setting_value || {}),
+                                    };
+                                    if (!newSettingValue.server_details) {
+                                      const serverDetails =
+                                        erpSetting.setting_value
+                                          ?.server_details;
+                                      newSettingValue.server_details =
+                                        serverDetails &&
+                                        typeof serverDetails === 'object' &&
+                                        !Array.isArray(serverDetails)
+                                          ? {
+                                              ...(serverDetails as Record<
+                                                string,
+                                                unknown
+                                              >),
+                                            }
+                                          : {};
+                                    }
+                                    if (
+                                      newSettingValue.server_details &&
+                                      typeof newSettingValue.server_details ===
+                                        'object' &&
+                                      !Array.isArray(
+                                        newSettingValue.server_details
+                                      )
+                                    ) {
+                                      (
+                                        newSettingValue.server_details as Record<
+                                          string,
+                                          unknown
+                                        >
+                                      ).schema = e.target.value || 'SEED';
+                                    }
+                                    setErpEditForm({
+                                      ...erpEditForm,
+                                      setting_value: newSettingValue,
+                                    });
+                                  }}
+                                  placeholder="SEED (default)"
+                                  autoComplete="off"
+                                />
+                                <p className="text-xs text-muted-foreground">
+                                  Default: SEED. Used for database fallback
+                                  connections. Enter your Sage X3 schema name if
+                                  different (e.g., TESTRUN).
+                                </p>
+                              </div>
+                            )}
+
+                          {/* Add schema field for Sage X3 if it doesn't exist in server_details */}
+                          {erpSetting.erp_type === 'sage_x3' &&
+                            erpSetting.setting_value.server_details &&
+                            (() => {
+                              const serverDetails =
+                                erpSetting.setting_value.server_details;
+                              const hasSchema =
+                                serverDetails &&
+                                typeof serverDetails === 'object' &&
+                                !Array.isArray(serverDetails) &&
+                                'schema' in
+                                  (serverDetails as Record<string, unknown>);
+                              return !hasSchema;
+                            })() && (
+                              <div className="space-y-2">
+                                <Label
+                                  htmlFor="edit-schema"
+                                  className="text-xs"
+                                >
+                                  Schema{' '}
+                                  <span className="text-muted-foreground">
+                                    (Optional)
+                                  </span>
+                                </Label>
+                                <Input
+                                  id="edit-schema"
+                                  type="text"
+                                  value={
+                                    erpEditForm.setting_value?.server_details &&
+                                    typeof erpEditForm.setting_value
+                                      .server_details === 'object' &&
+                                    !Array.isArray(
+                                      erpEditForm.setting_value.server_details
+                                    ) &&
+                                    'schema' in
+                                      (erpEditForm.setting_value
+                                        .server_details as Record<
+                                        string,
+                                        unknown
+                                      >)
+                                      ? String(
+                                          (
+                                            erpEditForm.setting_value
+                                              .server_details as Record<
+                                              string,
+                                              unknown
+                                            >
+                                          ).schema || 'SEED'
+                                        )
+                                      : 'SEED'
+                                  }
+                                  onChange={(e) => {
+                                    const newSettingValue = {
+                                      ...(erpEditForm.setting_value || {}),
+                                    };
+                                    if (!newSettingValue.server_details) {
+                                      const serverDetails =
+                                        erpSetting.setting_value
+                                          ?.server_details;
+                                      newSettingValue.server_details =
+                                        serverDetails &&
+                                        typeof serverDetails === 'object' &&
+                                        !Array.isArray(serverDetails)
+                                          ? {
+                                              ...(serverDetails as Record<
+                                                string,
+                                                unknown
+                                              >),
+                                            }
+                                          : {};
+                                    }
+                                    if (
+                                      newSettingValue.server_details &&
+                                      typeof newSettingValue.server_details ===
+                                        'object' &&
+                                      !Array.isArray(
+                                        newSettingValue.server_details
+                                      )
+                                    ) {
+                                      (
+                                        newSettingValue.server_details as Record<
+                                          string,
+                                          unknown
+                                        >
+                                      ).schema = e.target.value || 'SEED';
+                                    }
+                                    setErpEditForm({
+                                      ...erpEditForm,
+                                      setting_value: newSettingValue,
+                                    });
+                                  }}
+                                  placeholder="SEED (default)"
+                                />
+                                <p className="text-xs text-muted-foreground">
+                                  Default: SEED. Used for database fallback
+                                  connections. Enter your Sage X3 schema name if
+                                  different (e.g., TESTRUN).
+                                </p>
+                              </div>
+                            )}
+
+                          {Object.entries(
+                            erpSetting.setting_value.credentials
+                          ).map(([key, value]: [string, unknown]) => {
+                            const isPassword =
+                              key.includes('password') ||
+                              key.includes('secret') ||
+                              key.includes('token');
+                            const fieldId = `cred-${key}`;
+                            const isVisible =
+                              passwordVisibility[fieldId] || false;
+
+                            return (
+                              <div key={key} className="space-y-2">
+                                <Label
+                                  htmlFor={fieldId}
+                                  className="text-xs capitalize"
+                                >
+                                  {key.replace(/_/g, ' ')}
+                                </Label>
+                                <div className="relative">
+                                  <Input
+                                    id={fieldId}
+                                    type={
+                                      isPassword && !isVisible
+                                        ? 'password'
+                                        : 'text'
+                                    }
+                                    value={
+                                      erpEditForm.setting_value?.credentials?.[
+                                        key
+                                      ] ||
+                                      value ||
+                                      ''
+                                    }
+                                    onChange={(e) => {
+                                      const newSettingValue = {
+                                        ...(erpEditForm.setting_value || {}),
+                                      };
+                                      if (!newSettingValue.credentials) {
+                                        const credentials =
+                                          erpSetting.setting_value?.credentials;
+                                        newSettingValue.credentials =
+                                          credentials &&
+                                          typeof credentials === 'object' &&
+                                          !Array.isArray(credentials)
+                                            ? {
+                                                ...(credentials as Record<
+                                                  string,
+                                                  unknown
+                                                >),
+                                              }
+                                            : {};
+                                      }
+                                      newSettingValue.credentials[key] =
+                                        e.target.value;
+                                      setErpEditForm({
+                                        ...erpEditForm,
+                                        setting_value: newSettingValue,
+                                      });
+                                    }}
+                                    placeholder={`Enter ${key.replace(/_/g, ' ')}`}
+                                    className={isPassword ? 'pr-10' : ''}
+                                    autoComplete="off"
+                                  />
+                                  {isPassword && (
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="sm"
+                                      className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                                      onClick={() =>
+                                        setPasswordVisibility({
+                                          ...passwordVisibility,
+                                          [fieldId]: !isVisible,
+                                        })
+                                      }
+                                    >
+                                      {isVisible ? (
+                                        <EyeOff className="h-4 w-4 text-muted-foreground" />
+                                      ) : (
+                                        <Eye className="h-4 w-4 text-muted-foreground" />
+                                      )}
+                                    </Button>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
                         </div>
-                        {(erpSetting.erp_type === 'sage_300' || erpSetting.erp_type === 'sage_x3') && (
-                          <Alert className="mb-3">
-                            <AlertDescription className="text-xs">
-                              Database credentials are used as a fallback if API connection is unavailable. Both API and Database credentials can be provided.
-                              {erpSetting.erp_type === 'sage_300' && ' Note: Database name is also used for Sage 300 API connections.'}
-                            </AlertDescription>
-                          </Alert>
-                        )}
-                        
-                        {/* Database Name - Moved from Server Details */}
-                        {erpSetting.setting_value.server_details && (
-                          <div className="space-y-2">
-                            <Label htmlFor="edit-database" className="text-xs">
-                              Database Name
-                              {erpSetting.erp_type === 'sage_300' && (
-                                <span className="text-xs text-muted-foreground ml-1">(Also used for API)</span>
-                              )}
+                      )}
+
+                      {/* Permissions */}
+                      {erpSetting.setting_value.permissions && (
+                        <div className="space-y-3 p-4 border rounded-md">
+                          <Label className="text-sm font-semibold">
+                            Permissions
                           </Label>
-                            <Input
-                              id="edit-database"
-                              type="text"
-                              value={(erpEditForm.setting_value?.server_details && typeof erpEditForm.setting_value.server_details === 'object' && !Array.isArray(erpEditForm.setting_value.server_details) && 'database' in (erpEditForm.setting_value.server_details as Record<string, unknown>))
-                                ? String((erpEditForm.setting_value.server_details as Record<string, unknown>).database || '')
-                                : (erpSetting.setting_value.server_details && typeof erpSetting.setting_value.server_details === 'object' && !Array.isArray(erpSetting.setting_value.server_details) && 'database' in (erpSetting.setting_value.server_details as Record<string, unknown>))
-                                  ? String((erpSetting.setting_value.server_details as Record<string, unknown>).database || '')
-                                  : ''}
-                              onChange={(e) => {
-                                const newSettingValue = { ...(erpEditForm.setting_value || {}) };
-                                if (!newSettingValue.server_details) {
-                                  const serverDetails = erpSetting.setting_value?.server_details;
-                                  newSettingValue.server_details = (serverDetails && typeof serverDetails === 'object' && !Array.isArray(serverDetails))
-                                    ? { ...serverDetails as Record<string, unknown> }
-                                    : {};
+                          {Object.entries(
+                            erpSetting.setting_value.permissions
+                          ).map(([key, value]: [string, unknown]) => (
+                            <div
+                              key={key}
+                              className="flex items-center space-x-2"
+                            >
+                              <Switch
+                                id={`perm-${key}`}
+                                checked={
+                                  erpEditForm.setting_value?.permissions?.[
+                                    key
+                                  ] ??
+                                  value ??
+                                  false
                                 }
-                                if (newSettingValue.server_details && typeof newSettingValue.server_details === 'object' && !Array.isArray(newSettingValue.server_details)) {
-                                  (newSettingValue.server_details as Record<string, unknown>).database = e.target.value;
-                                }
-                                setErpEditForm({ ...erpEditForm, setting_value: newSettingValue });
-                              }}
-                              placeholder="Database name"
-                              autoComplete="off"
-                            />
-                        </div>
-                        )}
-                        
-                        {/* Schema field for Sage X3 - Moved from Server Details */}
-                        {erpSetting.erp_type === 'sage_x3' && erpSetting.setting_value.server_details && (() => {
-                          const serverDetails = erpSetting.setting_value.server_details;
-                          const hasSchema = serverDetails && typeof serverDetails === 'object' && !Array.isArray(serverDetails) && 'schema' in (serverDetails as Record<string, unknown>);
-                          return hasSchema;
-                        })() && (
-                          <div className="space-y-2">
-                            <Label htmlFor="edit-schema" className="text-xs">
-                              Schema <span className="text-muted-foreground">(Optional)</span>
-                            </Label>
-                            <Input
-                              id="edit-schema"
-                              type="text"
-                              value={(erpEditForm.setting_value?.server_details && typeof erpEditForm.setting_value.server_details === 'object' && !Array.isArray(erpEditForm.setting_value.server_details) && 'schema' in (erpEditForm.setting_value.server_details as Record<string, unknown>))
-                                ? String((erpEditForm.setting_value.server_details as Record<string, unknown>).schema || 'SEED')
-                                : (erpSetting.setting_value.server_details && typeof erpSetting.setting_value.server_details === 'object' && !Array.isArray(erpSetting.setting_value.server_details) && 'schema' in (erpSetting.setting_value.server_details as Record<string, unknown>))
-                                  ? String((erpSetting.setting_value.server_details as Record<string, unknown>).schema || 'SEED')
-                                  : 'SEED'}
-                              onChange={(e) => {
-                                const newSettingValue = { ...(erpEditForm.setting_value || {}) };
-                                if (!newSettingValue.server_details) {
-                                  const serverDetails = erpSetting.setting_value?.server_details;
-                                  newSettingValue.server_details = (serverDetails && typeof serverDetails === 'object' && !Array.isArray(serverDetails))
-                                    ? { ...serverDetails as Record<string, unknown> }
-                                    : {};
-                                }
-                                if (newSettingValue.server_details && typeof newSettingValue.server_details === 'object' && !Array.isArray(newSettingValue.server_details)) {
-                                  (newSettingValue.server_details as Record<string, unknown>).schema = e.target.value || 'SEED';
-                                }
-                                setErpEditForm({ ...erpEditForm, setting_value: newSettingValue });
-                              }}
-                              placeholder="SEED (default)"
-                              autoComplete="off"
-                            />
-                            <p className="text-xs text-muted-foreground">
-                              Default: SEED. Used for database fallback connections. Enter your Sage X3 schema name if different (e.g., TESTRUN).
-                            </p>
-                      </div>
-                        )}
-                        
-                        {/* Add schema field for Sage X3 if it doesn't exist in server_details */}
-                        {erpSetting.erp_type === 'sage_x3' && erpSetting.setting_value.server_details && (() => {
-                          const serverDetails = erpSetting.setting_value.server_details;
-                          const hasSchema = serverDetails && typeof serverDetails === 'object' && !Array.isArray(serverDetails) && 'schema' in (serverDetails as Record<string, unknown>);
-                          return !hasSchema;
-                        })() && (
-                          <div className="space-y-2">
-                            <Label htmlFor="edit-schema" className="text-xs">
-                              Schema <span className="text-muted-foreground">(Optional)</span>
-                          </Label>
-                            <Input
-                              id="edit-schema"
-                              type="text"
-                              value={(erpEditForm.setting_value?.server_details && typeof erpEditForm.setting_value.server_details === 'object' && !Array.isArray(erpEditForm.setting_value.server_details) && 'schema' in (erpEditForm.setting_value.server_details as Record<string, unknown>))
-                                ? String((erpEditForm.setting_value.server_details as Record<string, unknown>).schema || 'SEED')
-                                : 'SEED'}
-                              onChange={(e) => {
-                                const newSettingValue = { ...(erpEditForm.setting_value || {}) };
-                                if (!newSettingValue.server_details) {
-                                  const serverDetails = erpSetting.setting_value?.server_details;
-                                  newSettingValue.server_details = (serverDetails && typeof serverDetails === 'object' && !Array.isArray(serverDetails))
-                                    ? { ...serverDetails as Record<string, unknown> }
-                                    : {};
-                                }
-                                if (newSettingValue.server_details && typeof newSettingValue.server_details === 'object' && !Array.isArray(newSettingValue.server_details)) {
-                                  (newSettingValue.server_details as Record<string, unknown>).schema = e.target.value || 'SEED';
-                                }
-                                setErpEditForm({ ...erpEditForm, setting_value: newSettingValue });
-                              }}
-                              placeholder="SEED (default)"
-                            />
-                            <p className="text-xs text-muted-foreground">
-                              Default: SEED. Used for database fallback connections. Enter your Sage X3 schema name if different (e.g., TESTRUN).
-                            </p>
-                          </div>
-                        )}
-                        
-                        {Object.entries(erpSetting.setting_value.credentials).map(([key, value]: [string, unknown]) => {
-                          const isPassword = key.includes('password') || key.includes('secret') || key.includes('token');
-                          const fieldId = `cred-${key}`;
-                          const isVisible = passwordVisibility[fieldId] || false;
-                          
-                          return (
-                            <div key={key} className="space-y-2">
-                              <Label htmlFor={fieldId} className="text-xs capitalize">
+                                onCheckedChange={(checked) => {
+                                  const newSettingValue = {
+                                    ...(erpEditForm.setting_value || {}),
+                                  };
+                                  if (!newSettingValue.permissions) {
+                                    const permissions =
+                                      erpSetting.setting_value?.permissions;
+                                    newSettingValue.permissions =
+                                      permissions &&
+                                      typeof permissions === 'object' &&
+                                      !Array.isArray(permissions)
+                                        ? {
+                                            ...(permissions as Record<
+                                              string,
+                                              unknown
+                                            >),
+                                          }
+                                        : {};
+                                  }
+                                  newSettingValue.permissions[key] = checked;
+                                  setErpEditForm({
+                                    ...erpEditForm,
+                                    setting_value: newSettingValue,
+                                  });
+                                }}
+                              />
+                              <Label
+                                htmlFor={`perm-${key}`}
+                                className="cursor-pointer text-sm capitalize"
+                              >
                                 {key.replace(/_/g, ' ')}
                               </Label>
-                              <div className="relative">
-                              <Input
-                                id={fieldId}
-                                type={isPassword && !isVisible ? 'password' : 'text'}
-                                value={erpEditForm.setting_value?.credentials?.[key] || value || ''}
-                                onChange={(e) => {
-                                  const newSettingValue = { ...(erpEditForm.setting_value || {}) };
-                                  if (!newSettingValue.credentials) {
-                                    const credentials = erpSetting.setting_value?.credentials;
-                                    newSettingValue.credentials = (credentials && typeof credentials === 'object' && !Array.isArray(credentials))
-                                      ? { ...credentials as Record<string, unknown> }
-                                      : {};
-                                  }
-                                  newSettingValue.credentials[key] = e.target.value;
-                                  setErpEditForm({ ...erpEditForm, setting_value: newSettingValue });
-                                }}
-                                placeholder={`Enter ${key.replace(/_/g, ' ')}`}
-                                className={isPassword ? 'pr-10' : ''}
-                                autoComplete="off"
-                              />
-                                {isPassword && (
-                                  <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="sm"
-                                    className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
-                                    onClick={() => setPasswordVisibility({ ...passwordVisibility, [fieldId]: !isVisible })}
-                                  >
-                                    {isVisible ? (
-                                      <EyeOff className="h-4 w-4 text-muted-foreground" />
-                                    ) : (
-                                      <Eye className="h-4 w-4 text-muted-foreground" />
-                                    )}
-                                  </Button>
-                                )}
+                            </div>
+                          ))}
                         </div>
-                  </div>
-                          );
-                        })}
-                      </div>
-                    )}
+                      )}
 
-                    {/* Permissions */}
-                    {erpSetting.setting_value.permissions && (
-                      <div className="space-y-3 p-4 border rounded-md">
-                        <Label className="text-sm font-semibold">Permissions</Label>
-                        {Object.entries(erpSetting.setting_value.permissions).map(([key, value]: [string, unknown]) => (
-                          <div key={key} className="flex items-center space-x-2">
-                            <Switch
-                              id={`perm-${key}`}
-                              checked={erpEditForm.setting_value?.permissions?.[key] ?? value ?? false}
-                              onCheckedChange={(checked) => {
-                                const newSettingValue = { ...(erpEditForm.setting_value || {}) };
-                                if (!newSettingValue.permissions) {
-                                  const permissions = erpSetting.setting_value?.permissions;
-                                  newSettingValue.permissions = (permissions && typeof permissions === 'object' && !Array.isArray(permissions))
-                                    ? { ...permissions as Record<string, unknown> }
-                                    : {};
-                                }
-                                newSettingValue.permissions[key] = checked;
-                                setErpEditForm({ ...erpEditForm, setting_value: newSettingValue });
-                              }}
-                            />
-                            <Label htmlFor={`perm-${key}`} className="cursor-pointer text-sm capitalize">
-                              {key.replace(/_/g, ' ')}
+                      {/* Sync Settings */}
+                      {erpSetting.setting_value.sync_settings && (
+                        <div className="space-y-3 p-4 border rounded-md">
+                          <Label className="text-sm font-semibold">
+                            Sync Settings
                           </Label>
+                          {Object.entries(
+                            erpSetting.setting_value.sync_settings
+                          )
+                            .filter(([key]) => key !== 'last_sync_at') // Exclude last_sync_at
+                            .map(([key, value]: [string, unknown]) => (
+                              <div key={key} className="space-y-2">
+                                <Label
+                                  htmlFor={`sync-${key}`}
+                                  className="text-xs capitalize"
+                                >
+                                  {key.replace(/_/g, ' ')}
+                                </Label>
+                                {typeof value === 'boolean' ? (
+                                  <div className="flex items-center space-x-2">
+                                    <Switch
+                                      id={`sync-${key}`}
+                                      checked={
+                                        erpEditForm.setting_value
+                                          ?.sync_settings?.[key] ?? value
+                                      }
+                                      onCheckedChange={(checked) => {
+                                        const newSettingValue = {
+                                          ...(erpEditForm.setting_value || {}),
+                                        };
+                                        if (!newSettingValue.sync_settings) {
+                                          const syncSettings =
+                                            erpSetting.setting_value
+                                              ?.sync_settings;
+                                          newSettingValue.sync_settings =
+                                            syncSettings &&
+                                            typeof syncSettings === 'object' &&
+                                            !Array.isArray(syncSettings)
+                                              ? {
+                                                  ...(syncSettings as Record<
+                                                    string,
+                                                    unknown
+                                                  >),
+                                                }
+                                              : {};
+                                        }
+                                        newSettingValue.sync_settings[key] =
+                                          checked;
+                                        setErpEditForm({
+                                          ...erpEditForm,
+                                          setting_value: newSettingValue,
+                                        });
+                                      }}
+                                    />
+                                    <Label
+                                      htmlFor={`sync-${key}`}
+                                      className="cursor-pointer"
+                                    >
+                                      {(erpEditForm.setting_value
+                                        ?.sync_settings?.[key] ?? value)
+                                        ? 'Enabled'
+                                        : 'Disabled'}
+                                    </Label>
+                                  </div>
+                                ) : (
+                                  <Input
+                                    id={`sync-${key}`}
+                                    type="text"
+                                    value={
+                                      erpEditForm.setting_value
+                                        ?.sync_settings?.[key] ||
+                                      value ||
+                                      ''
+                                    }
+                                    onChange={(e) => {
+                                      const newSettingValue = {
+                                        ...(erpEditForm.setting_value || {}),
+                                      };
+                                      if (!newSettingValue.sync_settings) {
+                                        const syncSettings =
+                                          erpSetting.setting_value
+                                            ?.sync_settings;
+                                        newSettingValue.sync_settings =
+                                          syncSettings &&
+                                          typeof syncSettings === 'object' &&
+                                          !Array.isArray(syncSettings)
+                                            ? {
+                                                ...(syncSettings as Record<
+                                                  string,
+                                                  unknown
+                                                >),
+                                              }
+                                            : {};
+                                      }
+                                      newSettingValue.sync_settings[key] =
+                                        e.target.value;
+                                      setErpEditForm({
+                                        ...erpEditForm,
+                                        setting_value: newSettingValue,
+                                      });
+                                    }}
+                                    placeholder={`Enter ${key.replace(/_/g, ' ')}`}
+                                  />
+                                )}
+                              </div>
+                            ))}
                         </div>
-                        ))}
-                      </div>
-                    )}
+                      )}
 
-                    {/* Sync Settings */}
-                    {erpSetting.setting_value.sync_settings && (
-                      <div className="space-y-3 p-4 border rounded-md">
-                        <Label className="text-sm font-semibold">Sync Settings</Label>
-                        {Object.entries(erpSetting.setting_value.sync_settings)
-                          .filter(([key]) => key !== 'last_sync_at') // Exclude last_sync_at
-                          .map(([key, value]: [string, unknown]) => (
+                      {/* Other settings (non-object, non-array) */}
+                      {Object.entries(erpSetting.setting_value)
+                        .filter(
+                          ([key, value]) =>
+                            key !== 'server_details' &&
+                            key !== 'credentials' &&
+                            key !== 'permissions' &&
+                            key !== 'sync_settings' &&
+                            key !== 'last_sync_at' && // Exclude last_sync_at as it's displayed elsewhere
+                            typeof value !== 'object' &&
+                            !Array.isArray(value)
+                        )
+                        .map(([key, value]: [string, unknown]) => (
                           <div key={key} className="space-y-2">
-                            <Label htmlFor={`sync-${key}`} className="text-xs capitalize">
+                            <Label
+                              htmlFor={`setting-${key}`}
+                              className="text-xs capitalize"
+                            >
                               {key.replace(/_/g, ' ')}
                             </Label>
                             {typeof value === 'boolean' ? (
                               <div className="flex items-center space-x-2">
                                 <Switch
-                                  id={`sync-${key}`}
-                                  checked={erpEditForm.setting_value?.sync_settings?.[key] ?? value}
+                                  id={`setting-${key}`}
+                                  checked={
+                                    typeof erpEditForm.setting_value?.[key] ===
+                                    'boolean'
+                                      ? (erpEditForm.setting_value[
+                                          key
+                                        ] as boolean)
+                                      : (value as boolean)
+                                  }
                                   onCheckedChange={(checked) => {
-                                    const newSettingValue = { ...(erpEditForm.setting_value || {}) };
-                                    if (!newSettingValue.sync_settings) {
-                                      const syncSettings = erpSetting.setting_value?.sync_settings;
-                                      newSettingValue.sync_settings = (syncSettings && typeof syncSettings === 'object' && !Array.isArray(syncSettings))
-                                        ? { ...syncSettings as Record<string, unknown> }
-                                        : {};
-                                    }
-                                    newSettingValue.sync_settings[key] = checked;
-                                    setErpEditForm({ ...erpEditForm, setting_value: newSettingValue });
+                                    const newSettingValue = {
+                                      ...(erpEditForm.setting_value || {}),
+                                    };
+                                    newSettingValue[key] = checked;
+                                    setErpEditForm({
+                                      ...erpEditForm,
+                                      setting_value: newSettingValue,
+                                    });
                                   }}
                                 />
-                                <Label htmlFor={`sync-${key}`} className="cursor-pointer">
-                                  {(erpEditForm.setting_value?.sync_settings?.[key] ?? value) ? 'Enabled' : 'Disabled'}
+                                <Label
+                                  htmlFor={`setting-${key}`}
+                                  className="cursor-pointer"
+                                >
+                                  {(
+                                    typeof erpEditForm.setting_value?.[key] ===
+                                    'boolean'
+                                      ? erpEditForm.setting_value[key]
+                                      : value
+                                  )
+                                    ? 'Enabled'
+                                    : 'Disabled'}
                                 </Label>
-                    </div>
+                              </div>
                             ) : (
                               <Input
-                                id={`sync-${key}`}
+                                id={`setting-${key}`}
                                 type="text"
-                                value={erpEditForm.setting_value?.sync_settings?.[key] || value || ''}
+                                value={String(
+                                  erpEditForm.setting_value?.[key] ??
+                                    value ??
+                                    ''
+                                )}
                                 onChange={(e) => {
-                                  const newSettingValue = { ...(erpEditForm.setting_value || {}) };
-                                  if (!newSettingValue.sync_settings) {
-                                    const syncSettings = erpSetting.setting_value?.sync_settings;
-                                    newSettingValue.sync_settings = (syncSettings && typeof syncSettings === 'object' && !Array.isArray(syncSettings))
-                                      ? { ...syncSettings as Record<string, unknown> }
-                                      : {};
-                                  }
-                                  newSettingValue.sync_settings[key] = e.target.value;
-                                  setErpEditForm({ ...erpEditForm, setting_value: newSettingValue });
+                                  const newSettingValue = {
+                                    ...(erpEditForm.setting_value || {}),
+                                  };
+                                  newSettingValue[key] = e.target.value;
+                                  setErpEditForm({
+                                    ...erpEditForm,
+                                    setting_value: newSettingValue,
+                                  });
                                 }}
                                 placeholder={`Enter ${key.replace(/_/g, ' ')}`}
                               />
                             )}
-                  </div>
+                          </div>
                         ))}
-                </div>
-                    )}
-
-                    {/* Other settings (non-object, non-array) */}
-                    {Object.entries(erpSetting.setting_value)
-                      .filter(([key, value]) => 
-                        key !== 'server_details' && 
-                        key !== 'credentials' && 
-                        key !== 'permissions' && 
-                        key !== 'sync_settings' &&
-                        key !== 'last_sync_at' && // Exclude last_sync_at as it's displayed elsewhere
-                        typeof value !== 'object' &&
-                        !Array.isArray(value)
-                      )
-                      .map(([key, value]: [string, unknown]) => (
-                        <div key={key} className="space-y-2">
-                          <Label htmlFor={`setting-${key}`} className="text-xs capitalize">
-                            {key.replace(/_/g, ' ')}
-                          </Label>
-                          {typeof value === 'boolean' ? (
-                            <div className="flex items-center space-x-2">
-                              <Switch
-                                id={`setting-${key}`}
-                                checked={typeof erpEditForm.setting_value?.[key] === 'boolean' ? erpEditForm.setting_value[key] as boolean : (value as boolean)}
-                                onCheckedChange={(checked) => {
-                                  const newSettingValue = { ...(erpEditForm.setting_value || {}) };
-                                  newSettingValue[key] = checked;
-                                  setErpEditForm({ ...erpEditForm, setting_value: newSettingValue });
-                                }}
-                              />
-                              <Label htmlFor={`setting-${key}`} className="cursor-pointer">
-                                {(typeof erpEditForm.setting_value?.[key] === 'boolean' ? erpEditForm.setting_value[key] : value) ? 'Enabled' : 'Disabled'}
-                              </Label>
-                  </div>
-                          ) : (
-                            <Input
-                              id={`setting-${key}`}
-                              type="text"
-                              value={String(erpEditForm.setting_value?.[key] ?? value ?? '')}
-                              onChange={(e) => {
-                                const newSettingValue = { ...(erpEditForm.setting_value || {}) };
-                                newSettingValue[key] = e.target.value;
-                                setErpEditForm({ ...erpEditForm, setting_value: newSettingValue });
-                              }}
-                              placeholder={`Enter ${key.replace(/_/g, ' ')}`}
-                            />
-                          )}
-                </div>
-                      ))}
-                  </div>
-                )}
+                    </div>
+                  )}
 
                 <div className="flex justify-end space-x-2 pt-4">
                   <Button
@@ -2829,7 +4317,9 @@ export const ERPConfigPage = () => {
                     Cancel
                   </Button>
                   <Button
-                    onClick={() => showEditDialog && handleUpdateERP(showEditDialog)}
+                    onClick={() =>
+                      showEditDialog && handleUpdateERP(showEditDialog)
+                    }
                     disabled={updateERPSetting.isPending}
                   >
                     {updateERPSetting.isPending ? (
@@ -2845,19 +4335,24 @@ export const ERPConfigPage = () => {
               </div>
             ) : (
               <Alert>
-                <AlertDescription>Failed to load ERP setting details.</AlertDescription>
+                <AlertDescription>
+                  Failed to load ERP setting details.
+                </AlertDescription>
               </Alert>
             )}
           </DialogContent>
         </Dialog>
 
         {/* Create ERP Configuration Dialog */}
-        <Dialog open={showCreateDialog} onOpenChange={(open) => {
-          setShowCreateDialog(open);
-          if (!open) {
-            setTestResult(null);
-          }
-        }}>
+        <Dialog
+          open={showCreateDialog}
+          onOpenChange={(open) => {
+            setShowCreateDialog(open);
+            if (!open) {
+              setTestResult(null);
+            }
+          }}
+        >
           <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Configure ERP System</DialogTitle>
@@ -2867,7 +4362,7 @@ export const ERPConfigPage = () => {
             </DialogHeader>
             <div className="space-y-6">
               {/* Server Details */}
-                <div className="space-y-4">
+              <div className="space-y-4">
                 <div className="flex items-center space-x-2 text-sm font-medium text-muted-foreground">
                   <Database className="w-4 h-4" />
                   <span>Server Details</span>
@@ -2922,7 +4417,10 @@ export const ERPConfigPage = () => {
                   <div className="space-y-2">
                     <Label htmlFor="create-protocol">Protocol</Label>
                     <Select
-                      value={erpCreateForm.setting_value.server_details.protocol || 'http'}
+                      value={
+                        erpCreateForm.setting_value.server_details.protocol ||
+                        'http'
+                      }
                       onValueChange={(value: 'http' | 'https') =>
                         setErpCreateForm({
                           ...erpCreateForm,
@@ -2931,7 +4429,11 @@ export const ERPConfigPage = () => {
                             server_details: {
                               ...erpCreateForm.setting_value.server_details,
                               protocol: value,
-                              ssl_verify: value === 'https' ? erpCreateForm.setting_value.server_details.ssl_verify : false,
+                              ssl_verify:
+                                value === 'https'
+                                  ? erpCreateForm.setting_value.server_details
+                                      .ssl_verify
+                                  : false,
                             },
                           },
                         })
@@ -2946,15 +4448,23 @@ export const ERPConfigPage = () => {
                       </SelectContent>
                     </Select>
                     <p className="text-xs text-muted-foreground">
-                      Select HTTP or HTTPS. If host URL includes protocol (e.g., https://example.com), it will be auto-detected.
+                      Select HTTP or HTTPS. If host URL includes protocol (e.g.,
+                      https://example.com), it will be auto-detected.
                     </p>
                   </div>
-                  {erpCreateForm.setting_value.server_details.protocol === 'https' && (
+                  {erpCreateForm.setting_value.server_details.protocol ===
+                    'https' && (
                     <div className="space-y-2">
-                      <Label htmlFor="create-ssl-verify" className="flex items-center space-x-2">
+                      <Label
+                        htmlFor="create-ssl-verify"
+                        className="flex items-center space-x-2"
+                      >
                         <Switch
                           id="create-ssl-verify"
-                          checked={erpCreateForm.setting_value.server_details.ssl_verify || false}
+                          checked={
+                            erpCreateForm.setting_value.server_details
+                              .ssl_verify || false
+                          }
                           onCheckedChange={(checked) =>
                             setErpCreateForm({
                               ...erpCreateForm,
@@ -2971,7 +4481,8 @@ export const ERPConfigPage = () => {
                         <span>Verify SSL Certificate</span>
                       </Label>
                       <p className="text-xs text-muted-foreground">
-                        Enable SSL certificate verification. Disable for self-signed certificates.
+                        Enable SSL certificate verification. Disable for
+                        self-signed certificates.
                       </p>
                     </div>
                   )}
@@ -2984,7 +4495,10 @@ export const ERPConfigPage = () => {
                     </Label>
                     <Input
                       id="create-pool-alias"
-                      value={erpCreateForm.setting_value.server_details.pool_alias || ''}
+                      value={
+                        erpCreateForm.setting_value.server_details.pool_alias ||
+                        ''
+                      }
                       onChange={(e) =>
                         setErpCreateForm({
                           ...erpCreateForm,
@@ -3001,17 +4515,23 @@ export const ERPConfigPage = () => {
                       autoComplete="off"
                     />
                     <p className="text-xs text-muted-foreground">
-                      Required for Sage X3 API connections. Identifies the Sage X3 environment (e.g., Production, Development).
-                      </p>
-                    </div>
+                      Required for Sage X3 API connections. Identifies the Sage
+                      X3 environment (e.g., Production, Development).
+                    </p>
+                  </div>
                 )}
                 {/* API Version field for Sage 300 */}
                 {erpCreateForm.erp_type === 'sage_300' && (
                   <div className="space-y-2">
-                    <Label htmlFor="create-api-version">API Version (Optional)</Label>
+                    <Label htmlFor="create-api-version">
+                      API Version (Optional)
+                    </Label>
                     <Input
                       id="create-api-version"
-                      value={erpCreateForm.setting_value.server_details.api_version || 'v1.0'}
+                      value={
+                        erpCreateForm.setting_value.server_details
+                          .api_version || 'v1.0'
+                      }
                       onChange={(e) =>
                         setErpCreateForm({
                           ...erpCreateForm,
@@ -3032,14 +4552,16 @@ export const ERPConfigPage = () => {
                     </p>
                   </div>
                 )}
-                  </div>
+              </div>
 
               {/* Database Name - Show before API Credentials for Sage 300 only (not Sage X3) */}
               {erpCreateForm.erp_type === 'sage_300' && (
                 <div className="space-y-2">
                   <Label htmlFor="create-database">
                     Database Name <span className="text-red-500">*</span>
-                    <span className="text-xs text-muted-foreground ml-1">(Also used for API)</span>
+                    <span className="text-xs text-muted-foreground ml-1">
+                      (Also used for API)
+                    </span>
                   </Label>
                   <Input
                     id="create-database"
@@ -3064,24 +4586,33 @@ export const ERPConfigPage = () => {
                     className={formErrors.database ? 'border-red-500' : ''}
                   />
                   {formErrors.database && (
-                    <p className="text-xs text-red-500">{formErrors.database}</p>
+                    <p className="text-xs text-red-500">
+                      {formErrors.database}
+                    </p>
                   )}
                 </div>
               )}
 
               {/* API Credentials - Show for Sage 300 and Sage X3 */}
-              {(erpCreateForm.erp_type === 'sage_300' || erpCreateForm.erp_type === 'sage_x3') && (
+              {(erpCreateForm.erp_type === 'sage_300' ||
+                erpCreateForm.erp_type === 'sage_x3') && (
                 <div className="space-y-3 p-4 border rounded-md bg-blue-50/50 border-blue-200">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center space-x-2">
                       <Settings className="w-4 h-4" />
-                      <Label className="text-sm font-semibold">API Credentials</Label>
+                      <Label className="text-sm font-semibold">
+                        API Credentials
+                      </Label>
                     </div>
-                    <Badge variant="outline" className="text-xs">Primary Connection</Badge>
+                    <Badge variant="outline" className="text-xs">
+                      Primary Connection
+                    </Badge>
                   </div>
                   <Alert className="mb-3">
                     <AlertDescription className="text-xs">
-                      API credentials are used for the primary API connection. The system will use API first, then fall back to database if API is unavailable.
+                      API credentials are used for the primary API connection.
+                      The system will use API first, then fall back to database
+                      if API is unavailable.
                     </AlertDescription>
                   </Alert>
                   <div className="grid grid-cols-2 gap-4">
@@ -3091,7 +4622,10 @@ export const ERPConfigPage = () => {
                       </Label>
                       <Input
                         id="create-api-username"
-                        value={erpCreateForm.setting_value.api_credentials?.username || ''}
+                        value={
+                          erpCreateForm.setting_value.api_credentials
+                            ?.username || ''
+                        }
                         onChange={(e) => {
                           setErpCreateForm({
                             ...erpCreateForm,
@@ -3103,18 +4637,34 @@ export const ERPConfigPage = () => {
                               },
                             },
                           });
-                          if (formErrors['api_credentials.username'] || formErrors.username) {
-                            setFormErrors({ ...formErrors, 'api_credentials.username': '', username: '' });
+                          if (
+                            formErrors['api_credentials.username'] ||
+                            formErrors.username
+                          ) {
+                            setFormErrors({
+                              ...formErrors,
+                              'api_credentials.username': '',
+                              username: '',
+                            });
                           }
                         }}
                         placeholder="API username"
                         autoComplete="off"
-                        className={(formErrors['api_credentials.username'] || formErrors.username) ? 'border-red-500' : ''}
+                        className={
+                          formErrors['api_credentials.username'] ||
+                          formErrors.username
+                            ? 'border-red-500'
+                            : ''
+                        }
                       />
-                      {(formErrors['api_credentials.username'] || formErrors.username) && (
-                        <p className="text-xs text-red-500">{formErrors['api_credentials.username'] || formErrors.username}</p>
+                      {(formErrors['api_credentials.username'] ||
+                        formErrors.username) && (
+                        <p className="text-xs text-red-500">
+                          {formErrors['api_credentials.username'] ||
+                            formErrors.username}
+                        </p>
                       )}
-                  </div>
+                    </div>
                     <div className="space-y-2">
                       <Label htmlFor="create-api-password">
                         API Password <span className="text-red-500">*</span>
@@ -3122,25 +4672,40 @@ export const ERPConfigPage = () => {
                       <div className="relative">
                         <Input
                           id="create-api-password"
-                          type={passwordVisibility['create-api-password'] ? 'text' : 'password'}
-                          value={erpCreateForm.setting_value.api_credentials?.password || ''}
+                          type={
+                            passwordVisibility['create-api-password']
+                              ? 'text'
+                              : 'password'
+                          }
+                          value={
+                            erpCreateForm.setting_value.api_credentials
+                              ?.password || ''
+                          }
                           onChange={(e) => {
                             setErpCreateForm({
                               ...erpCreateForm,
                               setting_value: {
                                 ...erpCreateForm.setting_value,
                                 api_credentials: {
-                                  ...erpCreateForm.setting_value.api_credentials,
+                                  ...erpCreateForm.setting_value
+                                    .api_credentials,
                                   password: e.target.value,
                                 },
                               },
                             });
-                            if (formErrors['api_credentials.password'] || formErrors.password) {
-                              setFormErrors({ ...formErrors, 'api_credentials.password': '', password: '' });
+                            if (
+                              formErrors['api_credentials.password'] ||
+                              formErrors.password
+                            ) {
+                              setFormErrors({
+                                ...formErrors,
+                                'api_credentials.password': '',
+                                password: '',
+                              });
                             }
                           }}
                           placeholder="API password"
-                          className={`pr-10 ${(formErrors['api_credentials.password'] || formErrors.password) ? 'border-red-500' : ''}`}
+                          className={`pr-10 ${formErrors['api_credentials.password'] || formErrors.password ? 'border-red-500' : ''}`}
                           autoComplete="off"
                         />
                         <Button
@@ -3148,7 +4713,13 @@ export const ERPConfigPage = () => {
                           variant="ghost"
                           size="sm"
                           className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
-                          onClick={() => setPasswordVisibility({ ...passwordVisibility, 'create-api-password': !passwordVisibility['create-api-password'] })}
+                          onClick={() =>
+                            setPasswordVisibility({
+                              ...passwordVisibility,
+                              'create-api-password':
+                                !passwordVisibility['create-api-password'],
+                            })
+                          }
                         >
                           {passwordVisibility['create-api-password'] ? (
                             <EyeOff className="h-4 w-4 text-muted-foreground" />
@@ -3157,8 +4728,12 @@ export const ERPConfigPage = () => {
                           )}
                         </Button>
                       </div>
-                      {(formErrors['api_credentials.password'] || formErrors.password) && (
-                        <p className="text-xs text-red-500">{formErrors['api_credentials.password'] || formErrors.password}</p>
+                      {(formErrors['api_credentials.password'] ||
+                        formErrors.password) && (
+                        <p className="text-xs text-red-500">
+                          {formErrors['api_credentials.password'] ||
+                            formErrors.password}
+                        </p>
                       )}
                     </div>
                   </div>
@@ -3173,12 +4748,17 @@ export const ERPConfigPage = () => {
                         testingConnection ||
                         testConnectionBeforeCreate.isPending ||
                         createERPSetting.isPending ||
-                        !erpCreateForm.setting_value.api_credentials?.username ||
-                        !erpCreateForm.setting_value.api_credentials?.password ||
-                        (erpCreateForm.erp_type === 'sage_x3' && !erpCreateForm.setting_value.server_details.pool_alias)
+                        !erpCreateForm.setting_value.api_credentials
+                          ?.username ||
+                        !erpCreateForm.setting_value.api_credentials
+                          ?.password ||
+                        (erpCreateForm.erp_type === 'sage_x3' &&
+                          !erpCreateForm.setting_value.server_details
+                            .pool_alias)
                       }
                     >
-                      {testingConnection || testConnectionBeforeCreate.isPending ? (
+                      {testingConnection ||
+                      testConnectionBeforeCreate.isPending ? (
                         <>
                           <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                           Testing API...
@@ -3193,8 +4773,18 @@ export const ERPConfigPage = () => {
                   </div>
                   {/* Test Result for API */}
                   {testResult && testResult.connectionType === 'api' && (
-                    <Alert className={testResult.success ? 'border-green-500 bg-green-50' : 'border-red-500 bg-red-50'}>
-                      <AlertDescription className={testResult.success ? 'text-green-800' : 'text-red-800'}>
+                    <Alert
+                      className={
+                        testResult.success
+                          ? 'border-green-500 bg-green-50'
+                          : 'border-red-500 bg-red-50'
+                      }
+                    >
+                      <AlertDescription
+                        className={
+                          testResult.success ? 'text-green-800' : 'text-red-800'
+                        }
+                      >
                         {testResult.message}
                       </AlertDescription>
                     </Alert>
@@ -3204,24 +4794,33 @@ export const ERPConfigPage = () => {
 
               {/* Database Credentials - Show for all database-based ERPs */}
               <div className="space-y-3 p-4 border rounded-md bg-amber-50/50 border-amber-200">
-                  <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-2">
                     <Database className="w-4 h-4" />
-                    <Label className="text-sm font-semibold">Database Credentials</Label>
-                    </div>
-                  {(erpCreateForm.erp_type === 'sage_300' || erpCreateForm.erp_type === 'sage_x3') && (
-                    <Badge variant="outline" className="text-xs">Fallback Connection</Badge>
-                  )}
+                    <Label className="text-sm font-semibold">
+                      Database Credentials
+                    </Label>
                   </div>
-                {(erpCreateForm.erp_type === 'sage_300' || erpCreateForm.erp_type === 'sage_x3') && (
+                  {(erpCreateForm.erp_type === 'sage_300' ||
+                    erpCreateForm.erp_type === 'sage_x3') && (
+                    <Badge variant="outline" className="text-xs">
+                      Fallback Connection
+                    </Badge>
+                  )}
+                </div>
+                {(erpCreateForm.erp_type === 'sage_300' ||
+                  erpCreateForm.erp_type === 'sage_x3') && (
                   <Alert className="mb-3">
                     <AlertDescription className="text-xs">
-                      Database credentials are used as a fallback if API connection is unavailable. Both API and Database credentials can be provided.
-                      {erpCreateForm.erp_type === 'sage_300' && ' Note: Database name is also used for Sage 300 API connections.'}
+                      Database credentials are used as a fallback if API
+                      connection is unavailable. Both API and Database
+                      credentials can be provided.
+                      {erpCreateForm.erp_type === 'sage_300' &&
+                        ' Note: Database name is also used for Sage 300 API connections.'}
                     </AlertDescription>
                   </Alert>
                 )}
-                
+
                 {/* Database Name field for Sage X3 - Only in Database Credentials section */}
                 {erpCreateForm.erp_type === 'sage_x3' && (
                   <div className="space-y-2">
@@ -3230,7 +4829,9 @@ export const ERPConfigPage = () => {
                     </Label>
                     <Input
                       id="create-db-database"
-                      value={erpCreateForm.setting_value.credentials.database || ''}
+                      value={
+                        erpCreateForm.setting_value.credentials.database || ''
+                      }
                       onChange={(e) => {
                         setErpCreateForm({
                           ...erpCreateForm,
@@ -3242,16 +4843,32 @@ export const ERPConfigPage = () => {
                             },
                           },
                         });
-                        if (formErrors['credentials.database'] || formErrors.database) {
-                          setFormErrors({ ...formErrors, 'credentials.database': '', database: '' });
+                        if (
+                          formErrors['credentials.database'] ||
+                          formErrors.database
+                        ) {
+                          setFormErrors({
+                            ...formErrors,
+                            'credentials.database': '',
+                            database: '',
+                          });
                         }
                       }}
                       placeholder="Database name"
                       autoComplete="off"
-                      className={(formErrors['credentials.database'] || formErrors.database) ? 'border-red-500' : ''}
+                      className={
+                        formErrors['credentials.database'] ||
+                        formErrors.database
+                          ? 'border-red-500'
+                          : ''
+                      }
                     />
-                    {(formErrors['credentials.database'] || formErrors.database) && (
-                      <p className="text-xs text-red-500">{formErrors['credentials.database'] || formErrors.database}</p>
+                    {(formErrors['credentials.database'] ||
+                      formErrors.database) && (
+                      <p className="text-xs text-red-500">
+                        {formErrors['credentials.database'] ||
+                          formErrors.database}
+                      </p>
                     )}
                   </div>
                 )}
@@ -3262,7 +4879,10 @@ export const ERPConfigPage = () => {
                     <Label htmlFor="create-schema">Schema (Optional)</Label>
                     <Input
                       id="create-schema"
-                      value={erpCreateForm.setting_value.server_details.schema || 'SEED'}
+                      value={
+                        erpCreateForm.setting_value.server_details.schema ||
+                        'SEED'
+                      }
                       onChange={(e) =>
                         setErpCreateForm({
                           ...erpCreateForm,
@@ -3279,11 +4899,13 @@ export const ERPConfigPage = () => {
                       autoComplete="off"
                     />
                     <p className="text-xs text-muted-foreground">
-                      Default: SEED. Used for database fallback connections. Enter your Sage X3 schema name if different (e.g., TESTRUN).
-                      </p>
-                    </div>
+                      Default: SEED. Used for database fallback connections.
+                      Enter your Sage X3 schema name if different (e.g.,
+                      TESTRUN).
+                    </p>
+                  </div>
                 )}
-                
+
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="create-username">Database Username</Label>
@@ -3301,16 +4923,32 @@ export const ERPConfigPage = () => {
                             },
                           },
                         });
-                        if (formErrors['credentials.username'] || formErrors.username) {
-                          setFormErrors({ ...formErrors, 'credentials.username': '', username: '' });
+                        if (
+                          formErrors['credentials.username'] ||
+                          formErrors.username
+                        ) {
+                          setFormErrors({
+                            ...formErrors,
+                            'credentials.username': '',
+                            username: '',
+                          });
                         }
                       }}
                       placeholder="Database username"
                       autoComplete="off"
-                      className={(formErrors['credentials.username'] || formErrors.username) ? 'border-red-500' : ''}
+                      className={
+                        formErrors['credentials.username'] ||
+                        formErrors.username
+                          ? 'border-red-500'
+                          : ''
+                      }
                     />
-                    {(formErrors['credentials.username'] || formErrors.username) && (
-                      <p className="text-xs text-red-500">{formErrors['credentials.username'] || formErrors.username}</p>
+                    {(formErrors['credentials.username'] ||
+                      formErrors.username) && (
+                      <p className="text-xs text-red-500">
+                        {formErrors['credentials.username'] ||
+                          formErrors.username}
+                      </p>
                     )}
                   </div>
                   <div className="space-y-2">
@@ -3318,7 +4956,11 @@ export const ERPConfigPage = () => {
                     <div className="relative">
                       <Input
                         id="create-password"
-                        type={passwordVisibility['create-password'] ? 'text' : 'password'}
+                        type={
+                          passwordVisibility['create-password']
+                            ? 'text'
+                            : 'password'
+                        }
                         value={erpCreateForm.setting_value.credentials.password}
                         onChange={(e) => {
                           setErpCreateForm({
@@ -3331,12 +4973,19 @@ export const ERPConfigPage = () => {
                               },
                             },
                           });
-                          if (formErrors['credentials.password'] || formErrors.password) {
-                            setFormErrors({ ...formErrors, 'credentials.password': '', password: '' });
+                          if (
+                            formErrors['credentials.password'] ||
+                            formErrors.password
+                          ) {
+                            setFormErrors({
+                              ...formErrors,
+                              'credentials.password': '',
+                              password: '',
+                            });
                           }
                         }}
                         placeholder="Database password"
-                        className={`pr-10 ${(formErrors['credentials.password'] || formErrors.password) ? 'border-red-500' : ''}`}
+                        className={`pr-10 ${formErrors['credentials.password'] || formErrors.password ? 'border-red-500' : ''}`}
                         autoComplete="off"
                       />
                       <Button
@@ -3344,7 +4993,13 @@ export const ERPConfigPage = () => {
                         variant="ghost"
                         size="sm"
                         className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
-                        onClick={() => setPasswordVisibility({ ...passwordVisibility, 'create-password': !passwordVisibility['create-password'] })}
+                        onClick={() =>
+                          setPasswordVisibility({
+                            ...passwordVisibility,
+                            'create-password':
+                              !passwordVisibility['create-password'],
+                          })
+                        }
                       >
                         {passwordVisibility['create-password'] ? (
                           <EyeOff className="h-4 w-4 text-muted-foreground" />
@@ -3353,53 +5008,72 @@ export const ERPConfigPage = () => {
                         )}
                       </Button>
                     </div>
-                    {(formErrors['credentials.password'] || formErrors.password) && (
-                      <p className="text-xs text-red-500">{formErrors['credentials.password'] || formErrors.password}</p>
+                    {(formErrors['credentials.password'] ||
+                      formErrors.password) && (
+                      <p className="text-xs text-red-500">
+                        {formErrors['credentials.password'] ||
+                          formErrors.password}
+                      </p>
                     )}
                   </div>
                 </div>
                 {/* Test Database Connection Button - Only for Sage 300/X3 */}
-                  {(erpCreateForm.erp_type === 'sage_300' || erpCreateForm.erp_type === 'sage_x3') && (
-                    <div className="flex justify-end pt-2">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleTestConnectionForCreate('database')}
-                        disabled={
-                          testingConnection ||
-                          testConnectionBeforeCreate.isPending ||
-                          createERPSetting.isPending ||
-                          !erpCreateForm.setting_value.server_details.host ||
-                          (erpCreateForm.erp_type === 'sage_300' && !erpCreateForm.setting_value.server_details.database) ||
-                          (erpCreateForm.erp_type === 'sage_x3' && !erpCreateForm.setting_value.credentials?.database) ||
-                          !erpCreateForm.setting_value.credentials?.username ||
-                          !erpCreateForm.setting_value.credentials?.password
-                        }
-                      >
-                        {testingConnection || testConnectionBeforeCreate.isPending ? (
-                          <>
-                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                            Testing DB...
-                          </>
-                        ) : (
-                          <>
-                            <TestTube className="w-4 h-4 mr-2" />
-                            Test Database Connection
-                          </>
-                        )}
-                      </Button>
-                    </div>
-                  )}
-                  {/* Test Result for Database */}
-                  {testResult && testResult.connectionType === 'database' && (
-                    <Alert className={testResult.success ? 'border-green-500 bg-green-50' : 'border-red-500 bg-red-50'}>
-                      <AlertDescription className={testResult.success ? 'text-green-800' : 'text-red-800'}>
-                        {testResult.message}
-                      </AlertDescription>
-                    </Alert>
-                  )}
-                </div>
+                {(erpCreateForm.erp_type === 'sage_300' ||
+                  erpCreateForm.erp_type === 'sage_x3') && (
+                  <div className="flex justify-end pt-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleTestConnectionForCreate('database')}
+                      disabled={
+                        testingConnection ||
+                        testConnectionBeforeCreate.isPending ||
+                        createERPSetting.isPending ||
+                        !erpCreateForm.setting_value.server_details.host ||
+                        (erpCreateForm.erp_type === 'sage_300' &&
+                          !erpCreateForm.setting_value.server_details
+                            .database) ||
+                        (erpCreateForm.erp_type === 'sage_x3' &&
+                          !erpCreateForm.setting_value.credentials?.database) ||
+                        !erpCreateForm.setting_value.credentials?.username ||
+                        !erpCreateForm.setting_value.credentials?.password
+                      }
+                    >
+                      {testingConnection ||
+                      testConnectionBeforeCreate.isPending ? (
+                        <>
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          Testing DB...
+                        </>
+                      ) : (
+                        <>
+                          <TestTube className="w-4 h-4 mr-2" />
+                          Test Database Connection
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                )}
+                {/* Test Result for Database */}
+                {testResult && testResult.connectionType === 'database' && (
+                  <Alert
+                    className={
+                      testResult.success
+                        ? 'border-green-500 bg-green-50'
+                        : 'border-red-500 bg-red-50'
+                    }
+                  >
+                    <AlertDescription
+                      className={
+                        testResult.success ? 'text-green-800' : 'text-red-800'
+                      }
+                    >
+                      {testResult.message}
+                    </AlertDescription>
+                  </Alert>
+                )}
+              </div>
 
               {/* Permissions */}
               <div className="space-y-4">
@@ -3408,43 +5082,51 @@ export const ERPConfigPage = () => {
                   <span>Permissions</span>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
-                  {Object.entries(erpCreateForm.setting_value.permissions).map(([key, value]) => (
-                    <div key={key} className="flex items-center space-x-2">
-                      <Switch
-                        checked={value}
-                        onCheckedChange={(checked) =>
-                          setErpCreateForm({
-                            ...erpCreateForm,
-                            setting_value: {
-                              ...erpCreateForm.setting_value,
-                              permissions: {
-                                ...erpCreateForm.setting_value.permissions,
-                                [key]: checked,
+                  {Object.entries(erpCreateForm.setting_value.permissions).map(
+                    ([key, value]) => (
+                      <div key={key} className="flex items-center space-x-2">
+                        <Switch
+                          checked={value}
+                          onCheckedChange={(checked) =>
+                            setErpCreateForm({
+                              ...erpCreateForm,
+                              setting_value: {
+                                ...erpCreateForm.setting_value,
+                                permissions: {
+                                  ...erpCreateForm.setting_value.permissions,
+                                  [key]: checked,
+                                },
                               },
-                            },
-                          })
-                        }
-                      />
-                      <Label className="text-sm">
-                        {key.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase())}
-                      </Label>
-                    </div>
-                  ))}
+                            })
+                          }
+                        />
+                        <Label className="text-sm">
+                          {key
+                            .replace(/_/g, ' ')
+                            .replace(/\b\w/g, (l) => l.toUpperCase())}
+                        </Label>
+                      </div>
+                    )
+                  )}
                 </div>
               </div>
 
               {/* Sync Settings */}
-                <div className="space-y-4">
+              <div className="space-y-4">
                 <div className="flex items-center space-x-2 text-sm font-medium text-muted-foreground">
                   <RefreshCw className="w-4 h-4" />
                   <span>Sync Settings</span>
-                    </div>
-                    <div className="space-y-2">
+                </div>
+                <div className="space-y-2">
                   <Label htmlFor="create-sync-frequency">Sync Frequency</Label>
                   <Select
                     value={erpCreateForm.setting_value.sync_settings.sync_frequency.toString()}
                     onValueChange={(value) => {
-                      const numValue = value === 'custom' ? erpCreateForm.setting_value.sync_settings.sync_frequency : parseInt(value);
+                      const numValue =
+                        value === 'custom'
+                          ? erpCreateForm.setting_value.sync_settings
+                              .sync_frequency
+                          : parseInt(value);
                       setErpCreateForm({
                         ...erpCreateForm,
                         setting_value: {
@@ -3456,31 +5138,44 @@ export const ERPConfigPage = () => {
                       });
                     }}
                   >
-                        <SelectTrigger>
+                    <SelectTrigger>
                       <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
+                    </SelectTrigger>
+                    <SelectContent>
                       <SelectItem value="30">Every 30 minutes</SelectItem>
-                      <SelectItem value="60">Every hour (Recommended)</SelectItem>
+                      <SelectItem value="60">
+                        Every hour (Recommended)
+                      </SelectItem>
                       <SelectItem value="240">Every 4 hours</SelectItem>
                       <SelectItem value="360">Every 6 hours</SelectItem>
                       <SelectItem value="1440">Daily (once per day)</SelectItem>
-                      <SelectItem value="10080">Weekly (once per week)</SelectItem>
+                      <SelectItem value="10080">
+                        Weekly (once per week)
+                      </SelectItem>
                       <SelectItem value="custom">Custom (minutes)</SelectItem>
-                        </SelectContent>
-                      </Select>
-                  {(erpCreateForm.setting_value.sync_settings.sync_frequency === 30 ||
-                    erpCreateForm.setting_value.sync_settings.sync_frequency === 60 ||
-                    erpCreateForm.setting_value.sync_settings.sync_frequency === 240 ||
-                    erpCreateForm.setting_value.sync_settings.sync_frequency === 360 ||
-                    erpCreateForm.setting_value.sync_settings.sync_frequency === 1440 ||
-                    erpCreateForm.setting_value.sync_settings.sync_frequency === 10080) ? null : (
+                    </SelectContent>
+                  </Select>
+                  {erpCreateForm.setting_value.sync_settings.sync_frequency ===
+                    30 ||
+                  erpCreateForm.setting_value.sync_settings.sync_frequency ===
+                    60 ||
+                  erpCreateForm.setting_value.sync_settings.sync_frequency ===
+                    240 ||
+                  erpCreateForm.setting_value.sync_settings.sync_frequency ===
+                    360 ||
+                  erpCreateForm.setting_value.sync_settings.sync_frequency ===
+                    1440 ||
+                  erpCreateForm.setting_value.sync_settings.sync_frequency ===
+                    10080 ? null : (
                     <div className="space-y-2">
                       <Input
                         id="create-sync-frequency-custom"
                         type="number"
                         min="1"
-                        value={erpCreateForm.setting_value.sync_settings.sync_frequency}
+                        value={
+                          erpCreateForm.setting_value.sync_settings
+                            .sync_frequency
+                        }
                         onChange={(e) =>
                           setErpCreateForm({
                             ...erpCreateForm,
@@ -3495,15 +5190,17 @@ export const ERPConfigPage = () => {
                         placeholder="Enter minutes"
                       />
                       <p className="text-xs text-muted-foreground">
-                        Enter custom sync frequency in minutes (minimum: 1 minute)
+                        Enter custom sync frequency in minutes (minimum: 1
+                        minute)
                       </p>
                     </div>
                   )}
                   <p className="text-xs text-muted-foreground">
-                    Recommended: Hourly (60 minutes) for most businesses. More frequent syncing may impact ERP system performance.
+                    Recommended: Hourly (60 minutes) for most businesses. More
+                    frequent syncing may impact ERP system performance.
                   </p>
-                  </div>
                 </div>
+              </div>
 
               {/* Status */}
               <div className="space-y-2">
@@ -3523,46 +5220,63 @@ export const ERPConfigPage = () => {
               </div>
 
               {/* Test Connection Button for non-Sage systems */}
-              {(erpCreateForm.erp_type !== 'sage_300' && erpCreateForm.erp_type !== 'sage_x3') && (
-                <div className="flex justify-end">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => handleTestConnectionForCreate()}
-                    disabled={
-                      testingConnection ||
-                      testConnectionBeforeCreate.isPending ||
-                      createERPSetting.isPending ||
-                      !erpCreateForm.setting_value.server_details.host ||
-                      (erpCreateForm.erp_type === 'sage_300' && !erpCreateForm.setting_value.server_details.database) ||
-                      (erpCreateForm.erp_type === 'sage_x3' && !erpCreateForm.setting_value.credentials?.database) ||
-                      !erpCreateForm.setting_value.credentials?.username ||
-                      !erpCreateForm.setting_value.credentials?.password
-                    }
-                  >
-                    {testingConnection || testConnection.isPending ? (
-                      <>
-                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                        Testing...
-                      </>
-                    ) : (
-                      <>
-                        <TestTube className="w-4 h-4 mr-2" />
-                        Test Connection
-                      </>
-                    )}
-                  </Button>
-                </div>
-              )}
+              {erpCreateForm.erp_type !== 'sage_300' &&
+                erpCreateForm.erp_type !== 'sage_x3' && (
+                  <div className="flex justify-end">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => handleTestConnectionForCreate()}
+                      disabled={
+                        testingConnection ||
+                        testConnectionBeforeCreate.isPending ||
+                        createERPSetting.isPending ||
+                        !erpCreateForm.setting_value.server_details.host ||
+                        (erpCreateForm.erp_type === 'sage_300' &&
+                          !erpCreateForm.setting_value.server_details
+                            .database) ||
+                        (erpCreateForm.erp_type === 'sage_x3' &&
+                          !erpCreateForm.setting_value.credentials?.database) ||
+                        !erpCreateForm.setting_value.credentials?.username ||
+                        !erpCreateForm.setting_value.credentials?.password
+                      }
+                    >
+                      {testingConnection || testConnection.isPending ? (
+                        <>
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          Testing...
+                        </>
+                      ) : (
+                        <>
+                          <TestTube className="w-4 h-4 mr-2" />
+                          Test Connection
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                )}
 
               {/* Test Result for non-Sage systems */}
-              {testResult && (erpCreateForm.erp_type !== 'sage_300' && erpCreateForm.erp_type !== 'sage_x3') && !testResult.connectionType && (
-                <Alert className={testResult.success ? 'border-green-500 bg-green-50' : 'border-red-500 bg-red-50'}>
-                  <AlertDescription className={testResult.success ? 'text-green-800' : 'text-red-800'}>
-                    {testResult.message}
-                  </AlertDescription>
-                </Alert>
-              )}
+              {testResult &&
+                erpCreateForm.erp_type !== 'sage_300' &&
+                erpCreateForm.erp_type !== 'sage_x3' &&
+                !testResult.connectionType && (
+                  <Alert
+                    className={
+                      testResult.success
+                        ? 'border-green-500 bg-green-50'
+                        : 'border-red-500 bg-red-50'
+                    }
+                  >
+                    <AlertDescription
+                      className={
+                        testResult.success ? 'text-green-800' : 'text-red-800'
+                      }
+                    >
+                      {testResult.message}
+                    </AlertDescription>
+                  </Alert>
+                )}
 
               <div className="flex justify-end space-x-2">
                 <Button
@@ -3614,14 +5328,23 @@ export const ERPConfigPage = () => {
                   disabled={
                     createERPSetting.isPending ||
                     !erpCreateForm.setting_value.server_details.host ||
-                    (erpCreateForm.erp_type === 'sage_300' && !erpCreateForm.setting_value.server_details.database) ||
+                    (erpCreateForm.erp_type === 'sage_300' &&
+                      !erpCreateForm.setting_value.server_details.database) ||
                     !erpCreateForm.erp_type ||
-                    (erpCreateForm.erp_type === 'sage_300' || erpCreateForm.erp_type === 'sage_x3'
+                    (erpCreateForm.erp_type === 'sage_300' ||
+                    erpCreateForm.erp_type === 'sage_x3'
                       ? !(
-                          (erpCreateForm.setting_value.api_credentials?.username && erpCreateForm.setting_value.api_credentials?.password) ||
-                          (erpCreateForm.setting_value.credentials?.username && erpCreateForm.setting_value.credentials?.password)
+                          (erpCreateForm.setting_value.api_credentials
+                            ?.username &&
+                            erpCreateForm.setting_value.api_credentials
+                              ?.password) ||
+                          (erpCreateForm.setting_value.credentials?.username &&
+                            erpCreateForm.setting_value.credentials?.password)
                         )
-                      : !(erpCreateForm.setting_value.credentials?.username && erpCreateForm.setting_value.credentials?.password))
+                      : !(
+                          erpCreateForm.setting_value.credentials?.username &&
+                          erpCreateForm.setting_value.credentials?.password
+                        ))
                   }
                 >
                   {createERPSetting.isPending ? (
@@ -3639,18 +5362,25 @@ export const ERPConfigPage = () => {
         </Dialog>
 
         {/* Delete Confirmation Dialog */}
-        <AlertDialog open={showDeleteDialog !== null} onOpenChange={(open) => !open && setShowDeleteDialog(null)}>
+        <AlertDialog
+          open={showDeleteDialog !== null}
+          onOpenChange={(open) => !open && setShowDeleteDialog(null)}
+        >
           <AlertDialogContent>
             <AlertDialogHeader>
               <AlertDialogTitle>Delete ERP Configuration</AlertDialogTitle>
               <AlertDialogDescription>
-                Are you sure you want to delete this ERP configuration? This action cannot be undone and will stop all synchronization for this ERP system.
+                Are you sure you want to delete this ERP configuration? This
+                action cannot be undone and will stop all synchronization for
+                this ERP system.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
               <AlertDialogCancel>Cancel</AlertDialogCancel>
               <AlertDialogAction
-                onClick={() => showDeleteDialog && handleDelete(showDeleteDialog)}
+                onClick={() =>
+                  showDeleteDialog && handleDelete(showDeleteDialog)
+                }
                 className="bg-red-600 hover:bg-red-700"
                 disabled={deleteERPSetting.isPending}
               >
