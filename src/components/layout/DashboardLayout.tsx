@@ -69,7 +69,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
       current: location.pathname === '/dashboard/parties',
       permission: 'parties.view' as const,
     },
-    // {
+    // { temporary disabled
     //   name: 'Products',
     //   href: '/dashboard/products',
     //   icon: Package,
