@@ -44,6 +44,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { format as formatDateOnly } from 'date-fns';
 import {
   Table,
   TableBody,
@@ -342,6 +343,7 @@ export const ERPConfigPage = () => {
       sync_settings: {
         sync_frequency: 60, // Default: 60 minutes (hourly) - recommended
       },
+      invoice_sync_start_date: '' as string,
     },
     is_active: true,
   });
@@ -385,6 +387,13 @@ export const ERPConfigPage = () => {
   const [passwordVisibility, setPasswordVisibility] = useState<
     Record<string, boolean>
   >({});
+  const [createCalendarOpen, setCreateCalendarOpen] = useState(false);
+  const [createCalendarMonth, setCreateCalendarMonth] = useState<Date>(
+    () => new Date()
+  );
+  const [editCalendarMonth, setEditCalendarMonth] = useState<Date>(
+    () => new Date()
+  );
 
   const { canManageERP, isSuperAdmin } = usePermissions();
 
@@ -612,6 +621,26 @@ export const ERPConfigPage = () => {
               api_version: 'v1.0',
             };
           }
+        }
+      }
+
+      // Ensure sync_settings (and sync_frequency) exist so they are always sent on save
+      if (
+        !settingValue.sync_settings ||
+        typeof settingValue.sync_settings !== 'object' ||
+        Array.isArray(settingValue.sync_settings)
+      ) {
+        settingValue.sync_settings = { sync_frequency: 60 };
+      } else {
+        const syncSettings = settingValue.sync_settings as Record<
+          string,
+          unknown
+        >;
+        if (
+          syncSettings.sync_frequency === undefined ||
+          syncSettings.sync_frequency === ''
+        ) {
+          syncSettings.sync_frequency = 60;
         }
       }
 
@@ -907,8 +936,9 @@ export const ERPConfigPage = () => {
             can_read_tax_categories: true,
           },
           sync_settings: {
-            sync_frequency: 30,
+            sync_frequency: 60,
           },
+          invoice_sync_start_date: '',
         },
         is_active: true,
       });
@@ -1001,6 +1031,27 @@ export const ERPConfigPage = () => {
           if (!details.schema) {
             details.schema = 'SEED';
           }
+        }
+      }
+
+      // Always include sync_settings.sync_frequency in payload so backend receives it
+      if (!updateData.setting_value) {
+        updateData.setting_value = {};
+      }
+      const sv = updateData.setting_value as Record<string, unknown>;
+      if (
+        !sv.sync_settings ||
+        typeof sv.sync_settings !== 'object' ||
+        Array.isArray(sv.sync_settings)
+      ) {
+        sv.sync_settings = { sync_frequency: 60 };
+      } else {
+        const syncSettings = sv.sync_settings as Record<string, unknown>;
+        if (
+          syncSettings.sync_frequency === undefined ||
+          syncSettings.sync_frequency === ''
+        ) {
+          syncSettings.sync_frequency = 60;
         }
       }
 
@@ -1403,8 +1454,9 @@ export const ERPConfigPage = () => {
                                     can_read_tax_categories: true,
                                   },
                                   sync_settings: {
-                                    sync_frequency: 1440, // daily in minutes
+                                    sync_frequency: 60,
                                   },
+                                  invoice_sync_start_date: '',
                                 },
                                 is_active: true,
                               });
@@ -2435,7 +2487,7 @@ export const ERPConfigPage = () => {
                           }
                           onSelect={(date) =>
                             setSyncDateFrom(
-                              date ? date.toISOString().split('T')[0] : ''
+                              date ? formatDateOnly(date, 'yyyy-MM-dd') : ''
                             )
                           }
                           initialFocus
@@ -2464,7 +2516,7 @@ export const ERPConfigPage = () => {
                           }
                           onSelect={(date) =>
                             setSyncDateTo(
-                              date ? date.toISOString().split('T')[0] : ''
+                              date ? formatDateOnly(date, 'yyyy-MM-dd') : ''
                             )
                           }
                           initialFocus
@@ -4112,16 +4164,226 @@ export const ERPConfigPage = () => {
                         </div>
                       )}
 
-                      {/* Sync Settings */}
-                      {erpSetting.setting_value.sync_settings && (
+                      {/* Sync Settings - always show in Edit with defaults */}
+                      {erpSetting.setting_value != null && (
                         <div className="space-y-3 p-4 border rounded-md">
                           <Label className="text-sm font-semibold">
                             Sync Settings
                           </Label>
+                          {/* Sync frequency (dropdown) */}
+                          <div className="space-y-2">
+                            <Label className="text-xs">Sync frequency</Label>
+                            <Select
+                              value={(
+                                [
+                                  30, 60, 240, 360, 1440, 10080,
+                                ].includes(
+                                  Number(
+                                    (erpEditForm.setting_value?.sync_settings as
+                                      { sync_frequency?: number } | undefined)
+                                      ?.sync_frequency ??
+                                      (erpSetting.setting_value.sync_settings as
+                                        { sync_frequency?: number } | undefined)
+                                        ?.sync_frequency ??
+                                      60
+                                  )
+                                )
+                                  ? (
+                                      (erpEditForm.setting_value?.sync_settings as
+                                        { sync_frequency?: number } | undefined)
+                                        ?.sync_frequency ??
+                                      (erpSetting.setting_value.sync_settings as
+                                        { sync_frequency?: number } | undefined)
+                                        ?.sync_frequency ??
+                                      60
+                                    ).toString()
+                                  : '60'
+                              )}
+                              onValueChange={(value) => {
+                                const newSettingValue = {
+                                  ...(erpEditForm.setting_value || {}),
+                                };
+                                if (!newSettingValue.sync_settings) {
+                                  const syncSettings =
+                                    erpSetting.setting_value?.sync_settings;
+                                  newSettingValue.sync_settings =
+                                    syncSettings &&
+                                    typeof syncSettings === 'object' &&
+                                    !Array.isArray(syncSettings)
+                                      ? {
+                                          ...(syncSettings as Record<
+                                            string,
+                                            unknown
+                                          >),
+                                        }
+                                      : { sync_frequency: 60 };
+                                }
+                                const syncSettingsObj =
+                                  newSettingValue.sync_settings as Record<
+                                    string,
+                                    unknown
+                                  >;
+                                syncSettingsObj.sync_frequency =
+                                  parseInt(value);
+                                setErpEditForm({
+                                  ...erpEditForm,
+                                  setting_value: newSettingValue,
+                                });
+                              }}
+                            >
+                              <SelectTrigger>
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="30">
+                                  Every 30 minutes
+                                </SelectItem>
+                                <SelectItem value="60">
+                                  Every hour (Recommended)
+                                </SelectItem>
+                                <SelectItem value="240">
+                                  Every 4 hours
+                                </SelectItem>
+                                <SelectItem value="360">
+                                  Every 6 hours
+                                </SelectItem>
+                                <SelectItem value="1440">
+                                  Daily (once per day)
+                                </SelectItem>
+                                <SelectItem value="10080">
+                                  Weekly (once per week)
+                                </SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          {/* Invoice sync start date */}
+                          <div className="space-y-2">
+                            <Label className="text-xs">
+                              Invoice sync start date
+                            </Label>
+                            <Popover
+                              onOpenChange={(open) => {
+                                if (open) {
+                                  const dateStr =
+                                    erpEditForm.setting_value
+                                      ?.invoice_sync_start_date ??
+                                    erpSetting.setting_value
+                                      ?.invoice_sync_start_date;
+                                  setEditCalendarMonth(
+                                    dateStr
+                                      ? new Date(dateStr as string)
+                                      : new Date()
+                                  );
+                                }
+                              }}
+                            >
+                              <PopoverTrigger asChild>
+                                <Button
+                                  variant="outline"
+                                  className="w-full justify-start text-left font-normal"
+                                >
+                                  <CalendarIcon className="mr-2 h-4 w-4" />
+                                  {(erpEditForm.setting_value
+                                    ?.invoice_sync_start_date ??
+                                    erpSetting.setting_value
+                                      ?.invoice_sync_start_date)
+                                    ? formatDate(
+                                        (erpEditForm.setting_value
+                                          ?.invoice_sync_start_date ??
+                                          erpSetting.setting_value
+                                            ?.invoice_sync_start_date) as string
+                                      )
+                                    : 'Select date'}
+                                </Button>
+                              </PopoverTrigger>
+                              <PopoverContent
+                                className="w-auto p-0"
+                                align="start"
+                              >
+                                <div className="p-2 border-b">
+                                  <Label className="text-xs text-muted-foreground">
+                                    Jump to year
+                                  </Label>
+                                  <Select
+                                    value={editCalendarMonth
+                                      .getFullYear()
+                                      .toString()}
+                                    onValueChange={(value) =>
+                                      setEditCalendarMonth(
+                                        (m) =>
+                                          new Date(
+                                            parseInt(value, 10),
+                                            m.getMonth(),
+                                            1
+                                          )
+                                      )
+                                    }
+                                  >
+                                    <SelectTrigger className="mt-1 h-9">
+                                      <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      {Array.from(
+                                        {
+                                          length:
+                                            new Date().getFullYear() - 2000 + 1,
+                                        },
+                                        (_, i) =>
+                                          new Date().getFullYear() - i
+                                      ).map((year) => (
+                                        <SelectItem
+                                          key={year}
+                                          value={year.toString()}
+                                        >
+                                          {year}
+                                        </SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+                                <Calendar
+                                  mode="single"
+                                  month={editCalendarMonth}
+                                  onMonthChange={setEditCalendarMonth}
+                                  selected={
+                                    (erpEditForm.setting_value
+                                      ?.invoice_sync_start_date ??
+                                    erpSetting.setting_value
+                                      ?.invoice_sync_start_date)
+                                      ? new Date(
+                                          (erpEditForm.setting_value
+                                            ?.invoice_sync_start_date ??
+                                            erpSetting.setting_value
+                                              ?.invoice_sync_start_date) as string
+                                        )
+                                      : undefined
+                                  }
+                                  onSelect={(date) => {
+                                    const newSettingValue = {
+                                      ...(erpEditForm.setting_value || {}),
+                                    };
+                                    newSettingValue.invoice_sync_start_date =
+                                      date
+                                        ? formatDateOnly(date, 'yyyy-MM-dd')
+                                        : '';
+                                    setErpEditForm({
+                                      ...erpEditForm,
+                                      setting_value: newSettingValue,
+                                    });
+                                  }}
+                                  disabled={(date) => date > new Date()}
+                                  initialFocus
+                                />
+                              </PopoverContent>
+                            </Popover>
+                          </div>
                           {Object.entries(
-                            erpSetting.setting_value.sync_settings
+                            erpSetting.setting_value.sync_settings || {}
                           )
-                            .filter(([key]) => key !== 'last_sync_at') // Exclude last_sync_at
+                            .filter(
+                              ([key]) =>
+                                key !== 'last_sync_at' && key !== 'sync_frequency'
+                            )
                             .map(([key, value]: [string, unknown]) => (
                               <div key={key} className="space-y-2">
                                 <Label
@@ -5120,7 +5382,13 @@ export const ERPConfigPage = () => {
                 <div className="space-y-2">
                   <Label htmlFor="create-sync-frequency">Sync Frequency</Label>
                   <Select
-                    value={erpCreateForm.setting_value.sync_settings.sync_frequency.toString()}
+                    value={
+                      [30, 60, 240, 360, 1440, 10080].includes(
+                        erpCreateForm.setting_value.sync_settings.sync_frequency
+                      )
+                        ? erpCreateForm.setting_value.sync_settings.sync_frequency.toString()
+                        : 'custom'
+                    }
                     onValueChange={(value) => {
                       const numValue =
                         value === 'custom'
@@ -5198,6 +5466,104 @@ export const ERPConfigPage = () => {
                   <p className="text-xs text-muted-foreground">
                     Recommended: Hourly (60 minutes) for most businesses. More
                     frequent syncing may impact ERP system performance.
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <Label>
+                    Invoice sync start date <span className="text-red-500">*</span>
+                  </Label>
+                  <Popover
+                    open={createCalendarOpen}
+                    onOpenChange={(open) => {
+                      setCreateCalendarOpen(open);
+                      if (open) {
+                        setCreateCalendarMonth(
+                          erpCreateForm.setting_value.invoice_sync_start_date
+                            ? new Date(
+                                erpCreateForm.setting_value.invoice_sync_start_date
+                              )
+                            : new Date()
+                        );
+                      }
+                    }}
+                  >
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        className="w-full justify-start text-left font-normal"
+                      >
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {erpCreateForm.setting_value.invoice_sync_start_date
+                          ? formatDate(
+                              erpCreateForm.setting_value.invoice_sync_start_date
+                            )
+                          : 'Select date'}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <div className="p-2 border-b">
+                        <Label className="text-xs text-muted-foreground">
+                          Jump to year
+                        </Label>
+                        <Select
+                          value={createCalendarMonth.getFullYear().toString()}
+                          onValueChange={(value) =>
+                            setCreateCalendarMonth(
+                              (m) =>
+                                new Date(
+                                  parseInt(value, 10),
+                                  m.getMonth(),
+                                  1
+                                )
+                            )}
+                        >
+                          <SelectTrigger className="mt-1 h-9">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {Array.from(
+                              { length: new Date().getFullYear() - 2000 + 1 },
+                              (_, i) => new Date().getFullYear() - i
+                            ).map((year) => (
+                              <SelectItem
+                                key={year}
+                                value={year.toString()}
+                              >
+                                {year}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <Calendar
+                        mode="single"
+                        month={createCalendarMonth}
+                        onMonthChange={setCreateCalendarMonth}
+                        selected={
+                          erpCreateForm.setting_value.invoice_sync_start_date
+                            ? new Date(
+                                erpCreateForm.setting_value.invoice_sync_start_date
+                              )
+                            : undefined
+                        }
+                        onSelect={(date) =>
+                          setErpCreateForm({
+                            ...erpCreateForm,
+                            setting_value: {
+                              ...erpCreateForm.setting_value,
+                              invoice_sync_start_date: date
+                                ? formatDateOnly(date, 'yyyy-MM-dd')
+                                : '',
+                            },
+                          })
+                        }
+                        disabled={(date) => date > new Date()}
+                        initialFocus
+                      />
+                    </PopoverContent>
+                  </Popover>
+                  <p className="text-xs text-muted-foreground">
+                    First date to sync invoices from. Cannot be in the future.
                   </p>
                 </div>
               </div>
@@ -5314,8 +5680,9 @@ export const ERPConfigPage = () => {
                           can_read_tax_categories: true,
                         },
                         sync_settings: {
-                          sync_frequency: 30,
+                          sync_frequency: 60,
                         },
+                        invoice_sync_start_date: '',
                       },
                       is_active: true,
                     });
@@ -5328,6 +5695,7 @@ export const ERPConfigPage = () => {
                   disabled={
                     createERPSetting.isPending ||
                     !erpCreateForm.setting_value.server_details.host ||
+                    !erpCreateForm.setting_value.invoice_sync_start_date ||
                     (erpCreateForm.erp_type === 'sage_300' &&
                       !erpCreateForm.setting_value.server_details.database) ||
                     !erpCreateForm.erp_type ||
