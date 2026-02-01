@@ -11,7 +11,6 @@ import NotFound from './pages/NotFound';
 import { FeaturesPage } from './pages/landing/FeaturesPage';
 import { PricingPage } from './pages/landing/PricingPage';
 import AboutPage from './pages/landing/AboutPage';
-import APIDocsPage from './pages/landing/APIDocsPage';
 import PartnersPage from './pages/landing/PartnersPage';
 import ContactPage from './pages/landing/ContactPage';
 
@@ -85,7 +84,6 @@ const App = () => (
                 {/* Landing Pages */}
                 <Route path="/" element={<Index />} />
                 <Route path="/about" element={<AboutPage />} />
-                <Route path="/api-docs" element={<APIDocsPage />} />
                 <Route path="/partners" element={<PartnersPage />} />
                 <Route path="/contact" element={<ContactPage />} />
                 <Route path="/features" element={<FeaturesPage />} />

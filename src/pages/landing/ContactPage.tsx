@@ -106,7 +106,7 @@ const ContactPage = () => {
                         Get detailed responses to your questions
                       </p>
                       <p className="text-green-600 font-medium">
-                        support@einvoicing.ng
+                        support@databytesintegratedservices.com
                       </p>
                       <p className="text-sm text-gray-500">
                         Response within 2 hours

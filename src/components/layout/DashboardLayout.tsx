@@ -137,9 +137,11 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
         <div className="fixed inset-y-0 left-0 flex w-64 flex-col bg-white">
           <div className="flex h-16 items-center justify-between px-4">
             <div className="flex items-center space-x-2">
-              <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-                <FileText className="w-5 h-5 text-primary-foreground" />
-              </div>
+              <img 
+                src="/logo.png" 
+                alt="Databytes Logo" 
+                className="w-8 h-8 object-contain"
+              />
               <span className="text-xl font-bold">Databytes</span>
             </div>
             <Button
@@ -183,9 +185,11 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                 sidebarCollapsed ? 'justify-center' : ''
               }`}
             >
-              <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-                <FileText className="w-5 h-5 text-primary-foreground" />
-              </div>
+              <img 
+                src="/logo.png" 
+                alt="Databytes Logo" 
+                className="w-8 h-8 object-contain"
+              />
               {!sidebarCollapsed && (
                 <span className="text-xl font-bold">Databytes</span>
               )}

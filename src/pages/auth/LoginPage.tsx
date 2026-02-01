@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Eye, EyeOff, FileText, ArrowLeft } from 'lucide-react';
+import { Eye, EyeOff, ArrowLeft } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
@@ -80,8 +80,12 @@ export const LoginPage = () => {
         <div className="relative z-10 flex flex-col justify-center px-12 text-primary-foreground">
           <div className="mb-8">
             <div className="flex items-center space-x-3 mb-6">
-              <div className="w-12 h-12 bg-primary-foreground/20 rounded-xl flex items-center justify-center">
-                <FileText className="w-7 h-7" />
+              <div className="w-12 h-12 bg-primary-foreground/20 rounded-xl flex items-center justify-center p-2 shadow-lg backdrop-blur-sm border border-primary-foreground/10">
+                <img 
+                  src="/logo.png" 
+                  alt="Databytes Logo" 
+                  className="w-full h-full object-contain"
+                />
               </div>
               <span className="text-3xl font-bold">Databytes</span>
             </div>
