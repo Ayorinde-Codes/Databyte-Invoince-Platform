@@ -48,9 +48,11 @@ const Index = () => {
           <div className="flex justify-between items-center h-20">
             {/* Logo */}
             <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center">
-                <BarChart3 className="w-6 h-6 text-white" />
-              </div>
+              <img 
+                src="/logo.png" 
+                alt="Databytes Logo" 
+                className="w-10 h-10 object-contain"
+              />
               <span className="text-2xl font-bold text-gray-900">Databytes</span>
             </div>
 
@@ -67,12 +69,6 @@ const Index = () => {
                 className="text-gray-600 hover:text-gray-900 font-medium transition-colors"
               >
                 About
-              </Link>
-              <Link
-                to="/api-docs"
-                className="text-gray-600 hover:text-gray-900 font-medium transition-colors"
-              >
-                API Docs
               </Link>
               <Link
                 to="/partners"
@@ -131,12 +127,6 @@ const Index = () => {
                   className="text-gray-600 hover:text-gray-900 font-medium transition-colors"
                 >
                   About
-                </Link>
-                <Link
-                  to="/api-docs"
-                  className="text-gray-600 hover:text-gray-900 font-medium transition-colors"
-                >
-                  API Docs
                 </Link>
                 <Link
                   to="/partners"
@@ -283,21 +273,23 @@ const Index = () => {
         </div>
       </section>
 
-      {/* About Section */}
-      <section id="about" className="py-20 bg-white">
+      {/* About Our Platform Section */}
+      <section id="about" className="py-20 bg-gray-50">
         <div className="container mx-auto px-6">
-          <div className="max-w-4xl mx-auto text-center space-y-8">
-            <h2 className="text-4xl font-bold text-gray-900">
-              About Our Platform
-            </h2>
-            <p className="text-xl text-gray-600 leading-relaxed">
-              We are Nigeria's leading e-invoicing platform, providing
-              comprehensive FIRS compliance solutions for businesses of all
-              sizes. Our platform seamlessly integrates with major ERP systems
-              to streamline your invoicing and tax compliance processes.
-            </p>
-            <div className="grid md:grid-cols-3 gap-8 mt-16">
-              <div className="text-center space-y-4">
+          <div className="max-w-6xl mx-auto">
+            <div className="text-center space-y-8 mb-16">
+              <h2 className="text-4xl font-bold text-gray-900">
+                About Our Platform
+              </h2>
+              <p className="text-xl text-gray-600 leading-relaxed max-w-3xl mx-auto">
+                We are Nigeria's leading e-invoicing platform, providing
+                comprehensive FIRS compliance solutions for businesses of all
+                sizes. Our platform seamlessly integrates with major ERP systems
+                to streamline your invoicing and tax compliance processes.
+              </p>
+            </div>
+            <div className="grid md:grid-cols-3 gap-8">
+              <div className="bg-white rounded-xl shadow-lg p-8 text-center space-y-4 hover:shadow-xl transition-shadow">
                 <div className="w-16 h-16 bg-blue-100 rounded-xl flex items-center justify-center mx-auto">
                   <BarChart3 className="w-8 h-8 text-blue-600" />
                 </div>
@@ -308,7 +300,7 @@ const Index = () => {
                   Seamless integration with Sage, QuickBooks, Dynamics, and more
                 </p>
               </div>
-              <div className="text-center space-y-4">
+              <div className="bg-white rounded-xl shadow-lg p-8 text-center space-y-4 hover:shadow-xl transition-shadow">
                 <div className="w-16 h-16 bg-green-100 rounded-xl flex items-center justify-center mx-auto">
                   <CheckCircle className="w-8 h-8 text-green-600" />
                 </div>
@@ -319,7 +311,7 @@ const Index = () => {
                   100% compliant with Nigerian tax regulations and requirements
                 </p>
               </div>
-              <div className="text-center space-y-4">
+              <div className="bg-white rounded-xl shadow-lg p-8 text-center space-y-4 hover:shadow-xl transition-shadow">
                 <div className="w-16 h-16 bg-purple-100 rounded-xl flex items-center justify-center mx-auto">
                   <Award className="w-8 h-8 text-purple-600" />
                 </div>
@@ -329,59 +321,6 @@ const Index = () => {
                 <p className="text-gray-600">
                   24/7 technical support from our team of tax compliance experts
                 </p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* API Documentation Section */}
-      <section id="api-docs" className="py-20 bg-gray-50">
-        <div className="container mx-auto px-6">
-          <div className="max-w-6xl mx-auto">
-            <div className="text-center space-y-8 mb-16">
-              <h2 className="text-4xl font-bold text-gray-900">
-                API Documentation
-              </h2>
-              <p className="text-xl text-gray-600">
-                Comprehensive API documentation for seamless integration with
-                your existing systems
-              </p>
-            </div>
-
-            <div className="bg-white rounded-2xl shadow-lg p-8">
-              <div className="flex items-center justify-between mb-8">
-                <h3 className="text-2xl font-bold text-gray-900">
-                  Sage 300 Integration Guide
-                </h3>
-                <Badge className="bg-green-100 text-green-800">Sage 300</Badge>
-              </div>
-              <p className="text-gray-600 mb-8">
-                Complete guide to integrating Sage 300 with FIRS e-invoicing.
-              </p>
-
-              <div className="space-y-6">
-                <h4 className="text-xl font-semibold text-gray-900">
-                  API Endpoints
-                </h4>
-                <p className="text-gray-600">Core endpoints for Sage 300</p>
-
-                <div className="bg-gray-50 rounded-lg p-6">
-                  <div className="flex items-center space-x-4 mb-4">
-                    <Badge className="bg-orange-100 text-orange-800">
-                      POST
-                    </Badge>
-                    <code className="text-sm font-mono">
-                      /sage_300/AP/invoiceBatches
-                    </code>
-                  </div>
-                  <h5 className="font-semibold text-gray-900 mb-2">
-                    Fetch AP Invoice Batches
-                  </h5>
-                  <p className="text-gray-600 text-sm">
-                    Retrieve all Accounts Payable invoice batches.
-                  </p>
-                </div>
               </div>
             </div>
           </div>
@@ -467,7 +406,7 @@ const Index = () => {
                   <Search className="w-8 h-8 text-white" />
                 </div>
                 <h3 className="text-xl font-semibold">Email Us</h3>
-                <p className="text-gray-300">support@einvoicing.ng</p>
+                <p className="text-gray-300">support@databytesintegratedservices.com</p>
               </div>
               <div className="text-center space-y-4">
                 <div className="w-16 h-16 bg-blue-600 rounded-xl flex items-center justify-center mx-auto">

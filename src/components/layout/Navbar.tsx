@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { BarChart3, Menu, X } from 'lucide-react';
+import { Menu, X } from 'lucide-react';
 
 const Navbar = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -12,9 +12,11 @@ const Navbar = () => {
         <div className="flex items-center justify-between h-20">
           {/* Logo */}
           <Link to="/" className="flex items-center space-x-3">
-            <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center">
-              <BarChart3 className="w-6 h-6 text-white" />
-            </div>
+            <img 
+              src="/logo.png" 
+              alt="Databytes Logo" 
+              className="w-10 h-10 object-contain"
+            />
             <span className="text-2xl font-bold text-gray-900">Databytes</span>
           </Link>
 
@@ -31,12 +33,6 @@ const Navbar = () => {
               className="text-gray-600 hover:text-gray-900 font-medium transition-colors"
             >
               About
-            </Link>
-            <Link
-              to="/api-docs"
-              className="text-gray-600 hover:text-gray-900 font-medium transition-colors"
-            >
-              API Docs
             </Link>
             <Link
               to="/partners"
@@ -95,12 +91,6 @@ const Navbar = () => {
                     className="text-gray-600 hover:text-gray-900 font-medium transition-colors"
                   >
                     About
-                  </Link>
-                  <Link
-                    to="/api-docs"
-                    className="text-gray-600 hover:text-gray-900 font-medium transition-colors"
-                  >
-                    API Docs
                   </Link>
                   <Link
                     to="/partners"
