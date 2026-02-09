@@ -39,6 +39,8 @@ export const LoginPage = () => {
     formState: { errors },
     setValue,
     watch,
+    setError,
+    clearErrors,
   } = useForm<LoginFormData>({
     resolver: zodResolver(loginSchema),
     defaultValues: {
@@ -52,6 +54,7 @@ export const LoginPage = () => {
 
   const onSubmit = async (data: LoginFormData) => {
     setIsLoading(true);
+    clearErrors(); // Clear any previous errors
 
     try {
       await login({
@@ -62,11 +65,61 @@ export const LoginPage = () => {
       toast.success('Login successful! Welcome back.');
       navigate('/dashboard');
     } catch (error) {
-      toast.error(
-        error instanceof Error
-          ? error.message
-          : 'Login failed. Please try again.'
-      );
+      // Handle field-specific errors from API
+      let errorMessage = 'Login failed. Please try again.';
+      let firstErrorField: string | null = null;
+      
+      if (error && typeof error === 'object' && 'errors' in error) {
+        const apiError = error as { 
+          message?: string; 
+          errors?: Record<string, string[]>; 
+          statusCode?: number;
+        };
+        
+        errorMessage = apiError.message || errorMessage;
+        
+        // Map API field names to form field names
+        const fieldMapping: Record<string, keyof LoginFormData> = {
+          'email': 'email',
+          'password': 'password',
+        };
+        
+        // Set field-specific errors
+        if (apiError.errors) {
+          Object.entries(apiError.errors).forEach(([apiField, messages]) => {
+            const formField = fieldMapping[apiField] || apiField as keyof LoginFormData;
+            const errorMessage = Array.isArray(messages) ? messages[0] : String(messages);
+            
+            setError(formField, {
+              type: 'server',
+              message: errorMessage,
+            });
+            
+            // Track first error field for focus
+            if (!firstErrorField) {
+              firstErrorField = formField as string;
+            }
+          });
+        }
+      } else if (error instanceof Error) {
+        errorMessage = error.message;
+        // For generic errors, show toast
+        toast.error(errorMessage);
+      }
+      
+      // Focus on first error field
+      if (firstErrorField) {
+        setTimeout(() => {
+          const element = document.getElementById(firstErrorField);
+          if (element) {
+            element.focus();
+            element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }
+        }, 100);
+      } else if (!(error && typeof error === 'object' && 'errors' in error)) {
+        // Only show toast if no field-specific errors were set
+        toast.error(errorMessage);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -151,8 +204,10 @@ export const LoginPage = () => {
                     id="email"
                     type="email"
                     placeholder="Enter your email"
+                    autoComplete="email"
                     {...register('email')}
-                    className={errors.email ? 'border-destructive' : ''}
+                    className={errors.email ? 'border-destructive focus-visible:ring-destructive' : ''}
+                    aria-invalid={errors.email ? 'true' : 'false'}
                   />
                   {errors.email && (
                     <p className="text-sm text-destructive">
@@ -168,10 +223,12 @@ export const LoginPage = () => {
                       id="password"
                       type={showPassword ? 'text' : 'password'}
                       placeholder="Enter your password"
+                      autoComplete="current-password"
                       {...register('password')}
                       className={
-                        errors.password ? 'border-destructive pr-10' : 'pr-10'
+                        errors.password ? 'border-destructive focus-visible:ring-destructive pr-10' : 'pr-10'
                       }
+                      aria-invalid={errors.password ? 'true' : 'false'}
                     />
                     <Button
                       type="button"

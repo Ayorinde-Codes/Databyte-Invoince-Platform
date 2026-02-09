@@ -136,14 +136,15 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     } catch (error: unknown) {
       console.error('Login error:', error);
       
-      // Extract more detailed error information
-      let errorMessage = 'Login failed. Please check your credentials.';
+      if (error && typeof error === 'object' && 'statusCode' in error) {
+        throw error;
+      }
       
+      let errorMessage = 'Login failed. Please check your credentials.';
       if (error instanceof Error) {
         errorMessage = error.message;
       } else if (error && typeof error === 'object') {
-        // Handle ApiError structure
-        const apiError = error as { message?: string; statusCode?: number; errors?: Record<string, string[]> };
+        const apiError = error as { message?: string };
         if (apiError.message) {
           errorMessage = apiError.message;
         }
@@ -213,14 +214,19 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     } catch (error: unknown) {
       console.error('Registration error:', error);
       
-      // Extract error message from various error formats
-      let errorMessage = 'Registration failed. Please try again.';
+      // Preserve the error structure instead of converting to Error
+      // This allows RegisterPage to access errors.errors for field-specific errors
+      if (error && typeof error === 'object' && 'statusCode' in error) {
+        // It's an ApiError - throw it as-is
+        throw error;
+      }
       
+      // For other errors, extract message
+      let errorMessage = 'Registration failed. Please try again.';
       if (error instanceof Error) {
         errorMessage = error.message;
       } else if (error && typeof error === 'object') {
-        // Handle ApiError structure from apiService
-        const apiError = error as { message?: string; statusCode?: number; data?: unknown };
+        const apiError = error as { message?: string };
         if (apiError.message) {
           errorMessage = apiError.message;
         }
