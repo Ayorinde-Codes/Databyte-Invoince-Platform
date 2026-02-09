@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Eye, EyeOff, FileText, ArrowLeft, Building, User, Mail, Phone } from 'lucide-react';
+import { Eye, EyeOff, ArrowLeft, Building, User, Mail, Phone } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
@@ -49,6 +49,8 @@ export const RegisterPage = () => {
     formState: { errors },
     setValue,
     watch,
+    setError,
+    clearErrors,
   } = useForm<RegisterFormData>({
     resolver: zodResolver(registerSchema),
     defaultValues: {
@@ -103,6 +105,7 @@ export const RegisterPage = () => {
 
   const onSubmit = async (data: RegisterFormData) => {
     setIsLoading(true);
+    clearErrors(); // Clear any previous errors
 
     try {
       await registerUser({
@@ -118,20 +121,72 @@ export const RegisterPage = () => {
       toast.success('Registration successful! Welcome to Databyte.');
       navigate('/dashboard');
     } catch (error: unknown) {
-      // Extract error message from various error formats
+      // Handle field-specific errors from API
       let errorMessage = 'Registration failed. Please try again.';
+      let firstErrorField: string | null = null;
       
-      if (error instanceof Error) {
+      if (error && typeof error === 'object' && 'errors' in error) {
+        const apiError = error as { 
+          message?: string; 
+          errors?: Record<string, string[]>; 
+          statusCode?: number;
+        };
+        
+        errorMessage = apiError.message || errorMessage;
+        
+        // Map API field names to form field names
+        const fieldMapping: Record<string, keyof RegisterFormData> = {
+          'company_name': 'name',
+          'company_email': 'email',
+          'company_password': 'password',
+          'company_password_confirmation': 'confirm_password',
+          'tin': 'tin',
+          'phone': 'phone',
+          'address': 'address',
+          'primary_service_id': 'primary_service_id',
+        };
+        
+        // Set field-specific errors
+        if (apiError.errors) {
+          Object.entries(apiError.errors).forEach(([apiField, messages]) => {
+            const formField = fieldMapping[apiField] || apiField as keyof RegisterFormData;
+            const errorMessage = Array.isArray(messages) ? messages[0] : String(messages);
+            
+            setError(formField, {
+              type: 'server',
+              message: errorMessage,
+            });
+            
+            // Track first error field for focus
+            if (!firstErrorField) {
+              firstErrorField = formField as string;
+            }
+          });
+        }
+      } else if (error instanceof Error) {
         errorMessage = error.message;
       } else if (error && typeof error === 'object') {
-        // Handle ApiError structure from apiService
-        const apiError = error as { message?: string; statusCode?: number; data?: unknown };
+        const apiError = error as { message?: string };
         if (apiError.message) {
           errorMessage = apiError.message;
         }
       }
       
-      toast.error(errorMessage);
+      // Show toast for general errors (but field errors are already set above)
+      if (!(error && typeof error === 'object' && 'errors' in error)) {
+        toast.error(errorMessage);
+      }
+      
+      // Focus on first error field
+      if (firstErrorField) {
+        setTimeout(() => {
+          const element = document.getElementById(firstErrorField);
+          if (element) {
+            element.focus();
+            element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }
+        }, 100);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -145,10 +200,14 @@ export const RegisterPage = () => {
         <div className="relative z-10 flex flex-col justify-center px-12 text-primary-foreground">
           <div className="mb-8">
             <div className="flex items-center space-x-3 mb-6">
-              <div className="w-12 h-12 bg-primary-foreground/20 rounded-xl flex items-center justify-center">
-                <FileText className="w-7 h-7" />
+              <div className="w-12 h-12 bg-primary-foreground/20 rounded-xl flex items-center justify-center p-2 shadow-lg backdrop-blur-sm border border-primary-foreground/10">
+                <img 
+                  src="/logo.png" 
+                  alt="Databytes Logo" 
+                  className="w-full h-full object-contain"
+                />
               </div>
-              <span className="text-3xl font-bold">Databyte</span>
+              <span className="text-3xl font-bold">Databytes</span>
             </div>
             <h1 className="text-4xl font-bold mb-4">
               Join thousands of businesses streamlining their invoice management
@@ -211,8 +270,10 @@ export const RegisterPage = () => {
                       id="full_name"
                       type="text"
                       placeholder="Enter your full name"
+                      autoComplete="name"
                       {...register('name')}
-                      className={errors.name ? 'border-destructive' : ''}
+                      className={errors.name ? 'border-destructive focus-visible:ring-destructive' : ''}
+                      aria-invalid={errors.name ? 'true' : 'false'}
                     />
                     {errors.name && (
                       <p className="text-sm text-destructive">{errors.name.message}</p>
@@ -225,8 +286,10 @@ export const RegisterPage = () => {
                       id="email"
                       type="email"
                       placeholder="Enter your email"
+                      autoComplete="email"
                       {...register('email')}
-                      className={errors.email ? 'border-destructive' : ''}
+                      className={errors.email ? 'border-destructive focus-visible:ring-destructive' : ''}
+                      aria-invalid={errors.email ? 'true' : 'false'}
                     />
                     {errors.email && (
                       <p className="text-sm text-destructive">{errors.email.message}</p>
@@ -239,8 +302,10 @@ export const RegisterPage = () => {
                       id="phone"
                       type="tel"
                       placeholder="Enter your phone number"
+                      autoComplete="tel"
                       {...register('phone')}
-                      className={errors.phone ? 'border-destructive' : ''}
+                      className={errors.phone ? 'border-destructive focus-visible:ring-destructive' : ''}
+                      aria-invalid={errors.phone ? 'true' : 'false'}
                     />
                     {errors.phone && (
                       <p className="text-sm text-destructive">{errors.phone.message}</p>
@@ -261,8 +326,10 @@ export const RegisterPage = () => {
                       id="company_name_input"
                       type="text"
                       placeholder="Enter your company name"
+                      autoComplete="organization"
                       {...register('name')}
-                      className={errors.name ? 'border-destructive' : ''}
+                      className={errors.name ? 'border-destructive focus-visible:ring-destructive' : ''}
+                      aria-invalid={errors.name ? 'true' : 'false'}
                     />
                     {errors.name && (
                       <p className="text-sm text-destructive">{errors.name.message}</p>
@@ -275,8 +342,10 @@ export const RegisterPage = () => {
                       id="address"
                       type="text"
                       placeholder="Enter your company address"
+                      autoComplete="street-address"
                       {...register('address')}
-                      className={errors.address ? 'border-destructive' : ''}
+                      className={errors.address ? 'border-destructive focus-visible:ring-destructive' : ''}
+                      aria-invalid={errors.address ? 'true' : 'false'}
                     />
                     {errors.address && (
                       <p className="text-sm text-destructive">{errors.address.message}</p>
@@ -290,7 +359,8 @@ export const RegisterPage = () => {
                       type="text"
                       placeholder="Enter your company TIN"
                       {...register('tin')}
-                      className={errors.tin ? 'border-destructive' : ''}
+                      className={errors.tin ? 'border-destructive focus-visible:ring-destructive' : ''}
+                      aria-invalid={errors.tin ? 'true' : 'false'}
                     />
                     {errors.tin && (
                       <p className="text-sm text-destructive">{errors.tin.message}</p>
@@ -338,8 +408,10 @@ export const RegisterPage = () => {
                         id="password"
                         type={showPassword ? 'text' : 'password'}
                         placeholder="Create a strong password"
+                        autoComplete="new-password"
                         {...register('password')}
-                        className={errors.password ? 'border-destructive pr-10' : 'pr-10'}
+                        className={errors.password ? 'border-destructive focus-visible:ring-destructive pr-10' : 'pr-10'}
+                        aria-invalid={errors.password ? 'true' : 'false'}
                       />
                       <Button
                         type="button"
@@ -367,8 +439,10 @@ export const RegisterPage = () => {
                         id="confirm_password"
                         type={showConfirmPassword ? 'text' : 'password'}
                         placeholder="Confirm your password"
+                        autoComplete="new-password"
                         {...register('confirm_password')}
-                        className={errors.confirm_password ? 'border-destructive pr-10' : 'pr-10'}
+                        className={errors.confirm_password ? 'border-destructive focus-visible:ring-destructive pr-10' : 'pr-10'}
+                        aria-invalid={errors.confirm_password ? 'true' : 'false'}
                       />
                       <Button
                         type="button"
