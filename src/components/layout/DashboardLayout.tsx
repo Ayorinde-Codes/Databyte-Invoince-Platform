@@ -123,6 +123,14 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
       adminOnly: true,
     },
     {
+      name: 'Access Point Providers',
+      href: '/dashboard/admin/access-point-providers',
+      icon: Shield,
+      current: location.pathname === '/dashboard/admin/access-point-providers',
+      permission: 'services.manage' as const,
+      adminOnly: true,
+    },
+    {
       name: 'Settings',
       href: '/dashboard/settings',
       icon: Settings,

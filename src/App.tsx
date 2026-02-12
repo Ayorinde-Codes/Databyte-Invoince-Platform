@@ -32,6 +32,7 @@ import { ChangePasswordPage } from './pages/dashboard/ChangePasswordPage';
 import { AdminServicesPage } from './pages/dashboard/admin/AdminServicesPage';
 import { AdminCompaniesPage } from './pages/dashboard/admin/AdminCompaniesPage';
 import { AdminUsersPage } from './pages/dashboard/admin/AdminUsersPage';
+import { AdminAccessPointProvidersPage } from './pages/dashboard/admin/AdminAccessPointProvidersPage';
 
 // Providers
 import { AuthProvider, useAuth } from './providers/AuthProvider';
@@ -197,6 +198,14 @@ const App = () => (
                   element={
                     <ProtectedRoute allowedPermissions={['services.manage']}>
                       <AdminServicesPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/dashboard/admin/access-point-providers"
+                  element={
+                    <ProtectedRoute allowedPermissions={['services.manage']}>
+                      <AdminAccessPointProvidersPage />
                     </ProtectedRoute>
                   }
                 />
