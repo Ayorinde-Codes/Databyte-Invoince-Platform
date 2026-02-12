@@ -28,11 +28,13 @@ import {
 } from '@/components/ui/tooltip';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { useNotifications } from '@/hooks/useNotifications';
+import { usePermissions } from '@/hooks/usePermissions';
 import { Notification, NotificationType } from '@/types/notification';
 import { cn } from '@/lib/utils';
 
 export const NotificationsPage = () => {
   const navigate = useNavigate();
+  const { isSuperAdmin } = usePermissions();
   const [filter, setFilter] = useState<'all' | 'unread' | 'read'>('all');
   const [typeFilter, setTypeFilter] = useState<string>('all');
   const [page, setPage] = useState(1);
@@ -55,6 +57,7 @@ export const NotificationsPage = () => {
     type: typeFilter === 'all' ? undefined : typeFilter,
     per_page: perPage,
     page,
+    enabled: !isSuperAdmin(),
   });
 
   const getColorClass = (color: string | null) => {

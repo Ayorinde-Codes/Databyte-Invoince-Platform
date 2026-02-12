@@ -12,7 +12,7 @@ import {
   DollarSign,
   BarChart3,
   Settings,
-  Package,
+  Building,
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -344,12 +344,6 @@ export const DashboardPage = () => {
     return ((current - previous) / previous) * 100;
   }, [revenueChartData]);
 
-  // Calculate invoice growth (placeholder - would need historical data)
-  const invoiceGrowth = 8.2; // Placeholder
-
-  // Calculate customer growth (placeholder - would need historical data)
-  const customerGrowth = 15.3; // Placeholder
-
   // Calculate FIRS compliance rate
   const complianceRate = useMemo(() => {
     const invoices = extractInvoiceData(arInvoicesResponse);
@@ -424,12 +418,12 @@ export const DashboardPage = () => {
     return dashboardData.recent_invoices as SuperAdminRecentInvoice[];
   }, [dashboardData?.recent_invoices, isSuperAdmin]);
 
-  // Metrics object - different for super-admin vs regular company
+  // Metrics object - different for super-admin vs regular company; growth from API when available
   const metrics = dashboardData ? (isSuperAdmin ? {
     totalRevenue: dashboardData.metrics?.total_revenue || 0,
-    revenueGrowth: 0, // Would need historical data
+    revenueGrowth: dashboardData.metrics?.revenue_growth ?? undefined,
     totalInvoices: dashboardData.metrics?.total_invoices || 0,
-    invoiceGrowth: 0,
+    invoiceGrowth: dashboardData.metrics?.invoice_growth ?? undefined,
     totalCompanies: dashboardData.metrics?.total_companies || 0,
     activeCompanies: dashboardData.metrics?.active_companies || 0,
     totalServices: dashboardData.metrics?.total_services || 0,
@@ -437,14 +431,15 @@ export const DashboardPage = () => {
     complianceRate: dashboardData.metrics?.firs_compliance_rate || 0,
   } : {
     totalRevenue: totalRevenue || 0,
-    revenueGrowth: revenueGrowth || 0,
+    revenueGrowth: dashboardData?.growth?.revenue_growth ?? revenueGrowth ?? undefined,
     totalInvoices: ((dashboardData?.counts?.ar_invoices || 0) + (dashboardData?.counts?.ap_invoices || 0)),
-    invoiceGrowth: invoiceGrowth || 0,
+    invoiceGrowth: dashboardData?.growth?.invoice_growth ?? undefined,
     totalCustomers: dashboardData?.counts?.customers || 0,
-    customerGrowth: customerGrowth || 0,
-    totalProducts: dashboardData?.counts?.products || 0,
-    productGrowth: 5.2, // Placeholder - would need historical data
+    customerGrowth: dashboardData?.growth?.customer_growth ?? undefined,
+    totalVendors: dashboardData?.counts?.vendors || 0,
+    vendorGrowth: dashboardData?.growth?.vendor_growth ?? undefined,
     complianceRate: complianceRate || 0,
+    complianceGrowth: dashboardData?.growth?.compliance_growth ?? undefined,
   }) : null;
 
 
@@ -625,7 +620,7 @@ export const DashboardPage = () => {
                 title="Total Revenue"
                 value={metrics.totalRevenue}
                 change={metrics.revenueGrowth}
-                changeType={metrics.revenueGrowth >= 0 ? "increase" : "decrease"}
+                changeType={metrics.revenueGrowth != null ? (metrics.revenueGrowth >= 0 ? "increase" : "decrease") : "neutral"}
                 format="currency"
                 icon={DollarSign}
                 description="Revenue from AR invoices"
@@ -634,7 +629,7 @@ export const DashboardPage = () => {
                 title="Total Invoices"
                 value={metrics.totalInvoices}
                 change={metrics.invoiceGrowth}
-                changeType="increase"
+                changeType={metrics.invoiceGrowth != null ? (metrics.invoiceGrowth >= 0 ? "increase" : "decrease") : "neutral"}
                 format="number"
                 icon={FileText}
                 description="AR + AP invoices"
@@ -643,25 +638,25 @@ export const DashboardPage = () => {
                 title="Total Customers"
                 value={metrics.totalCustomers}
                 change={metrics.customerGrowth}
-                changeType="increase"
+                changeType={metrics.customerGrowth != null ? (metrics.customerGrowth >= 0 ? "increase" : "decrease") : "neutral"}
                 format="number"
                 icon={Users}
                 description="Active customers"
               />
               <MetricsCard
-                title="Total Products"
-                value={metrics.totalProducts}
-                change={metrics.productGrowth}
-                changeType="increase"
+                title="Total Vendors"
+                value={metrics.totalVendors}
+                change={metrics.vendorGrowth}
+                changeType={metrics.vendorGrowth != null ? (metrics.vendorGrowth >= 0 ? "increase" : "decrease") : "neutral"}
                 format="number"
-                icon={Package}
-                description="Active products"
+                icon={Building}
+                description="Active vendors"
               />
               <MetricsCard
                 title="FIRS Compliance"
                 value={metrics.complianceRate}
-                change={2.1}
-                changeType="increase"
+                change={'complianceGrowth' in metrics ? metrics.complianceGrowth : undefined}
+                changeType={('complianceGrowth' in metrics && metrics.complianceGrowth != null) ? (metrics.complianceGrowth >= 0 ? "increase" : "decrease") : "neutral"}
                 format="percentage"
                 icon={Shield}
                 description="Compliance rate"
@@ -747,17 +742,23 @@ export const DashboardPage = () => {
               <div className="space-y-3">
                 {canWrite() && (
                   <>
-                <Button className="w-full justify-start" variant="outline">
-                  <Plus className="w-4 h-4 mr-2" />
-                  Create New Invoice
+                <Button className="w-full justify-start" variant="outline" asChild>
+                  <Link to="/dashboard/invoices">
+                    <Plus className="w-4 h-4 mr-2" />
+                    Invoices
+                  </Link>
                 </Button>
-                <Button className="w-full justify-start" variant="outline">
-                  <BarChart3 className="w-4 h-4 mr-2" />
-                  Generate Report
+                <Button className="w-full justify-start" variant="outline" asChild>
+                  <Link to="/dashboard/reports">
+                    <BarChart3 className="w-4 h-4 mr-2" />
+                    Generate Report
+                  </Link>
                 </Button>
-                <Button className="w-full justify-start" variant="outline">
-                  <Settings className="w-4 h-4 mr-2" />
-                  ERP Settings
+                <Button className="w-full justify-start" variant="outline" asChild>
+                  <Link to="/dashboard/erp-config">
+                    <Settings className="w-4 h-4 mr-2" />
+                    ERP Settings
+                  </Link>
                 </Button>
                   </>
                 )}

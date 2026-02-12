@@ -4,11 +4,12 @@ import { toast } from 'sonner';
 import { extractErrorMessage } from '@/utils/error';
 
 // Query hook for fetching company profile
-export const useCompanyProfile = () => {
+export const useCompanyProfile = (enabled = true) => {
   return useQuery({
     queryKey: ['company', 'profile'],
     queryFn: () => apiService.getCompanyProfile(),
     staleTime: 5 * 60 * 1000, // 5 minutes
+    enabled,
   });
 };
 
@@ -74,11 +75,12 @@ export const useChangePassword = () => {
 };
 
 // Query hook for fetching company users (team members)
-export const useCompanyUsers = () => {
+export const useCompanyUsers = (enabled = true) => {
   return useQuery({
     queryKey: ['company', 'users'],
     queryFn: () => apiService.getCompanyUsers(),
     staleTime: 5 * 60 * 1000, // 5 minutes
+    enabled,
   });
 };
 
@@ -123,12 +125,30 @@ export const useAssignUserRole = () => {
   });
 };
 
+// Mutation hook for updating user status (active/inactive)
+export const useUpdateUserStatus = () => {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: (data: { user_id: number; status: 'active' | 'inactive' }) =>
+      apiService.updateUserStatus(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['company', 'users'] });
+      toast.success('User status updated');
+    },
+    onError: (error: unknown) => {
+      toast.error(extractErrorMessage(error, 'Failed to update user status'));
+    },
+  });
+};
+
 // Query hook for fetching company preferences
-export const useCompanyPreferences = () => {
+export const useCompanyPreferences = (enabled = true) => {
   return useQuery({
     queryKey: ['company', 'preferences'],
     queryFn: () => apiService.getCompanyPreferences(),
     staleTime: 5 * 60 * 1000, // 5 minutes
+    enabled,
   });
 };
 

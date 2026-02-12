@@ -20,7 +20,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   requireAll = false,
   redirectTo = '/dashboard',
 }) => {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading, requiresPasswordChange } = useAuth();
   const {
     hasAnyRole,
     hasAllRoles,
@@ -28,6 +28,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
     hasPermission,
   } = usePermissions();
   const location = useLocation();
+  const pathname = location.pathname;
 
   // Show loading state
   if (isLoading) {
@@ -37,6 +38,11 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   // Check authentication
   if (!isAuthenticated) {
     return <Navigate to="/auth/login" state={{ from: location }} replace />;
+  }
+
+  // Require password change: redirect to change-password page until they change it
+  if (requiresPasswordChange && pathname !== '/dashboard/change-password') {
+    return <Navigate to="/dashboard/change-password" replace />;
   }
 
   // Check role/permission access

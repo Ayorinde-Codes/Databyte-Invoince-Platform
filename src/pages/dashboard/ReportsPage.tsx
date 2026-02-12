@@ -79,7 +79,8 @@ const extractInvoiceData = (response: unknown): InvoiceRecord[] => {
 export const ReportsPage = () => {
   const [dateRange, setDateRange] = useState('last_30_days');
   const [reportType, setReportType] = useState('overview');
-  const { isSuperAdmin: isUserSuperAdmin } = usePermissions();
+  const { isSuperAdmin: isUserSuperAdmin, hasPermission } = usePermissions();
+  const canExportReports = hasPermission('reports.export');
 
   // Fetch dashboard overview
   const { 
@@ -311,20 +312,23 @@ export const ReportsPage = () => {
     return total > 0 ? (approved / total) * 100 : 0;
   }, [arInvoicesResponse]);
 
-  // Calculate metrics from real data
+  // Calculate metrics from real data; growth from dashboard API when available
   const overviewMetrics = useMemo(() => {
     const totalInvoices = (dashboardData?.counts?.ar_invoices || 0) + (dashboardData?.counts?.ap_invoices || 0);
     const avgInvoiceValue = totalInvoices > 0 ? totalRevenue / totalInvoices : 0;
+    const apiRevenueGrowth = dashboardData?.metrics?.revenue_growth ?? dashboardData?.growth?.revenue_growth ?? undefined;
+    const apiInvoiceGrowth = dashboardData?.metrics?.invoice_growth ?? dashboardData?.growth?.invoice_growth ?? undefined;
+    const apiComplianceGrowth = dashboardData?.growth?.compliance_growth ?? undefined;
 
     return {
       totalRevenue,
-      revenueGrowth,
+      revenueGrowth: apiRevenueGrowth ?? revenueGrowth,
       totalInvoices,
-      invoiceGrowth: 0, // Would need historical data
+      invoiceGrowth: apiInvoiceGrowth,
       avgInvoiceValue,
-      avgGrowth: 0, // Would need historical data
+      avgGrowth: undefined as number | undefined,
       complianceRate,
-      complianceGrowth: 0, // Would need historical data
+      complianceGrowth: apiComplianceGrowth,
     };
   }, [totalRevenue, revenueGrowth, dashboardData, complianceRate]);
 
@@ -356,7 +360,7 @@ export const ReportsPage = () => {
       .slice(0, 5)
       .map(customer => ({
         ...customer,
-        growth: 0, // Would need historical data
+        growth: undefined as number | undefined,
       }));
   }, [arInvoicesResponse]);
 
@@ -477,10 +481,12 @@ export const ReportsPage = () => {
               Refresh
             </Button>
 
-            <Button variant="outline" size="sm">
-              <Download className="w-4 h-4 mr-2" />
-              Export
-            </Button>
+            {canExportReports && (
+              <Button variant="outline" size="sm">
+                <Download className="w-4 h-4 mr-2" />
+                Export
+              </Button>
+            )}
           </div>
         </div>
 
@@ -505,7 +511,7 @@ export const ReportsPage = () => {
                 title="Total Revenue"
                 value={overviewMetrics.totalRevenue}
                 change={overviewMetrics.revenueGrowth}
-                changeType="increase"
+                changeType={overviewMetrics.revenueGrowth != null ? (overviewMetrics.revenueGrowth >= 0 ? 'increase' : 'decrease') : 'neutral'}
                 format="currency"
                 icon={DollarSign}
                 description="Revenue this period"
@@ -515,7 +521,7 @@ export const ReportsPage = () => {
                 title="Total Invoices"
                 value={overviewMetrics.totalInvoices}
                 change={overviewMetrics.invoiceGrowth}
-                changeType="increase"
+                changeType={overviewMetrics.invoiceGrowth != null ? (overviewMetrics.invoiceGrowth >= 0 ? 'increase' : 'decrease') : 'neutral'}
                 format="number"
                 icon={FileText}
                 description="Invoices processed"
@@ -525,7 +531,7 @@ export const ReportsPage = () => {
                 title="Avg Invoice Value"
                 value={overviewMetrics.avgInvoiceValue}
                 change={overviewMetrics.avgGrowth}
-                changeType="increase"
+                changeType="neutral"
                 format="currency"
                 icon={TrendingUp}
                 description="Average per invoice"
@@ -535,7 +541,7 @@ export const ReportsPage = () => {
                 title="FIRS Compliance"
                 value={overviewMetrics.complianceRate}
                 change={overviewMetrics.complianceGrowth}
-                changeType="increase"
+                changeType={overviewMetrics.complianceGrowth != null ? (overviewMetrics.complianceGrowth >= 0 ? 'increase' : 'decrease') : 'neutral'}
                 format="percentage"
                 icon={CheckCircle}
                 description="Compliance rate"
@@ -583,20 +589,28 @@ export const ReportsPage = () => {
                       <div className="text-sm text-muted-foreground mb-2">
                         {metric.title}
                       </div>
-                      <div
-                        className={`text-xs flex items-center justify-center ${
-                          metric.changeType === 'increase'
-                            ? 'text-green-600'
-                            : 'text-red-600'
-                        }`}
-                      >
-                        {metric.changeType === 'increase' ? (
-                          <TrendingUp className="w-3 h-3 mr-1" />
-                        ) : (
-                          <TrendingUp className="w-3 h-3 mr-1 rotate-180" />
-                        )}
-                        {Math.abs(metric.change)}% from last period
-                      </div>
+                      {metric.change != null ? (
+                        <div
+                          className={`text-xs flex items-center justify-center ${
+                            metric.changeType === 'increase'
+                              ? 'text-green-600'
+                              : metric.changeType === 'decrease'
+                                ? 'text-red-600'
+                                : 'text-muted-foreground'
+                          }`}
+                        >
+                          {metric.changeType === 'increase' ? (
+                            <TrendingUp className="w-3 h-3 mr-1" />
+                          ) : metric.changeType === 'decrease' ? (
+                            <TrendingUp className="w-3 h-3 mr-1 rotate-180" />
+                          ) : null}
+                          {metric.change >= 0 ? '+' : ''}{metric.change}% from last period
+                        </div>
+                      ) : (
+                        <div className="text-xs text-muted-foreground">
+                          — (no prior period data)
+                        </div>
+                      )}
                       <div className="text-xs text-muted-foreground mt-1">
                         {metric.description}
                       </div>
@@ -684,12 +698,16 @@ export const ReportsPage = () => {
                         <div className="font-medium">
                           {formatCurrency(customer.revenue)}
                         </div>
-                        <div
-                          className={`text-sm ${customer.growth > 0 ? 'text-green-600' : 'text-red-600'}`}
-                        >
-                          {customer.growth > 0 ? '+' : ''}
-                          {customer.growth}%
-                        </div>
+                        {customer.growth != null ? (
+                          <div
+                            className={`text-sm ${customer.growth > 0 ? 'text-green-600' : customer.growth < 0 ? 'text-red-600' : 'text-muted-foreground'}`}
+                          >
+                            {customer.growth > 0 ? '+' : ''}
+                            {customer.growth}%
+                          </div>
+                        ) : (
+                          <div className="text-sm text-muted-foreground">—</div>
+                        )}
                       </div>
                     </div>
                   ))}

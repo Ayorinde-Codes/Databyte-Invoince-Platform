@@ -14,6 +14,8 @@ interface AuthContextType {
   token: string | null;
   isAuthenticated: boolean;
   isLoading: boolean;
+  requiresPasswordChange: boolean;
+  clearRequiresPasswordChange: () => void;
   login: (credentials: {
     email: string;
     password: string;
@@ -53,19 +55,27 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [company, setCompany] = useState<Company | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [requiresPasswordChange, setRequiresPasswordChange] = useState(false);
 
-  // Initialize auth state from localStorage
+  const clearRequiresPasswordChange = useCallback(() => {
+    setRequiresPasswordChange(false);
+    removeLocalStorage(AUTH_CONFIG.requires_password_change_key);
+  }, []);
+
+  // Initialize auth state from localStorage (company can be null e.g. for super_admin)
   useEffect(() => {
     const initializeAuth = () => {
       try {
         const storedToken = getLocalStorage(AUTH_CONFIG.token_key, null);
         const storedUser = getLocalStorage(AUTH_CONFIG.user_key, null);
         const storedCompany = getLocalStorage(AUTH_CONFIG.company_key, null);
+        const storedRequiresPasswordChange = getLocalStorage(AUTH_CONFIG.requires_password_change_key, false);
 
-        if (storedToken && storedUser && storedCompany) {
+        if (storedToken && storedUser) {
           setToken(storedToken);
           setUser(storedUser);
-          setCompany(storedCompany);
+          setCompany(storedCompany ?? null);
+          setRequiresPasswordChange(Boolean(storedRequiresPasswordChange));
         }
       } catch (error) {
         console.error('Error initializing auth:', error);
@@ -73,6 +83,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         removeLocalStorage(AUTH_CONFIG.token_key);
         removeLocalStorage(AUTH_CONFIG.user_key);
         removeLocalStorage(AUTH_CONFIG.company_key);
+        removeLocalStorage(AUTH_CONFIG.requires_password_change_key);
       } finally {
         setIsLoading(false);
       }
@@ -88,14 +99,16 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setUser(null);
       setCompany(null);
       setToken(null);
+      setRequiresPasswordChange(false);
       removeLocalStorage(AUTH_CONFIG.token_key);
       removeLocalStorage(AUTH_CONFIG.user_key);
       removeLocalStorage(AUTH_CONFIG.company_key);
+      removeLocalStorage(AUTH_CONFIG.requires_password_change_key);
       removeLocalStorage(AUTH_CONFIG.refresh_token_key);
       
       // Redirect to login if not already there
-      if (window.location.pathname !== '/login') {
-        window.location.href = '/login';
+      if (!window.location.pathname.startsWith('/auth/login')) {
+        window.location.href = '/auth/login';
       }
     };
 
@@ -110,7 +123,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     email: string;
     password: string;
   }): Promise<AuthResponse> => {
-    setIsLoading(true);
+    // Don't set loading here - let the LoginPage handle its own loading state
+    // This prevents a global loading overlay from blocking error display
 
     try {
       const response = await apiService.login(credentials);
@@ -120,40 +134,45 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         throw new Error(errorMsg);
       }
 
-      const { token, user } = response.data;
+      const { token, user, requires_password_change } = response.data;
       const company = user.company;
 
       // Store auth data
       setToken(token);
       setUser(user);
       setCompany(company);
+      setRequiresPasswordChange(Boolean(requires_password_change));
 
       setLocalStorage(AUTH_CONFIG.token_key, token);
       setLocalStorage(AUTH_CONFIG.user_key, user);
       setLocalStorage(AUTH_CONFIG.company_key, company);
+      if (requires_password_change) {
+        setLocalStorage(AUTH_CONFIG.requires_password_change_key, true);
+      } else {
+        removeLocalStorage(AUTH_CONFIG.requires_password_change_key);
+      }
 
       return response.data;
     } catch (error: unknown) {
-      console.error('Login error:', error);
-      
+      // Preserve ApiError structure (with statusCode) - don't convert to Error
+      // This allows LoginPage to access statusCode, message, and errors properties
       if (error && typeof error === 'object' && 'statusCode' in error) {
+        // It's an ApiError from apiService - throw it as-is so LoginPage can access all properties
         throw error;
       }
       
+      // For other errors, extract message but preserve structure if possible
       let errorMessage = 'Login failed. Please check your credentials.';
       if (error instanceof Error) {
         errorMessage = error.message;
-      } else if (error && typeof error === 'object') {
-        const apiError = error as { message?: string };
-        if (apiError.message) {
-          errorMessage = apiError.message;
-        }
+      } else if (error && typeof error === 'object' && 'message' in error) {
+        errorMessage = (error as { message: string }).message;
       }
       
+      // Throw as Error - LoginPage will handle it
       throw new Error(errorMessage);
-    } finally {
-      setIsLoading(false);
     }
+    // Don't set loading here either - LoginPage handles its own loading state
   };
 
   // Real register function
@@ -212,7 +231,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
       return response.data;
     } catch (error: unknown) {
-      console.error('Registration error:', error);
       
       // Preserve the error structure instead of converting to Error
       // This allows RegisterPage to access errors.errors for field-specific errors
@@ -242,7 +260,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     try {
       await apiService.logout();
     } catch (error) {
-      console.error('Logout error:', error);
+      // Silently handle logout errors - user is already being logged out locally
     } finally {
       setUser(null);
       setCompany(null);
@@ -257,21 +275,27 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   }, []);
 
-  const updateUser = (userData: Partial<User>) => {
-    if (user) {
-      const updatedUser = { ...user, ...userData };
-      setUser(updatedUser);
-      setLocalStorage(AUTH_CONFIG.user_key, updatedUser);
-    }
-  };
+  const updateUser = useCallback((userData: Partial<User>) => {
+    setUser((currentUser) => {
+      if (currentUser) {
+        const updatedUser = { ...currentUser, ...userData };
+        setLocalStorage(AUTH_CONFIG.user_key, updatedUser);
+        return updatedUser;
+      }
+      return currentUser;
+    });
+  }, []);
 
-  const updateCompany = (companyData: Partial<Company>) => {
-    if (company) {
-      const updatedCompany = { ...company, ...companyData };
-      setCompany(updatedCompany);
-      setLocalStorage(AUTH_CONFIG.company_key, updatedCompany);
-    }
-  };
+  const updateCompany = useCallback((companyData: Partial<Company>) => {
+    setCompany((currentCompany) => {
+      if (currentCompany) {
+        const updatedCompany = { ...currentCompany, ...companyData };
+        setLocalStorage(AUTH_CONFIG.company_key, updatedCompany);
+        return updatedCompany;
+      }
+      return currentCompany;
+    });
+  }, []);
 
   const refreshToken = useCallback(async () => {
     try {
@@ -305,10 +329,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       );
       
       if (storedRefreshToken) {
-      console.error('Token refresh failed:', error);
         // Only logout if we had a refresh token and it failed
-      logout();
-    }
+        logout();
+      }
       // Otherwise, silently ignore (Sanctum tokens don't need refresh)
     }
   }, [logout]);
@@ -331,6 +354,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     token,
     isAuthenticated: !!token && !!user,
     isLoading,
+    requiresPasswordChange,
+    clearRequiresPasswordChange,
     login,
     register,
     logout,

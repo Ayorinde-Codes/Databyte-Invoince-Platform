@@ -135,6 +135,18 @@ export const API_ENDPOINTS = {
     delete: '/admin/services/:id',
     publicList: '/services',
   },
+  admin: {
+    companies: {
+      list: '/admin/companies',
+      get: '/admin/companies/:id',
+      update: '/admin/companies/:id',
+    },
+    users: {
+      list: '/admin/users',
+      get: '/admin/users/:id',
+      update: '/admin/users/:id',
+    },
+  },
   company: {
     profile: '/company/profile',
     updateProfile: '/company/profile',
@@ -148,6 +160,8 @@ export const API_ENDPOINTS = {
   auth: {
     login: '/auth/login',
     register: '/auth/register',
+    me: '/auth/me',
+    meActivity: '/auth/me/activity',
     logout: '/auth/logout',
     refresh: '/auth/refresh',
     profile: '/auth/profile',
@@ -156,6 +170,7 @@ export const API_ENDPOINTS = {
     resetPassword: '/auth/reset-password',
     createUser: '/auth/create-user',
     assignRole: '/auth/assign-role',
+    updateUserStatus: '/auth/update-user-status',
     acceptInvitation: '/auth/accept-invitation',
   },
   notifications: {
@@ -173,6 +188,7 @@ export const AUTH_CONFIG = {
   refresh_token_key: 'databyte_refresh_token',
   user_key: 'databyte_user',
   company_key: 'databyte_company',
+  requires_password_change_key: 'databyte_requires_password_change',
   session_timeout: 24 * 60 * 60 * 1000, // 24 hours
   refresh_threshold: 5 * 60 * 1000, // 5 minutes
 } as const;

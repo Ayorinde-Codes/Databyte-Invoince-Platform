@@ -43,6 +43,7 @@ export type Permission =
 const ROLE_PERMISSIONS: Record<Role, (Permission | '*')[]> = {
   super_admin: [
     '*', // All permissions
+    'services.manage', // Admin Services/Companies/Users (also needed so allPermissions includes it when expanding '*')
   ],
   company_admin: [
     'dashboard.view',
@@ -84,9 +85,9 @@ const ROLE_PERMISSIONS: Record<Role, (Permission | '*')[]> = {
     'invoices.view',
     'parties.view',
     'products.view',
-    'erp.view',
     'firs.view',
     'reports.view',
+    'settings.view',
   ],
   company: [
     // Company entity has same permissions as company_admin

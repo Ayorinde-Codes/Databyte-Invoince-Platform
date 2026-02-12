@@ -1,13 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
-  User,
-  Mail,
-  Phone,
   MapPin,
   Calendar,
   Shield,
-  Key,
-  Bell,
   Camera,
   Save,
   Edit,
@@ -15,6 +10,7 @@ import {
   EyeOff,
   Activity,
   Clock,
+  Key,
   Settings,
 } from 'lucide-react';
 
@@ -44,90 +40,93 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAuth } from '../../hooks/useAuth';
 import { formatDate } from '../../utils/helpers';
 import { DashboardLayout } from '../../components/layout/DashboardLayout';
+import { apiService } from '../../services/api';
+import type { User } from '../../types/auth';
+
+// Parse first and last name from full name
+const parseName = (name: string | undefined): { firstName: string; lastName: string } => {
+  if (!name?.trim()) return { firstName: '', lastName: '' };
+  const parts = name.trim().split(/\s+/);
+  if (parts.length === 1) return { firstName: parts[0], lastName: '' };
+  const lastName = parts.pop() ?? '';
+  const firstName = parts.join(' ');
+  return { firstName, lastName };
+};
+
+type ActivityItem = {
+  id: string;
+  action: string;
+  description: string | null;
+  event_type: string | null;
+  created_at: string | null;
+};
+
+const getActivityIcon = (eventType: string | null) => {
+  switch (eventType) {
+    case 'login':
+    case 'logout':
+      return <Shield className="w-4 h-4 text-green-500" />;
+    case 'user_creation':
+    case 'role_change':
+    case 'status_change':
+      return <Settings className="w-4 h-4 text-gray-500" />;
+    case 'api_key_regeneration':
+      return <Key className="w-4 h-4 text-purple-500" />;
+    default:
+      return <Activity className="w-4 h-4 text-gray-500" />;
+  }
+};
 
 export const ProfilePage = () => {
-  const { user } = useAuth();
+  const { user, updateUser } = useAuth();
+  const [profileUser, setProfileUser] = useState<User | null>(null);
+  const [recentActivity, setRecentActivity] = useState<ActivityItem[]>([]);
+  const [activityLoading, setActivityLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
 
-  // Mock activity data
-  const recentActivity = [
-    {
-      id: '1',
-      action: 'Created invoice INV-2024-001',
-      timestamp: '2024-01-20T10:30:00Z',
-      type: 'invoice',
-    },
-    {
-      id: '2',
-      action: 'Updated company settings',
-      timestamp: '2024-01-19T15:45:00Z',
-      type: 'settings',
-    },
-    {
-      id: '3',
-      action: 'Logged in from new device',
-      timestamp: '2024-01-19T09:15:00Z',
-      type: 'security',
-    },
-    {
-      id: '4',
-      action: 'Generated API key',
-      timestamp: '2024-01-18T14:20:00Z',
-      type: 'api',
-    },
-    {
-      id: '5',
-      action: 'Exported invoice report',
-      timestamp: '2024-01-17T11:30:00Z',
-      type: 'report',
-    },
-  ];
+  // Fetch fresh user from API so we have created_at and last_login_at (even for existing sessions)
+  useEffect(() => {
+    let cancelled = false;
+    apiService
+      .getMe()
+      .then((res) => {
+        if (cancelled || !res?.data?.user) return;
+        const u = res.data.user as User;
+        setProfileUser(u);
+        updateUser(u);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Only fetch once on mount - updateUser is memoized and stable
 
-  const loginSessions = [
-    {
-      id: '1',
-      device: 'MacBook Pro - Chrome',
-      location: 'Lagos, Nigeria',
-      ip: '192.168.1.100',
-      lastActive: '2024-01-20T10:30:00Z',
-      current: true,
-    },
-    {
-      id: '2',
-      device: 'iPhone 15 - Safari',
-      location: 'Lagos, Nigeria',
-      ip: '192.168.1.101',
-      lastActive: '2024-01-19T18:45:00Z',
-      current: false,
-    },
-    {
-      id: '3',
-      device: 'Windows PC - Edge',
-      location: 'Abuja, Nigeria',
-      ip: '10.0.0.50',
-      lastActive: '2024-01-18T14:20:00Z',
-      current: false,
-    },
-  ];
+  // Fetch current user's activity from API
+  useEffect(() => {
+    let cancelled = false;
+    setActivityLoading(true);
+    apiService
+      .getMyActivity()
+      .then((res) => {
+        if (cancelled) return;
+        setRecentActivity(res?.data?.activity ?? []);
+      })
+      .catch(() => {
+        if (!cancelled) setRecentActivity([]);
+      })
+      .finally(() => {
+        if (!cancelled) setActivityLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
-  const getActivityIcon = (type: string) => {
-    switch (type) {
-      case 'invoice':
-        return <Mail className="w-4 h-4 text-blue-500" />;
-      case 'settings':
-        return <Settings className="w-4 h-4 text-gray-500" />;
-      case 'security':
-        return <Shield className="w-4 h-4 text-green-500" />;
-      case 'api':
-        return <Key className="w-4 h-4 text-purple-500" />;
-      case 'report':
-        return <Activity className="w-4 h-4 text-orange-500" />;
-      default:
-        return <Clock className="w-4 h-4 text-gray-500" />;
-    }
-  };
+  const displayUser = profileUser ?? user;
+  const { firstName, lastName } = parseName(displayUser?.name);
 
   return (
     <DashboardLayout>
@@ -172,16 +171,18 @@ export const ProfilePage = () => {
                 <CardContent className="space-y-6">
                   <div className="flex flex-col items-center space-y-4">
                     <Avatar className="w-24 h-24">
-                      <AvatarImage
-                        src="/placeholder-avatar.jpg"
-                        alt={user?.name}
-                      />
+                      {user?.avatar ? (
+                        <AvatarImage
+                          src={user.avatar}
+                          alt={user?.name}
+                        />
+                      ) : null}
                       <AvatarFallback className="text-2xl">
                         {user?.name
                           ?.split(' ')
                           .map((n) => n[0])
                           .join('')
-                          .toUpperCase()}
+                          .toUpperCase() ?? '?'}
                       </AvatarFallback>
                     </Avatar>
 
@@ -195,12 +196,12 @@ export const ProfilePage = () => {
 
                   <div className="space-y-4">
                     <div className="text-center">
-                      <h3 className="text-lg font-semibold">{user?.name}</h3>
+                      <h3 className="text-lg font-semibold">{displayUser?.name}</h3>
                       <p className="text-sm text-muted-foreground">
-                        {user?.email}
+                        {displayUser?.email}
                       </p>
                       <Badge variant="secondary" className="mt-2">
-                        {user?.roles?.[0] || 'No role'}
+                        {displayUser?.roles?.[0] ?? 'No role'}
                       </Badge>
                     </div>
 
@@ -209,15 +210,19 @@ export const ProfilePage = () => {
                     <div className="space-y-3 text-sm">
                       <div className="flex items-center space-x-2">
                         <Calendar className="w-4 h-4 text-muted-foreground" />
-                        <span>Joined {formatDate('2024-01-01')}</span>
+                        <span>
+                          Joined {user?.created_at ? formatDate(user.created_at) : '—'}
+                        </span>
                       </div>
                       <div className="flex items-center space-x-2">
                         <MapPin className="w-4 h-4 text-muted-foreground" />
-                        <span>Lagos, Nigeria</span>
+                        <span className="text-muted-foreground">—</span>
                       </div>
                       <div className="flex items-center space-x-2">
                         <Clock className="w-4 h-4 text-muted-foreground" />
-                        <span>Last active: Today</span>
+                        <span>
+                          Last active: {user?.last_login_at ? formatDate(user.last_login_at) : '—'}
+                        </span>
                       </div>
                     </div>
                   </div>
@@ -239,16 +244,20 @@ export const ProfilePage = () => {
                         <Label htmlFor="first-name">First Name</Label>
                         <Input
                           id="first-name"
-                          defaultValue="John"
+                          defaultValue={firstName}
+                          placeholder="First name"
                           disabled={!isEditing}
+                          autoComplete="off"
                         />
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor="last-name">Last Name</Label>
                         <Input
                           id="last-name"
-                          defaultValue="Doe"
+                          defaultValue={lastName}
+                          placeholder="Last name"
                           disabled={!isEditing}
+                          autoComplete="off"
                         />
                       </div>
                       <div className="space-y-2">
@@ -256,7 +265,8 @@ export const ProfilePage = () => {
                         <Input
                           id="email"
                           type="email"
-                          defaultValue={user?.email}
+                          defaultValue={displayUser?.email ?? ''}
+                          placeholder="Email"
                           disabled={!isEditing}
                         />
                       </div>
@@ -264,8 +274,10 @@ export const ProfilePage = () => {
                         <Label htmlFor="phone">Phone Number</Label>
                         <Input
                           id="phone"
-                          defaultValue="+234 801 234 5678"
+                          defaultValue=""
+                          placeholder="Add phone number"
                           disabled={!isEditing}
+                          autoComplete="off"
                         />
                       </div>
                     </div>
@@ -275,9 +287,10 @@ export const ProfilePage = () => {
                       <Textarea
                         id="bio"
                         placeholder="Tell us about yourself..."
-                        defaultValue="Senior Finance Manager with 8+ years of experience in invoice management and financial compliance."
+                        defaultValue=""
                         disabled={!isEditing}
                         rows={3}
+                        autoComplete="off"
                       />
                     </div>
 
@@ -389,6 +402,7 @@ export const ProfilePage = () => {
                         id="current-password"
                         type={showCurrentPassword ? 'text' : 'password'}
                         placeholder="Enter current password"
+                        autoComplete="off"
                       />
                       <Button
                         type="button"
@@ -440,6 +454,7 @@ export const ProfilePage = () => {
                       id="confirm-password"
                       type="password"
                       placeholder="Confirm new password"
+                      autoComplete="off"
                     />
                   </div>
 
@@ -482,24 +497,40 @@ export const ProfilePage = () => {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="space-y-4">
-                  {recentActivity.map((activity) => (
-                    <div
-                      key={activity.id}
-                      className="flex items-center space-x-4 p-4 border rounded-lg"
-                    >
-                      <div className="flex-shrink-0">
-                        {getActivityIcon(activity.type)}
+                {activityLoading ? (
+                  <div className="flex flex-col items-center justify-center py-12 text-center text-muted-foreground">
+                    <Clock className="w-12 h-12 mb-4 opacity-50 animate-pulse" />
+                    <p className="text-sm">Loading activity...</p>
+                  </div>
+                ) : recentActivity.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-12 text-center text-muted-foreground">
+                    <Activity className="w-12 h-12 mb-4 opacity-50" />
+                    <p className="text-sm">No recent activity</p>
+                    <p className="text-xs mt-1">Activity will appear here when available</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {recentActivity.map((item) => (
+                      <div
+                        key={item.id}
+                        className="flex items-center space-x-4 p-4 border rounded-lg"
+                      >
+                        <div className="flex-shrink-0">
+                          {getActivityIcon(item.event_type)}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium">{item.action}</p>
+                          {item.description && (
+                            <p className="text-xs text-muted-foreground">{item.description}</p>
+                          )}
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            {item.created_at ? formatDate(item.created_at) : ''}
+                          </p>
+                        </div>
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium">{activity.action}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {formatDate(activity.timestamp)}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
@@ -514,49 +545,10 @@ export const ProfilePage = () => {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="space-y-4">
-                  {loginSessions.map((session) => (
-                    <div
-                      key={session.id}
-                      className="flex items-center justify-between p-4 border rounded-lg"
-                    >
-                      <div className="flex items-center space-x-4">
-                        <div className="flex-shrink-0">
-                          <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center">
-                            <Activity className="w-5 h-5 text-primary" />
-                          </div>
-                        </div>
-                        <div>
-                          <div className="flex items-center space-x-2">
-                            <p className="text-sm font-medium">
-                              {session.device}
-                            </p>
-                            {session.current && (
-                              <Badge variant="default" className="text-xs">
-                                Current
-                              </Badge>
-                            )}
-                          </div>
-                          <p className="text-xs text-muted-foreground">
-                            {session.location} • {session.ip}
-                          </p>
-                          <p className="text-xs text-muted-foreground">
-                            Last active: {formatDate(session.lastActive)}
-                          </p>
-                        </div>
-                      </div>
-
-                      {!session.current && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="text-red-600"
-                        >
-                          Revoke
-                        </Button>
-                      )}
-                    </div>
-                  ))}
+                <div className="flex flex-col items-center justify-center py-12 text-center text-muted-foreground">
+                  <Activity className="w-12 h-12 mb-4 opacity-50" />
+                  <p className="text-sm">Session management</p>
+                  <p className="text-xs mt-1">You are logged in on this device</p>
                 </div>
               </CardContent>
             </Card>

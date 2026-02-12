@@ -317,12 +317,6 @@ export const PartiesPage = () => {
           </div>
 
           <div className="flex items-center gap-3">
-            {canCreate && (
-              <Button size="sm">
-                <Plus className="w-4 h-4 mr-2" />
-                Add {activeTab === 'customer' ? 'Customer' : 'Vendor'}
-              </Button>
-            )}
             <Button variant="outline" size="sm" onClick={handleRefresh}>
               <RefreshCw className="w-4 h-4 mr-2" />
               Refresh
@@ -509,12 +503,6 @@ export const PartiesPage = () => {
                         ? 'Try adjusting your filters'
                         : `Get started by adding your first ${activeTab === 'customer' ? 'customer' : 'vendor'}`}
                     </p>
-                    {canCreate && (
-                      <Button>
-                        <Plus className="w-4 h-4 mr-2" />
-                        Add {activeTab === 'customer' ? 'Customer' : 'Vendor'}
-                      </Button>
-                    )}
                   </div>
                 ) : (
                   <>

@@ -8,8 +8,14 @@ export const useNotifications = (params?: {
   type?: string;
   per_page?: number;
   page?: number;
+  /** When false, skips API calls (e.g. for super_admin who has no company). Default true. */
+  enabled?: boolean;
 }) => {
   const queryClient = useQueryClient();
+  const enabled = params?.enabled !== false;
+  const apiParams = params
+    ? { read: params.read, type: params.type, per_page: params.per_page, page: params.page }
+    : undefined;
 
   // Fetch notifications
   const {
@@ -18,9 +24,10 @@ export const useNotifications = (params?: {
     error,
     refetch,
   } = useQuery<NotificationApiResponse>({
-    queryKey: ['notifications', params],
-    queryFn: () => apiService.getNotifications(params),
+    queryKey: ['notifications', apiParams],
+    queryFn: () => apiService.getNotifications(apiParams),
     refetchInterval: 30000, // Refetch every 30 seconds
+    enabled,
   });
 
   // Fetch unread count
@@ -28,6 +35,7 @@ export const useNotifications = (params?: {
     queryKey: ['notifications', 'unread-count'],
     queryFn: () => apiService.getUnreadNotificationCount(),
     refetchInterval: 30000,
+    enabled,
   });
 
   // Mark notification as read

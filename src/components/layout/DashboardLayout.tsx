@@ -16,6 +16,8 @@ import {
   HelpCircle,
   Users,
   Package,
+  Building2,
+  Cog,
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -43,7 +45,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const { user, company, logout } = useAuth();
-  const { canManageERP, canManageSettings, hasPermission } = usePermissions();
+  const { canManageERP, canManageSettings, hasPermission, isSuperAdmin } = usePermissions();
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -61,6 +63,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
       icon: FileText,
       current: location.pathname === '/dashboard/invoices',
       permission: 'invoices.view' as const,
+      companyOnly: true,
     },
     {
       name: 'Parties',
@@ -68,6 +71,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
       icon: Users,
       current: location.pathname === '/dashboard/parties',
       permission: 'parties.view' as const,
+      companyOnly: true,
     },
     // { temporary disabled
     //   name: 'Products',
@@ -75,6 +79,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
     //   icon: Package,
     //   current: location.pathname === '/dashboard/products',
     //   permission: 'products.view' as const,
+    //   companyOnly: true,
     // },
     {
       name: 'Reports',
@@ -90,6 +95,32 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
       current: location.pathname === '/dashboard/erp-config',
       permission: 'erp.view' as const,
       requiresManage: true,
+      companyOnly: true,
+    },
+    // Admin section (super_admin only)
+    {
+      name: 'Companies',
+      href: '/dashboard/admin/companies',
+      icon: Building2,
+      current: location.pathname === '/dashboard/admin/companies',
+      permission: 'services.manage' as const,
+      adminOnly: true,
+    },
+    {
+      name: 'Company users',
+      href: '/dashboard/admin/users',
+      icon: Users,
+      current: location.pathname === '/dashboard/admin/users',
+      permission: 'services.manage' as const,
+      adminOnly: true,
+    },
+    {
+      name: 'ERP Services',
+      href: '/dashboard/admin/services',
+      icon: Cog,
+      current: location.pathname === '/dashboard/admin/services',
+      permission: 'services.manage' as const,
+      adminOnly: true,
     },
     {
       name: 'Settings',
@@ -97,24 +128,26 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
       icon: Settings,
       current: location.pathname === '/dashboard/settings',
       permission: 'settings.view' as const,
-      requiresManage: true,
+      // No requiresManage: company_user sees Settings (limited to Security on the page)
     },
   ];
 
   // Filter navigation based on permissions
   const filteredNavigation = navigation.filter((item) => {
+    // Super admin: hide company-only items (invoices, parties, reports, ERP config, settings)
+    if ('companyOnly' in item && item.companyOnly && isSuperAdmin()) {
+      return false;
+    }
+    if ('adminOnly' in item && item.adminOnly && !isSuperAdmin()) {
+      return false;
+    }
     // Check basic permission
     if (!hasPermission(item.permission)) {
       return false;
     }
-    // Check if item requires manage permission
-    if (item.requiresManage) {
-      if (item.href === '/dashboard/erp-config' && !canManageERP()) {
-        return false;
-      }
-      if (item.href === '/dashboard/settings' && !canManageSettings()) {
-        return false;
-      }
+    // ERP Config: only for users who can manage ERP (company_user is read-only, hide entirely)
+    if (item.href === '/dashboard/erp-config' && !canManageERP()) {
+      return false;
     }
     return true;
   });

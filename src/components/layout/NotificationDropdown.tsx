@@ -18,11 +18,13 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { useNotifications } from '../../hooks/useNotifications';
+import { usePermissions } from '../../hooks/usePermissions';
 import { Notification } from '../../types/notification';
 import { cn } from '@/lib/utils';
 
 const NotificationDropdown = () => {
   const navigate = useNavigate();
+  const { isSuperAdmin } = usePermissions();
   const {
     notifications,
     unreadCount,
@@ -34,7 +36,7 @@ const NotificationDropdown = () => {
     getNotificationColor,
     isMarkingAsRead,
     isMarkingAllAsRead,
-  } = useNotifications({ per_page: 10, page: 1 });
+  } = useNotifications({ per_page: 10, page: 1, enabled: !isSuperAdmin() });
 
   const handleNotificationClick = (notification: Notification) => {
     if (!notification.read) {
