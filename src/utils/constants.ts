@@ -146,6 +146,11 @@ export const API_ENDPOINTS = {
       get: '/admin/users/:id',
       update: '/admin/users/:id',
     },
+    accessPointProviders: {
+      list: '/admin/access-point-providers',
+      get: '/admin/access-point-providers/:id',
+      update: '/admin/access-point-providers/:id',
+    },
   },
   company: {
     profile: '/company/profile',

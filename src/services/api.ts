@@ -1523,6 +1523,32 @@ class ApiService {
     });
   }
 
+  // ==================== ADMIN ACCESS POINT PROVIDERS ====================
+
+  async getAdminAccessPointProviders(params?: {
+    is_available?: boolean;
+    search?: string;
+    per_page?: number;
+    page?: number;
+  }) {
+    const queryParams = new URLSearchParams();
+    if (params?.is_available !== undefined) queryParams.append('is_available', params.is_available.toString());
+    if (params?.search) queryParams.append('search', params.search);
+    if (params?.per_page) queryParams.append('per_page', params.per_page.toString());
+    if (params?.page) queryParams.append('page', params.page.toString());
+    const endpoint = queryParams.toString()
+      ? `${API_ENDPOINTS.admin.accessPointProviders.list}?${queryParams}`
+      : API_ENDPOINTS.admin.accessPointProviders.list;
+    return this.makeRequest(endpoint);
+  }
+
+  async updateAdminAccessPointProvider(id: number, data: { name?: string; code?: string; is_available?: boolean }) {
+    return this.makeRequest(API_ENDPOINTS.admin.accessPointProviders.update.replace(':id', id.toString()), {
+      method: 'PUT',
+      body: data,
+    });
+  }
+
   // ==================== NOTIFICATIONS ====================
 
   async getNotifications(params?: {
