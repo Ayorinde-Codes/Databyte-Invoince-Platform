@@ -1,9 +1,9 @@
-import { useState } from 'react';
+import { useState, startTransition } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Eye, EyeOff, ArrowLeft } from 'lucide-react';
+import { Eye, EyeOff, ArrowLeft, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
@@ -17,6 +17,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useAuth } from '../../hooks/useAuth';
 
 const loginSchema = z.object({
@@ -30,6 +31,7 @@ type LoginFormData = z.infer<typeof loginSchema>;
 export const LoginPage = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [serverErrorMessage, setServerErrorMessage] = useState<string | null>(null);
   const navigate = useNavigate();
   const { login } = useAuth();
 
@@ -54,71 +56,78 @@ export const LoginPage = () => {
 
   const onSubmit = async (data: LoginFormData) => {
     setIsLoading(true);
-    clearErrors(); // Clear any previous errors
+    clearErrors();
+    setServerErrorMessage(null);
 
     try {
-      await login({
+      const authData = await login({
         email: data.email,
         password: data.password,
       });
 
       toast.success('Login successful! Welcome back.');
-      navigate('/dashboard');
-    } catch (error) {
-      // Handle field-specific errors from API
-      let errorMessage = 'Login failed. Please try again.';
-      let firstErrorField: string | null = null;
-      
-      if (error && typeof error === 'object' && 'errors' in error) {
-        const apiError = error as { 
-          message?: string; 
-          errors?: Record<string, string[]>; 
-          statusCode?: number;
-        };
-        
+      startTransition(() => {
+        if (authData?.requires_password_change) {
+          navigate('/dashboard/change-password', { replace: true });
+        } else {
+          navigate('/dashboard', { replace: true });
+        }
+      });
+    } catch (error: unknown) {
+      let errorMessage = 'Login failed. Please check your credentials.';
+      let apiError: { message?: string; errors?: Record<string, string[]>; statusCode?: number } | null = null;
+
+      if (error && typeof error === 'object' && 'statusCode' in error) {
+        apiError = error as { message?: string; errors?: Record<string, string[]>; statusCode?: number };
         errorMessage = apiError.message || errorMessage;
-        
-        // Map API field names to form field names
+      } else if (error instanceof Error) {
+        errorMessage = error.message;
+      } else if (error && typeof error === 'object' && 'message' in error) {
+        errorMessage = (error as { message: string }).message;
+      }
+
+      let firstErrorField: keyof LoginFormData | null = null;
+      
+      if (apiError?.errors && Object.keys(apiError.errors).length > 0) {
         const fieldMapping: Record<string, keyof LoginFormData> = {
           'email': 'email',
           'password': 'password',
         };
-        
-        // Set field-specific errors
-        if (apiError.errors) {
-          Object.entries(apiError.errors).forEach(([apiField, messages]) => {
-            const formField = fieldMapping[apiField] || apiField as keyof LoginFormData;
-            const errorMessage = Array.isArray(messages) ? messages[0] : String(messages);
-            
-            setError(formField, {
-              type: 'server',
-              message: errorMessage,
-            });
-            
-            // Track first error field for focus
-            if (!firstErrorField) {
-              firstErrorField = formField as string;
-            }
+
+        Object.entries(apiError.errors).forEach(([apiField, messages]) => {
+          const formField = fieldMapping[apiField] || apiField as keyof LoginFormData;
+          const message = Array.isArray(messages) ? messages[0] : String(messages);
+          
+          setError(formField, {
+            type: 'server',
+            message: message,
           });
-        }
-      } else if (error instanceof Error) {
-        errorMessage = error.message;
-        // For generic errors, show toast
-        toast.error(errorMessage);
+          
+          if (!firstErrorField) {
+            firstErrorField = formField;
+          }
+        });
+      } else {
+        setServerErrorMessage(errorMessage);
+        setError('email', {
+          type: 'server',
+          message: '',
+        });
+        setError('password', {
+          type: 'server',
+          message: '',
+        });
+        firstErrorField = 'email';
       }
-      
-      // Focus on first error field
+
       if (firstErrorField) {
         setTimeout(() => {
-          const element = document.getElementById(firstErrorField);
+          const element = document.getElementById(firstErrorField as string);
           if (element) {
             element.focus();
             element.scrollIntoView({ behavior: 'smooth', block: 'center' });
           }
-        }, 100);
-      } else if (!(error && typeof error === 'object' && 'errors' in error)) {
-        // Only show toast if no field-specific errors were set
-        toast.error(errorMessage);
+        }, 150);
       }
     } finally {
       setIsLoading(false);
@@ -127,7 +136,6 @@ export const LoginPage = () => {
 
   return (
     <div className="min-h-screen flex">
-      {/* Left Side - Branding */}
       <div className="hidden lg:flex lg:w-1/2 bg-primary relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-br from-primary to-primary/80" />
         <div className="relative z-10 flex flex-col justify-center px-12 text-primary-foreground">
@@ -174,10 +182,8 @@ export const LoginPage = () => {
         </div>
       </div>
 
-      {/* Right Side - Login Form */}
       <div className="flex-1 flex flex-col justify-center px-6 py-12 lg:px-12">
         <div className="w-full max-w-md mx-auto">
-          {/* Back to Home Link */}
           <Link
             to="/"
             className="inline-flex items-center text-muted-foreground hover:text-foreground transition-colors mb-8"
@@ -197,7 +203,20 @@ export const LoginPage = () => {
             </CardHeader>
 
             <CardContent>
-              <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+              <form 
+                onSubmit={handleSubmit(onSubmit)} 
+                className="space-y-4"
+                noValidate
+              >
+                {(errors.email || errors.password || serverErrorMessage) && (
+                  <Alert variant="destructive">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertDescription>
+                      {serverErrorMessage || errors.email?.message || errors.password?.message || 'Please correct the errors below'}
+                    </AlertDescription>
+                  </Alert>
+                )}
+                
                 <div className="space-y-2">
                   <Label htmlFor="email">Email address</Label>
                   <Input
@@ -209,7 +228,7 @@ export const LoginPage = () => {
                     className={errors.email ? 'border-destructive focus-visible:ring-destructive' : ''}
                     aria-invalid={errors.email ? 'true' : 'false'}
                   />
-                  {errors.email && (
+                  {errors.email && errors.email.message && (
                     <p className="text-sm text-destructive">
                       {errors.email.message}
                     </p>
@@ -244,7 +263,7 @@ export const LoginPage = () => {
                       )}
                     </Button>
                   </div>
-                  {errors.password && (
+                  {errors.password && errors.password.message && (
                     <p className="text-sm text-destructive">
                       {errors.password.message}
                     </p>

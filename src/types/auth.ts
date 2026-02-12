@@ -6,6 +6,8 @@ export interface User {
   avatar?: string | null;
   roles: string[];
   company: Company;
+  created_at?: string | null;
+  last_login_at?: string | null;
 }
 
 export interface Company {
@@ -37,6 +39,7 @@ export interface RegisterFormData {
 export interface AuthResponse {
   token: string;
   user: User;
+  requires_password_change?: boolean;
 }
 
 // API Response wrapper for authentication

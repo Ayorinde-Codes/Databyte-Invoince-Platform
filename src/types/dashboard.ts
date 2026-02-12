@@ -14,6 +14,16 @@ export interface DashboardCounts {
   pending_firs_submissions: number;
 }
 
+/** Period-over-period growth percentages (e.g. this month vs last month). */
+export interface DashboardGrowth {
+  revenue_growth: number | null;
+  invoice_growth: number | null;
+  customer_growth: number | null;
+  product_growth: number | null;
+  vendor_growth: number | null;
+  compliance_growth: number | null;
+}
+
 export interface Customer {
   id: number;
   company_id: number;
@@ -109,7 +119,10 @@ export interface DashboardOverview {
     total_revenue: number;
     total_users: number;
     firs_compliance_rate: number;
+    revenue_growth?: number | null;
+    invoice_growth?: number | null;
   };
+  growth?: DashboardGrowth;
   companies_registered?: {
     today: number;
     this_week: number;

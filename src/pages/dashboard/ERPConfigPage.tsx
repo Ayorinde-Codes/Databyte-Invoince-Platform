@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Database,
   Plus,
@@ -395,7 +396,15 @@ export const ERPConfigPage = () => {
     () => new Date()
   );
 
-  const { canManageERP, isSuperAdmin } = usePermissions();
+  const { canManageERP, isSuperAdmin, isCompanyUser } = usePermissions();
+  const navigate = useNavigate();
+
+  // Company users are read-only; they must not see ERP configuration
+  useEffect(() => {
+    if (isCompanyUser()) {
+      navigate('/dashboard', { replace: true });
+    }
+  }, [isCompanyUser, navigate]);
 
   const { data: companyProfileResponse } = useCompanyProfile();
   const companyProfile =

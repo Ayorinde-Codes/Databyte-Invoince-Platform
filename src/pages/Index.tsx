@@ -211,14 +211,12 @@ const Index = () => {
             {/* Right Column - Professional Image Placeholder */}
             <div className="relative">
               <div className="bg-gray-200 rounded-2xl overflow-hidden shadow-2xl">
-                {/* Professional business person image placeholder */}
-                <div className=" bg-gradient-to-br from-gray-300 to-gray-400 flex items-center justify-center">
-                  <div className="text-center text-gray-600">
-                    {/* <Briefcase className="w-16 h-16 mx-auto mb-4" /> */}
-                    {/* <p className="text-lg font-medium">Professional Business Image</p>
-                    <p className="text-sm">Replace with actual photo</p> */}
-                    <img src="https://media.istockphoto.com/id/1444934349/photo/hardworking-young-adult-businessman-checking-the-company-budget-in-the-files.jpg?s=612x612&w=0&k=20&c=VnRiH5TQ-q6Stp7dARIQxvfpu-NGqQX55CpZRQaEzPA=" />
-                  </div>
+                <div className="bg-gradient-to-br from-gray-300 to-gray-400 flex items-center justify-center min-h-[280px]">
+                  <img
+                    src="https://media.istockphoto.com/id/1444934349/photo/hardworking-young-adult-businessman-checking-the-company-budget-in-the-files.jpg?s=612x612&w=0&k=20&c=VnRiH5TQ-q6Stp7dARIQxvfpu-NGqQX55CpZRQaEzPA="
+                    alt="Professional reviewing company budget and documents"
+                    className="w-full h-full object-cover"
+                  />
                 </div>
               </div>
 
@@ -226,7 +224,6 @@ const Index = () => {
               <div className="absolute -top-6 -right-6 w-24 h-24 bg-blue-600 rounded-2xl flex items-center justify-center shadow-lg">
                 <Award className="w-8 h-8 text-white" />
               </div>
-
               <div className="absolute -bottom-6 -left-6 w-20 h-20 bg-green-500 rounded-xl flex items-center justify-center shadow-lg">
                 <CheckCircle className="w-6 h-6 text-white" />
               </div>

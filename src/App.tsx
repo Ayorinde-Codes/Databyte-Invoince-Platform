@@ -28,6 +28,10 @@ import { ReportsPage } from './pages/dashboard/ReportsPage';
 import { ProfilePage } from './pages/dashboard/ProfilePage';
 import { ERPConfigPage } from './pages/dashboard/ERPConfigPage';
 import { NotificationsPage } from './pages/dashboard/NotificationsPage';
+import { ChangePasswordPage } from './pages/dashboard/ChangePasswordPage';
+import { AdminServicesPage } from './pages/dashboard/admin/AdminServicesPage';
+import { AdminCompaniesPage } from './pages/dashboard/admin/AdminCompaniesPage';
+import { AdminUsersPage } from './pages/dashboard/admin/AdminUsersPage';
 
 // Providers
 import { AuthProvider, useAuth } from './providers/AuthProvider';
@@ -109,6 +113,14 @@ const App = () => (
 
                 {/* Dashboard Routes */}
                 <Route
+                  path="/dashboard/change-password"
+                  element={
+                    <ProtectedRoute>
+                      <ChangePasswordPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
                   path="/dashboard"
                   element={
                     <ProtectedRoute allowedPermissions={['dashboard.view']}>
@@ -177,6 +189,30 @@ const App = () => (
                   element={
                     <ProtectedRoute>
                       <NotificationsPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/dashboard/admin/services"
+                  element={
+                    <ProtectedRoute allowedPermissions={['services.manage']}>
+                      <AdminServicesPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/dashboard/admin/companies"
+                  element={
+                    <ProtectedRoute allowedPermissions={['services.manage']}>
+                      <AdminCompaniesPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/dashboard/admin/users"
+                  element={
+                    <ProtectedRoute allowedPermissions={['services.manage']}>
+                      <AdminUsersPage />
                     </ProtectedRoute>
                   }
                 />

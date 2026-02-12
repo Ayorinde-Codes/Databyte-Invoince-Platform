@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Eye, EyeOff, ArrowLeft, Building, User, Mail, Phone } from 'lucide-react';
+import { Eye, EyeOff, ArrowLeft, Building, User, Mail, Phone, Check, X } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
@@ -18,7 +18,13 @@ import { apiService } from '@/services/api';
 const registerSchema = z.object({
   name: z.string().min(2, 'Company name must be at least 2 characters'),
   email: z.string().email('Please enter a valid email address'),
-  password: z.string().min(8, 'Password must be at least 8 characters'),
+  password: z
+    .string()
+    .min(8, 'Password must be at least 8 characters')
+    .regex(/[A-Z]/, 'Password must contain at least one uppercase letter')
+    .regex(/[a-z]/, 'Password must contain at least one lowercase letter')
+    .regex(/[0-9]/, 'Password must contain at least one number')
+    .regex(/[^A-Za-z0-9]/, 'Password must contain at least one special character'),
   confirm_password: z.string(),
   phone: z.string().min(10, 'Phone number must be at least 10 characters'),
   address: z.string().min(5, 'Address must be at least 5 characters'),
@@ -68,6 +74,17 @@ export const RegisterPage = () => {
 
   const termsAccepted = watch('terms_accepted');
   const selectedService = watch('primary_service_id');
+  const password = watch('password') || '';
+
+  const passwordRequirements = useMemo(() => {
+    return {
+      minLength: password.length >= 8,
+      hasUpperCase: /[A-Z]/.test(password),
+      hasLowerCase: /[a-z]/.test(password),
+      hasNumber: /[0-9]/.test(password),
+      hasSpecialChar: /[^A-Za-z0-9]/.test(password),
+    };
+  }, [password]);
 
   const { register: registerUser } = useAuth();
 
@@ -105,7 +122,7 @@ export const RegisterPage = () => {
 
   const onSubmit = async (data: RegisterFormData) => {
     setIsLoading(true);
-    clearErrors(); // Clear any previous errors
+    clearErrors();
 
     try {
       await registerUser({
@@ -121,7 +138,6 @@ export const RegisterPage = () => {
       toast.success('Registration successful! Welcome to Databyte.');
       navigate('/dashboard');
     } catch (error: unknown) {
-      // Handle field-specific errors from API
       let errorMessage = 'Registration failed. Please try again.';
       let firstErrorField: string | null = null;
       
@@ -134,7 +150,6 @@ export const RegisterPage = () => {
         
         errorMessage = apiError.message || errorMessage;
         
-        // Map API field names to form field names
         const fieldMapping: Record<string, keyof RegisterFormData> = {
           'company_name': 'name',
           'company_email': 'email',
@@ -146,7 +161,6 @@ export const RegisterPage = () => {
           'primary_service_id': 'primary_service_id',
         };
         
-        // Set field-specific errors
         if (apiError.errors) {
           Object.entries(apiError.errors).forEach(([apiField, messages]) => {
             const formField = fieldMapping[apiField] || apiField as keyof RegisterFormData;
@@ -157,7 +171,6 @@ export const RegisterPage = () => {
               message: errorMessage,
             });
             
-            // Track first error field for focus
             if (!firstErrorField) {
               firstErrorField = formField as string;
             }
@@ -172,12 +185,10 @@ export const RegisterPage = () => {
         }
       }
       
-      // Show toast for general errors (but field errors are already set above)
       if (!(error && typeof error === 'object' && 'errors' in error)) {
         toast.error(errorMessage);
       }
       
-      // Focus on first error field
       if (firstErrorField) {
         setTimeout(() => {
           const element = document.getElementById(firstErrorField);
@@ -194,7 +205,6 @@ export const RegisterPage = () => {
 
   return (
     <div className="min-h-screen flex">
-      {/* Left Side - Branding */}
       <div className="hidden lg:flex lg:w-1/2 bg-primary relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-br from-primary to-primary/80" />
         <div className="relative z-10 flex flex-col justify-center px-12 text-primary-foreground">
@@ -235,10 +245,8 @@ export const RegisterPage = () => {
         </div>
       </div>
 
-      {/* Right Side - Registration Form */}
       <div className="flex-1 flex flex-col justify-center px-6 py-12 lg:px-12">
         <div className="w-full max-w-2xl mx-auto">
-          {/* Back to Home Link */}
           <Link 
             to="/" 
             className="inline-flex items-center text-muted-foreground hover:text-foreground transition-colors mb-8"
@@ -257,7 +265,6 @@ export const RegisterPage = () => {
             
             <CardContent>
               <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-                {/* Personal Information */}
                 <div className="space-y-4">
                   <div className="flex items-center space-x-2 text-sm font-medium text-muted-foreground">
                     <User className="w-4 h-4" />
@@ -313,7 +320,6 @@ export const RegisterPage = () => {
                   </div>
                 </div>
 
-                {/* Company Information */}
                 <div className="space-y-4">
                   <div className="flex items-center space-x-2 text-sm font-medium text-muted-foreground">
                     <Building className="w-4 h-4" />
@@ -394,7 +400,6 @@ export const RegisterPage = () => {
                   </div>
                 </div>
 
-                {/* Security */}
                 <div className="space-y-4">
                   <div className="flex items-center space-x-2 text-sm font-medium text-muted-foreground">
                     <Mail className="w-4 h-4" />
@@ -427,6 +432,63 @@ export const RegisterPage = () => {
                         )}
                       </Button>
                     </div>
+                    {password && (
+                      <div className="space-y-1.5 mt-2 p-3 bg-muted/50 rounded-md border">
+                        <p className="text-xs font-medium text-muted-foreground mb-2">Password requirements:</p>
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2 text-xs">
+                            {passwordRequirements.minLength ? (
+                              <Check className="h-3.5 w-3.5 text-green-600" />
+                            ) : (
+                              <X className="h-3.5 w-3.5 text-muted-foreground" />
+                            )}
+                            <span className={passwordRequirements.minLength ? 'text-green-600' : 'text-muted-foreground'}>
+                              At least 8 characters
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2 text-xs">
+                            {passwordRequirements.hasUpperCase ? (
+                              <Check className="h-3.5 w-3.5 text-green-600" />
+                            ) : (
+                              <X className="h-3.5 w-3.5 text-muted-foreground" />
+                            )}
+                            <span className={passwordRequirements.hasUpperCase ? 'text-green-600' : 'text-muted-foreground'}>
+                              One uppercase letter
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2 text-xs">
+                            {passwordRequirements.hasLowerCase ? (
+                              <Check className="h-3.5 w-3.5 text-green-600" />
+                            ) : (
+                              <X className="h-3.5 w-3.5 text-muted-foreground" />
+                            )}
+                            <span className={passwordRequirements.hasLowerCase ? 'text-green-600' : 'text-muted-foreground'}>
+                              One lowercase letter
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2 text-xs">
+                            {passwordRequirements.hasNumber ? (
+                              <Check className="h-3.5 w-3.5 text-green-600" />
+                            ) : (
+                              <X className="h-3.5 w-3.5 text-muted-foreground" />
+                            )}
+                            <span className={passwordRequirements.hasNumber ? 'text-green-600' : 'text-muted-foreground'}>
+                              One number
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2 text-xs">
+                            {passwordRequirements.hasSpecialChar ? (
+                              <Check className="h-3.5 w-3.5 text-green-600" />
+                            ) : (
+                              <X className="h-3.5 w-3.5 text-muted-foreground" />
+                            )}
+                            <span className={passwordRequirements.hasSpecialChar ? 'text-green-600' : 'text-muted-foreground'}>
+                              One special character
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                     {errors.password && (
                       <p className="text-sm text-destructive">{errors.password.message}</p>
                     )}
@@ -464,7 +526,6 @@ export const RegisterPage = () => {
                   </div>
                 </div>
 
-                {/* Terms and Conditions */}
                 <div className="flex items-start space-x-2">
                   <Checkbox
                     id="terms_accepted"
@@ -475,11 +536,11 @@ export const RegisterPage = () => {
                   <div className="grid gap-1.5 leading-none">
                     <Label htmlFor="terms_accepted" className="text-sm">
                       I agree to the{' '}
-                      <a href="#" className="text-primary hover:underline">
+                      <a href="/terms" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
                         Terms of Service
                       </a>{' '}
                       and{' '}
-                      <a href="#" className="text-primary hover:underline">
+                      <a href="/privacy" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
                         Privacy Policy
                       </a>
                     </Label>

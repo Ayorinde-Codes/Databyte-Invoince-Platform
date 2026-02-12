@@ -244,7 +244,6 @@ export const InvoicesPage = () => {
   const [isUpdatingItem, setIsUpdatingItem] = useState(false);
   const [hsnCodePopoverOpen, setHsnCodePopoverOpen] = useState<number | null>(null);
 
-  // FIRS fields state
   const [firsInvoiceTypeCode, setFirsInvoiceTypeCode] = useState<string>('');
   const [firsNote, setFirsNote] = useState<string>('');
   const [previousInvoiceIrn, setPreviousInvoiceIrn] = useState<string>('');
@@ -253,17 +252,12 @@ export const InvoicesPage = () => {
   const [showFirsFieldsDialog, setShowFirsFieldsDialog] = useState(false);
   const [editingInvoiceForFirs, setEditingInvoiceForFirs] = useState<Invoice | null>(null);
 
-  // FIRS fields update mutations
   const updateARFirsFields = useUpdateARInvoiceFirsFields();
   const updateAPFirsFields = useUpdateAPInvoiceFirsFields();
 
-  // Fetch HSN codes for dropdown
   const { data: hsnCodesData, isLoading: isLoadingHsnCodes } = useHsnCodes();
-  
-  // Fetch invoice types for dropdown
   const { data: invoiceTypesData, isLoading: isLoadingInvoiceTypes } = useInvoiceTypes();
   
-  // Extract HSN codes array (handle different response structures)
   const hsnCodes = useMemo(() => {
     if (!hsnCodesData) return [];
     if (Array.isArray(hsnCodesData)) return hsnCodesData;
@@ -279,11 +273,9 @@ export const InvoicesPage = () => {
     return [];
   }, [hsnCodesData]);
   
-  // Extract invoice types array (handle different response structures)
   const invoiceTypes = useMemo(() => {
     if (!invoiceTypesData) return [];
     if (Array.isArray(invoiceTypesData)) return invoiceTypesData;
-    // Handle object with codes/data array
     if (invoiceTypesData && typeof invoiceTypesData === 'object') {
       const types = ('codes' in invoiceTypesData && Array.isArray((invoiceTypesData as { codes?: unknown }).codes))
         ? (invoiceTypesData as { codes: unknown[] }).codes
@@ -304,7 +296,6 @@ export const InvoicesPage = () => {
     [invoiceTypes]
   );
 
-  // Check if invoice type requires previous invoice IRN
   const requiresPreviousIrn = useCallback((invoiceTypeCode: string | null | undefined): boolean => {
     if (!invoiceTypeCode) return false;
     const typeLabel = getInvoiceTypeLabel(invoiceTypeCode);
@@ -313,7 +304,6 @@ export const InvoicesPage = () => {
     return value.includes('credit note') || value.includes('debit note');
   }, [getInvoiceTypeLabel]);
   
-  // Extract HSN code values for display (handle objects with hscode/description or simple strings)
   const getHsnCodeValue = (code: string | { hscode?: string; code?: string; value?: string; name?: string }): string => {
     if (typeof code === 'string') return code;
     return code.hscode || code.code || code.value || code.name || '';
@@ -331,11 +321,8 @@ export const InvoicesPage = () => {
   const canUpdate = hasPermission('invoices.update');
   const canDelete = hasPermission('invoices.delete');
   const canValidateFIRS = hasPermission('firs.validate');
-  const canSignFIRS = hasPermission('firs.submit'); // Permission name may still be 'firs.submit' in backend
+  const canSignFIRS = hasPermission('firs.submit');
 
-  // Query parameters
-  // Note: Backend doesn't support 'search' parameter for invoices endpoint
-  // Search is handled client-side for now
   const queryParams = {
     per_page: 15,
     page,
@@ -345,11 +332,7 @@ export const InvoicesPage = () => {
     ...(batchNumber && { batch_number: batchNumber }),
     ...(partyFilter && activeTab === 'ar' && { customer_id: partyFilter }),
     ...(partyFilter && activeTab === 'ap' && { vendor_id: partyFilter }),
-    // Removed search from query params - backend doesn't support it
-    // Search filtering is done client-side
   };
-
-  // Fetch invoices
   const {
     data: arData,
     isLoading: arLoading,
@@ -364,21 +347,16 @@ export const InvoicesPage = () => {
   const currentData = activeTab === 'ar' ? arData : apData;
   const isLoading = activeTab === 'ar' ? arLoading : apLoading;
   
-  // Extract invoices - Laravel pagination returns data in data.data
   const currentDataObj = currentData?.data;
   const invoices = (currentDataObj && typeof currentDataObj === 'object' && 'data' in currentDataObj && Array.isArray(currentDataObj.data))
     ? currentDataObj.data
     : [];
-  // Pagination structure: Laravel returns pagination at the root level of data
   const pagination = (currentDataObj && typeof currentDataObj === 'object')
     ? currentDataObj as Record<string, unknown>
     : {};
 
-  // Mutations
   const deleteAR = useDeleteARInvoice();
   const deleteAP = useDeleteAPInvoice();
-
-  // Calculate summary stats
   const totalInvoices = (typeof pagination.total === 'number') ? pagination.total : 0;
   const totalAmount = invoices.reduce(
     (sum: number, inv: Invoice) =>
@@ -395,8 +373,6 @@ export const InvoicesPage = () => {
     (inv: Invoice) => !inv.firs_status || inv.firs_status === 'pending'
   ).length;
 
-  // Filter invoices client-side (for FIRS status only - search and status are server-side)
-  // Note: Search and status filters are sent to the API, but FIRS filter is client-side
   const filteredInvoices = invoices.filter((invoice: Invoice) => {
     const matchesFirs =
       firsFilter === 'all' ||
@@ -408,7 +384,6 @@ export const InvoicesPage = () => {
         firsFilter !== 'cancelled' &&
         invoice.firs_status === firsFilter);
 
-    // Search is already handled server-side, but we keep this for client-side search if needed
     const matchesSearch =
       !searchTerm ||
       invoice.invoice_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -424,16 +399,10 @@ export const InvoicesPage = () => {
   });
   
 
-  // Quick fix handlers
   const handleQuickFix = (fix: QuickFix) => {
-    // Handle FIRS fields action - open FIRS fields dialog instead of quick fix dialog
     if (fix.action === 'update_firs_fields' && validationResult?.invoice_id && validationResult?.invoice_type) {
-      // Close validation dialog first and wait a bit to ensure it closes
       setShowValidationDialog(false);
-      // Small delay to ensure validation dialog closes before opening FIRS fields dialog
       setTimeout(() => {
-        // Try to find invoice in current list or selected invoice
-        // Use the same extraction logic as used elsewhere in the component
         const arDataObj = arData?.data;
         const arInvoiceList = (arDataObj && typeof arDataObj === 'object' && 'data' in arDataObj && Array.isArray(arDataObj.data))
           ? arDataObj.data
@@ -451,10 +420,8 @@ export const InvoicesPage = () => {
              (selectedInvoice && selectedInvoice.id === validationResult.invoice_id ? selectedInvoice : null));
         
         if (invoice) {
-          // Invoice found, open FIRS fields dialog
           handleOpenFirsFieldsDialog(invoice);
         } else {
-          // Invoice not in current list, fetch it
           const fetchInvoice = async () => {
             try {
               const response = validationResult.invoice_type === 'ar'
@@ -466,17 +433,15 @@ export const InvoicesPage = () => {
                 toast.error('Failed to load invoice details');
               }
             } catch (error) {
-              console.error('Failed to fetch invoice:', error);
               toast.error('Failed to load invoice details');
             }
           };
           fetchInvoice();
         }
-      }, 150); // Small delay to ensure validation dialog closes
+      }, 150);
       return;
     }
     
-    // Set default value based on field type
     let defaultValue = '';
     if (fix.field === 'hsn_code') {
       defaultValue = '';
@@ -503,14 +468,11 @@ export const InvoicesPage = () => {
       const { fix, value } = quickFixDialog;
 
       if (fix.action === 'update_party' && fix.party_id) {
-        // Update party field
         await apiService.updateParty(fix.party_id, {
           [fix.field]: value,
         } as Record<string, unknown>);
         toast.success(`${fix.message} updated successfully`);
       } else if (fix.action === 'update_invoice_item' && fix.item_id && validationResult?.invoice_id && validationResult?.invoice_type) {
-        // Update invoice item field
-        // Use specific HSN code endpoint if updating HSN code, otherwise use general update endpoint
         if (fix.field === 'hsn_code') {
           if (validationResult.invoice_type === 'ar') {
             await apiService.updateARInvoiceItemHsnCode(validationResult.invoice_id, fix.item_id, value);
@@ -531,10 +493,8 @@ export const InvoicesPage = () => {
         toast.success(`${fix.message} updated successfully`);
       }
 
-      // Close dialog and refresh invoice data
       setQuickFixDialog({ open: false, fix: null, value: '' });
       
-      // Invalidate and refetch invoices to get updated data
       queryClient.invalidateQueries({ queryKey: ['invoices'] });
       if (validationResult?.invoice_type === 'ar') {
         queryClient.invalidateQueries({ queryKey: ['invoices', 'ar'] });
@@ -544,9 +504,7 @@ export const InvoicesPage = () => {
         await refetchAP();
       }
       
-      // Update selected invoice if it's the same one being updated
       if (selectedInvoice && validationResult?.invoice_id === selectedInvoice.id) {
-        // Refetch the selected invoice to get updated data
         try {
           if (validationResult.invoice_type === 'ar') {
             const response = await apiService.getARInvoice(selectedInvoice.id, 'items');
@@ -560,17 +518,15 @@ export const InvoicesPage = () => {
             }
           }
         } catch (error) {
-          console.error('Failed to refresh selected invoice:', error);
+          // Error handled silently - fallback update will be used
         }
       }
       
-      // Update validation result to remove the fixed item from quick_fixes
       if (validationResult && fix.action === 'update_invoice_item' && fix.item_id) {
         const updatedQuickFixes = validationResult.quick_fixes?.filter(
           (qf: QuickFix) => !(qf.type === 'item_hsn_code' && qf.item_id === fix.item_id)
         ) || [];
         
-        // Update errors to remove the fixed HSN code error
         const updatedErrors = validationResult.errors?.filter(
           (error: string) => !error.includes(fix.item_description || '')
         ) || [];
@@ -581,13 +537,11 @@ export const InvoicesPage = () => {
           errors: updatedErrors.length > 0 ? updatedErrors : undefined,
         });
         
-        // If no more errors, mark as valid
         if (updatedErrors.length === 0 && (!validationResult.warnings || validationResult.warnings.length === 0)) {
           setValidationResult(null);
           toast.success('All validation issues resolved!');
         }
       } else {
-        // Clear validation result to allow re-validation
         setValidationResult(null);
       }
     } catch (error) {
@@ -742,7 +696,6 @@ export const InvoicesPage = () => {
 
       if (response.status) {
         toast.success('Invoice validated successfully');
-        // Invalidate and refetch invoices to get updated data
         if (activeTab === 'ar') {
           queryClient.invalidateQueries({ queryKey: ['invoices', 'ar'] });
           await refetchAR();
@@ -750,11 +703,8 @@ export const InvoicesPage = () => {
           queryClient.invalidateQueries({ queryKey: ['invoices', 'ap'] });
           await refetchAP();
         }
-        // Also invalidate dashboard to refresh counts
         queryClient.invalidateQueries({ queryKey: ['dashboard'] });
       } else {
-        // Check if response has validation details
-        // Backend returns: { status: false, message: "...", data: { errors: [...], warnings: [...], suggestions: [...], quick_fixes: [...] } }
         const validationData = 
           response.data && typeof response.data === 'object' && 'data' in response.data
             ? (response.data.data as ValidationDetails)
@@ -781,7 +731,6 @@ export const InvoicesPage = () => {
           });
           setShowValidationDialog(true);
           
-          // Also show errors in toast for visibility
           if (validationData.errors && validationData.errors.length > 0) {
             const errorMessages = validationData.errors.slice(0, 3).join('; ');
             const moreCount = validationData.errors.length > 3 ? ` (+${validationData.errors.length - 3} more)` : '';
@@ -790,13 +739,11 @@ export const InvoicesPage = () => {
             });
           }
         } else {
-          // If no structured errors, show the message and try to extract any error info
           const errorMessage = response.message || 'Validation failed';
           toast.error(errorMessage);
         }
       }
     } catch (error: unknown) {
-
       const apiError = error as ApiError & { 
         data?: ValidationDetails; 
         response?: { status?: boolean; message?: string; data?: ValidationDetails };
@@ -832,7 +779,6 @@ export const InvoicesPage = () => {
         });
         setShowValidationDialog(true);
         
-        // Also show errors in toast for visibility
         if (validationData.errors && validationData.errors.length > 0) {
           const errorMessages = validationData.errors.slice(0, 3).join('; ');
           const moreCount = validationData.errors.length > 3 ? ` (+${validationData.errors.length - 3} more)` : '';
@@ -841,7 +787,6 @@ export const InvoicesPage = () => {
           });
         }
       } else {
-        // Try to extract any error message from the response
         const fallbackMessage = apiError.message || extractErrorMessage(error, 'Failed to validate invoice');
         toast.error(fallbackMessage);
       }
@@ -860,7 +805,6 @@ export const InvoicesPage = () => {
 
       if (response.status) {
         toast.success('Invoice signed successfully');
-        // Invalidate and refetch invoices to get updated data
         if (activeTab === 'ar') {
           queryClient.invalidateQueries({ queryKey: ['invoices', 'ar'] });
           await refetchAR();
@@ -868,7 +812,6 @@ export const InvoicesPage = () => {
           queryClient.invalidateQueries({ queryKey: ['invoices', 'ap'] });
           await refetchAP();
         }
-        // Also invalidate dashboard to refresh counts
         queryClient.invalidateQueries({ queryKey: ['dashboard'] });
       } else {
         toast.error(response.message || 'Failed to sign invoice');
@@ -893,7 +836,6 @@ export const InvoicesPage = () => {
 
       if (response.status) {
         toast.success(`Payment status updated to ${paymentStatus} successfully`);
-        // Invalidate and refetch invoices to get updated data
         if (activeTab === 'ar') {
           queryClient.invalidateQueries({ queryKey: ['invoices', 'ar'] });
           await refetchAR();
@@ -901,7 +843,6 @@ export const InvoicesPage = () => {
           queryClient.invalidateQueries({ queryKey: ['invoices', 'ap'] });
           await refetchAP();
         }
-        // Also invalidate dashboard to refresh counts
         queryClient.invalidateQueries({ queryKey: ['dashboard'] });
       } else {
         toast.error(response.message || `Failed to update payment status to ${paymentStatus}`);
@@ -1021,7 +962,6 @@ export const InvoicesPage = () => {
 
       toast.success('HSN code updated successfully');
       
-      // Invalidate and refetch invoices to get updated data
       if (activeTab === 'ar') {
         queryClient.invalidateQueries({ queryKey: ['invoices', 'ar'] });
         queryClient.invalidateQueries({ queryKey: ['invoices', 'ar', invoice.id] });
@@ -1032,7 +972,6 @@ export const InvoicesPage = () => {
         await refetchAP();
       }
 
-      // Update selected invoice if it's the same one - refetch to get latest data
       if (selectedInvoice && selectedInvoice.id === invoice.id) {
         try {
           if (activeTab === 'ar') {
@@ -1134,7 +1073,6 @@ export const InvoicesPage = () => {
         });
       }
 
-      // Invalidate and refetch invoices
       if (activeTab === 'ar') {
         queryClient.invalidateQueries({ queryKey: ['invoices', 'ar'] });
         await refetchAR();
@@ -1152,7 +1090,6 @@ export const InvoicesPage = () => {
   };
 
   const toggleRowExpansion = (invoiceId: number, event?: React.MouseEvent) => {
-    // Prevent expansion when clicking on buttons or dropdowns
     if (event) {
       const target = event.target as HTMLElement;
       if (
@@ -1188,24 +1125,6 @@ export const InvoicesPage = () => {
             </p>
           </div>
 
-          <div className="flex items-center gap-3">
-            {canCreate && (
-              <>
-            <Button variant="outline" size="sm">
-              <Upload className="w-4 h-4 mr-2" />
-              Import
-            </Button>
-            <Button variant="outline" size="sm">
-              <Download className="w-4 h-4 mr-2" />
-              Export
-            </Button>
-            <Button size="sm">
-              <Plus className="w-4 h-4 mr-2" />
-              Create Invoice
-            </Button>
-              </>
-            )}
-          </div>
         </div>
 
         {/* Summary Cards */}
@@ -2030,7 +1949,6 @@ export const InvoicesPage = () => {
                       const from = paginationData?.from || 0;
                       const to = paginationData?.to || 0;
                       
-                      // Always show pagination info when there are invoices
                       if (total === 0) return null;
                       
                       return (
@@ -2420,8 +2338,6 @@ export const InvoicesPage = () => {
                   alt="FIRS QR Code"
                   className="w-64 h-64 object-contain"
                   onError={(e) => {
-                    console.error('QR Code image failed to load:', selectedQRCode.substring(0, 50));
-                    // Fallback: try as base64 if it's not a data URI
                     if (!selectedQRCode.startsWith('data:')) {
                       (e.target as HTMLImageElement).src = `data:image/png;base64,${selectedQRCode}`;
                     }
@@ -2462,26 +2378,17 @@ export const InvoicesPage = () => {
                   </h4>
                   <div className="bg-red-50 border border-red-200 rounded-md p-4 space-y-2">
                     {validationResult.errors.map((error, index) => {
-                      // Find matching quick fix for this error
-                      // Match by error content - try to find the most relevant fix
                       const matchingFix = validationResult.quick_fixes?.find((fix) => {
-                        // Match FIRS field errors
                         if (fix.action === 'update_firs_fields') {
                           if (fix.type === 'firs_invoice_type_code' && error.includes('invoice type code')) return true;
                           if (fix.type === 'firs_note' && error.includes('FIRS note')) return true;
                           if (fix.type === 'previous_invoice_irn' && error.includes('Previous invoice IRN')) return true;
                         }
-                        // Match party TIN errors
                         if (fix.type === 'party_tin' && (error.includes('TIN is missing') || error.includes('TIN'))) return true;
-                        // Match party email errors
                         if (fix.type === 'party_email' && error.includes('email')) return true;
-                        // Match party telephone errors
                         if (fix.type === 'party_telephone' && error.includes('telephone')) return true;
-                        // Match HSN code errors - check if error mentions the item description
                         if (fix.type === 'item_hsn_code' && error.includes('HSN codes')) {
-                          // If fix has item_description, check if error mentions it
                           if (fix.item_description && error.includes(fix.item_description)) return true;
-                          // Otherwise, match any HSN code error
                           return true;
                         }
                         return false;
@@ -2516,7 +2423,6 @@ export const InvoicesPage = () => {
                   </h4>
                   <div className="bg-yellow-50 border border-yellow-200 rounded-md p-4 space-y-2">
                     {validationResult.warnings.map((warning, index) => {
-                      // Find matching quick fix for this warning
                       const matchingFix = validationResult.quick_fixes?.find((fix) => {
                         if (fix.type === 'party_email' && warning.includes('email')) return true;
                         if (fix.type === 'party_telephone' && warning.includes('telephone')) return true;
@@ -2871,8 +2777,6 @@ export const InvoicesPage = () => {
                   alt="FIRS QR Code"
                   className="w-64 h-64 object-contain"
                   onError={(e) => {
-                    console.error('QR Code image failed to load:', selectedQRCode.substring(0, 50));
-                    // Fallback: try as base64 if it's not a data URI
                     if (!selectedQRCode.startsWith('data:')) {
                       (e.target as HTMLImageElement).src = `data:image/png;base64,${selectedQRCode}`;
                     }
@@ -2913,26 +2817,17 @@ export const InvoicesPage = () => {
                   </h4>
                   <div className="bg-red-50 border border-red-200 rounded-md p-4 space-y-2">
                     {validationResult.errors.map((error, index) => {
-                      // Find matching quick fix for this error
-                      // Match by error content - try to find the most relevant fix
                       const matchingFix = validationResult.quick_fixes?.find((fix) => {
-                        // Match FIRS field errors
                         if (fix.action === 'update_firs_fields') {
                           if (fix.type === 'firs_invoice_type_code' && error.includes('invoice type code')) return true;
                           if (fix.type === 'firs_note' && error.includes('FIRS note')) return true;
                           if (fix.type === 'previous_invoice_irn' && error.includes('Previous invoice IRN')) return true;
                         }
-                        // Match party TIN errors
                         if (fix.type === 'party_tin' && (error.includes('TIN is missing') || error.includes('TIN'))) return true;
-                        // Match party email errors
                         if (fix.type === 'party_email' && error.includes('email')) return true;
-                        // Match party telephone errors
                         if (fix.type === 'party_telephone' && error.includes('telephone')) return true;
-                        // Match HSN code errors - check if error mentions the item description
                         if (fix.type === 'item_hsn_code' && error.includes('HSN codes')) {
-                          // If fix has item_description, check if error mentions it
                           if (fix.item_description && error.includes(fix.item_description)) return true;
-                          // Otherwise, match any HSN code error
                           return true;
                         }
                         return false;
@@ -2967,7 +2862,6 @@ export const InvoicesPage = () => {
                   </h4>
                   <div className="bg-yellow-50 border border-yellow-200 rounded-md p-4 space-y-2">
                     {validationResult.warnings.map((warning, index) => {
-                      // Find matching quick fix for this warning
                       const matchingFix = validationResult.quick_fixes?.find((fix) => {
                         if (fix.type === 'party_email' && warning.includes('email')) return true;
                         if (fix.type === 'party_telephone' && warning.includes('telephone')) return true;
@@ -3322,8 +3216,6 @@ export const InvoicesPage = () => {
                   alt="FIRS QR Code"
                   className="w-64 h-64 object-contain"
                   onError={(e) => {
-                    console.error('QR Code image failed to load:', selectedQRCode.substring(0, 50));
-                    // Fallback: try as base64 if it's not a data URI
                     if (!selectedQRCode.startsWith('data:')) {
                       (e.target as HTMLImageElement).src = `data:image/png;base64,${selectedQRCode}`;
                     }
@@ -3364,26 +3256,17 @@ export const InvoicesPage = () => {
                   </h4>
                   <div className="bg-red-50 border border-red-200 rounded-md p-4 space-y-2">
                     {validationResult.errors.map((error, index) => {
-                      // Find matching quick fix for this error
-                      // Match by error content - try to find the most relevant fix
                       const matchingFix = validationResult.quick_fixes?.find((fix) => {
-                        // Match FIRS field errors
                         if (fix.action === 'update_firs_fields') {
                           if (fix.type === 'firs_invoice_type_code' && error.includes('invoice type code')) return true;
                           if (fix.type === 'firs_note' && error.includes('FIRS note')) return true;
                           if (fix.type === 'previous_invoice_irn' && error.includes('Previous invoice IRN')) return true;
                         }
-                        // Match party TIN errors
                         if (fix.type === 'party_tin' && (error.includes('TIN is missing') || error.includes('TIN'))) return true;
-                        // Match party email errors
                         if (fix.type === 'party_email' && error.includes('email')) return true;
-                        // Match party telephone errors
                         if (fix.type === 'party_telephone' && error.includes('telephone')) return true;
-                        // Match HSN code errors - check if error mentions the item description
                         if (fix.type === 'item_hsn_code' && error.includes('HSN codes')) {
-                          // If fix has item_description, check if error mentions it
                           if (fix.item_description && error.includes(fix.item_description)) return true;
-                          // Otherwise, match any HSN code error
                           return true;
                         }
                         return false;
@@ -3418,7 +3301,6 @@ export const InvoicesPage = () => {
                   </h4>
                   <div className="bg-yellow-50 border border-yellow-200 rounded-md p-4 space-y-2">
                     {validationResult.warnings.map((warning, index) => {
-                      // Find matching quick fix for this warning
                       const matchingFix = validationResult.quick_fixes?.find((fix) => {
                         if (fix.type === 'party_email' && warning.includes('email')) return true;
                         if (fix.type === 'party_telephone' && warning.includes('telephone')) return true;
@@ -3773,8 +3655,6 @@ export const InvoicesPage = () => {
                   alt="FIRS QR Code"
                   className="w-64 h-64 object-contain"
                   onError={(e) => {
-                    console.error('QR Code image failed to load:', selectedQRCode.substring(0, 50));
-                    // Fallback: try as base64 if it's not a data URI
                     if (!selectedQRCode.startsWith('data:')) {
                       (e.target as HTMLImageElement).src = `data:image/png;base64,${selectedQRCode}`;
                     }
@@ -3815,26 +3695,17 @@ export const InvoicesPage = () => {
                   </h4>
                   <div className="bg-red-50 border border-red-200 rounded-md p-4 space-y-2">
                     {validationResult.errors.map((error, index) => {
-                      // Find matching quick fix for this error
-                      // Match by error content - try to find the most relevant fix
                       const matchingFix = validationResult.quick_fixes?.find((fix) => {
-                        // Match FIRS field errors
                         if (fix.action === 'update_firs_fields') {
                           if (fix.type === 'firs_invoice_type_code' && error.includes('invoice type code')) return true;
                           if (fix.type === 'firs_note' && error.includes('FIRS note')) return true;
                           if (fix.type === 'previous_invoice_irn' && error.includes('Previous invoice IRN')) return true;
                         }
-                        // Match party TIN errors
                         if (fix.type === 'party_tin' && (error.includes('TIN is missing') || error.includes('TIN'))) return true;
-                        // Match party email errors
                         if (fix.type === 'party_email' && error.includes('email')) return true;
-                        // Match party telephone errors
                         if (fix.type === 'party_telephone' && error.includes('telephone')) return true;
-                        // Match HSN code errors - check if error mentions the item description
                         if (fix.type === 'item_hsn_code' && error.includes('HSN codes')) {
-                          // If fix has item_description, check if error mentions it
                           if (fix.item_description && error.includes(fix.item_description)) return true;
-                          // Otherwise, match any HSN code error
                           return true;
                         }
                         return false;
@@ -3869,7 +3740,6 @@ export const InvoicesPage = () => {
                   </h4>
                   <div className="bg-yellow-50 border border-yellow-200 rounded-md p-4 space-y-2">
                     {validationResult.warnings.map((warning, index) => {
-                      // Find matching quick fix for this warning
                       const matchingFix = validationResult.quick_fixes?.find((fix) => {
                         if (fix.type === 'party_email' && warning.includes('email')) return true;
                         if (fix.type === 'party_telephone' && warning.includes('telephone')) return true;
@@ -4224,8 +4094,6 @@ export const InvoicesPage = () => {
                   alt="FIRS QR Code"
                   className="w-64 h-64 object-contain"
                   onError={(e) => {
-                    console.error('QR Code image failed to load:', selectedQRCode.substring(0, 50));
-                    // Fallback: try as base64 if it's not a data URI
                     if (!selectedQRCode.startsWith('data:')) {
                       (e.target as HTMLImageElement).src = `data:image/png;base64,${selectedQRCode}`;
                     }
@@ -4266,26 +4134,17 @@ export const InvoicesPage = () => {
                   </h4>
                   <div className="bg-red-50 border border-red-200 rounded-md p-4 space-y-2">
                     {validationResult.errors.map((error, index) => {
-                      // Find matching quick fix for this error
-                      // Match by error content - try to find the most relevant fix
                       const matchingFix = validationResult.quick_fixes?.find((fix) => {
-                        // Match FIRS field errors
                         if (fix.action === 'update_firs_fields') {
                           if (fix.type === 'firs_invoice_type_code' && error.includes('invoice type code')) return true;
                           if (fix.type === 'firs_note' && error.includes('FIRS note')) return true;
                           if (fix.type === 'previous_invoice_irn' && error.includes('Previous invoice IRN')) return true;
                         }
-                        // Match party TIN errors
                         if (fix.type === 'party_tin' && (error.includes('TIN is missing') || error.includes('TIN'))) return true;
-                        // Match party email errors
                         if (fix.type === 'party_email' && error.includes('email')) return true;
-                        // Match party telephone errors
                         if (fix.type === 'party_telephone' && error.includes('telephone')) return true;
-                        // Match HSN code errors - check if error mentions the item description
                         if (fix.type === 'item_hsn_code' && error.includes('HSN codes')) {
-                          // If fix has item_description, check if error mentions it
                           if (fix.item_description && error.includes(fix.item_description)) return true;
-                          // Otherwise, match any HSN code error
                           return true;
                         }
                         return false;
@@ -4320,7 +4179,6 @@ export const InvoicesPage = () => {
                   </h4>
                   <div className="bg-yellow-50 border border-yellow-200 rounded-md p-4 space-y-2">
                     {validationResult.warnings.map((warning, index) => {
-                      // Find matching quick fix for this warning
                       const matchingFix = validationResult.quick_fixes?.find((fix) => {
                         if (fix.type === 'party_email' && warning.includes('email')) return true;
                         if (fix.type === 'party_telephone' && warning.includes('telephone')) return true;

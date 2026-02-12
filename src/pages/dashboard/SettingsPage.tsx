@@ -73,9 +73,11 @@ import {
   useCompanyUsers,
   useCreateUser,
   useAssignUserRole,
+  useUpdateUserStatus,
   useCompanyPreferences,
   useUpdateCompanyPreferences,
 } from '../../hooks/useCompany';
+import { usePermissions } from '../../hooks/usePermissions';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -93,10 +95,14 @@ type TeamMember = {
 
 export const SettingsPage = () => {
   const { user } = useAuth();
+  const { canManageUsers, isSuperAdmin, isCompanyUser } = usePermissions();
+  const companyScoped = !isSuperAdmin() && !isCompanyUser();
   const [showApiKey, setShowApiKey] = useState(false);
   const [activeTab, setActiveTab] = useState('company');
   const [showInviteDialog, setShowInviteDialog] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState<number | null>(null);
+  const [showInvitePassword, setShowInvitePassword] = useState(false);
+  const [showInviteConfirmPassword, setShowInviteConfirmPassword] = useState(false);
   const [inviteForm, setInviteForm] = useState({
     name: '',
     email: '',
@@ -108,19 +114,20 @@ export const SettingsPage = () => {
     role: 'company_user' as 'company_admin' | 'company_user',
   });
   
-  // Company profile hooks
-  const { data: companyProfileResponse, isLoading: isLoadingProfile } = useCompanyProfile();
+  // Company profile hooks (disabled for super_admin — no company)
+  const { data: companyProfileResponse, isLoading: isLoadingProfile } = useCompanyProfile(companyScoped);
   const updateProfile = useUpdateCompanyProfile();
   const regenerateApiKeys = useRegenerateApiKeys();
   const changePassword = useChangePassword();
   
   // Team members hooks
-  const { data: usersResponse, isLoading: isLoadingUsers } = useCompanyUsers();
+  const { data: usersResponse, isLoading: isLoadingUsers } = useCompanyUsers(companyScoped);
   const createUser = useCreateUser();
   const assignRole = useAssignUserRole();
+  const updateUserStatus = useUpdateUserStatus();
   
   // Preferences hooks
-  const { data: preferencesResponse, isLoading: isLoadingPreferences } = useCompanyPreferences();
+  const { data: preferencesResponse, isLoading: isLoadingPreferences } = useCompanyPreferences(companyScoped);
   const updatePreferences = useUpdateCompanyPreferences();
   
   const usersResponseData = usersResponse?.data;
@@ -230,10 +237,17 @@ export const SettingsPage = () => {
     },
   ] : [];
 
+  // Basic email format validation (RFC 5322 simplified)
+  const isValidEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+
   // Handle invite member
   const handleInviteMember = () => {
     if (!inviteForm.name || !inviteForm.email || !inviteForm.password || !inviteForm.password_confirmation) {
       toast.error('Please fill in all fields');
+      return;
+    }
+    if (!isValidEmail(inviteForm.email)) {
+      toast.error('Please enter a valid email address');
       return;
     }
     if (inviteForm.password !== inviteForm.password_confirmation) {
@@ -313,6 +327,155 @@ export const SettingsPage = () => {
       status: 'active',
     },
   ];
+
+  // Super admin has no company; company_user is read-only — show only account security (change password, etc.)
+  if (isSuperAdmin() || isCompanyUser()) {
+    return (
+      <DashboardLayout>
+        <div className="space-y-6">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight">Settings</h1>
+            <p className="text-muted-foreground">
+              Manage your account security
+            </p>
+          </div>
+
+          {/* Security — change password and account security (same as Security tab for company users) */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center">
+                <Shield className="w-5 h-5 mr-2" />
+                Security settings
+              </CardTitle>
+              <CardDescription>
+                Manage your account security and access controls
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <Label>Two-Factor Authentication</Label>
+                    <p className="text-sm text-muted-foreground">
+                      Add an extra layer of security to your account
+                    </p>
+                  </div>
+                  <Button variant="outline">Enable 2FA</Button>
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <Label>Session Timeout</Label>
+                    <p className="text-sm text-muted-foreground">
+                      Automatically log out after inactivity
+                    </p>
+                  </div>
+                  <Select value={sessionTimeout} onValueChange={setSessionTimeout}>
+                    <SelectTrigger className="w-[180px]">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="15">15 minutes</SelectItem>
+                      <SelectItem value="30">30 minutes</SelectItem>
+                      <SelectItem value="60">1 hour</SelectItem>
+                      <SelectItem value="240">4 hours</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <Label>Login Alerts</Label>
+                    <p className="text-sm text-muted-foreground">
+                      Get notified of new login attempts
+                    </p>
+                  </div>
+                  <Switch checked={loginAlerts} onCheckedChange={setLoginAlerts} />
+                </div>
+              </div>
+
+              <Separator />
+
+              <div className="space-y-4">
+                <h3 className="text-lg font-medium">Password</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="admin-current-password">Current Password</Label>
+                    <Input
+                      id="admin-current-password"
+                      type="password"
+                      autoComplete="off"
+                      value={passwordForm.current_password}
+                      onChange={(e) => setPasswordForm({ ...passwordForm, current_password: e.target.value })}
+                      placeholder="Enter current password"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="admin-new-password">New Password</Label>
+                    <Input
+                      id="admin-new-password"
+                      type="password"
+                      autoComplete="new-password"
+                      value={passwordForm.password}
+                      onChange={(e) => setPasswordForm({ ...passwordForm, password: e.target.value })}
+                      placeholder="Enter new password"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="admin-confirm-password">Confirm New Password</Label>
+                  <Input
+                    id="admin-confirm-password"
+                    type="password"
+                    autoComplete="new-password"
+                    value={passwordForm.password_confirmation}
+                    onChange={(e) => setPasswordForm({ ...passwordForm, password_confirmation: e.target.value })}
+                    placeholder="Confirm new password"
+                  />
+                </div>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    if (!passwordForm.current_password || !passwordForm.password || !passwordForm.password_confirmation) {
+                      toast.error('Please fill in all password fields');
+                      return;
+                    }
+                    if (passwordForm.password !== passwordForm.password_confirmation) {
+                      toast.error('New password and confirmation do not match');
+                      return;
+                    }
+                    if (passwordForm.password.length < 8) {
+                      toast.error('Password must be at least 8 characters long');
+                      return;
+                    }
+                    changePassword.mutate(passwordForm, {
+                      onSuccess: () => {
+                        setPasswordForm({
+                          current_password: '',
+                          password: '',
+                          password_confirmation: '',
+                        });
+                      },
+                    });
+                  }}
+                  disabled={changePassword.isPending}
+                >
+                  {changePassword.isPending ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Updating...
+                    </>
+                  ) : (
+                    'Update Password'
+                  )}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout>
@@ -593,9 +756,27 @@ export const SettingsPage = () => {
                             </Badge>
                           </TableCell>
                           <TableCell>
-                                  <Badge variant={statusDisplay.variant}>
-                                    {statusDisplay.label}
-                            </Badge>
+                            {canManageUsers() ? (
+                              <Select
+                                value={member.status ?? 'active'}
+                                onValueChange={(value: 'active' | 'inactive') =>
+                                  updateUserStatus.mutate({ user_id: member.id, status: value })
+                                }
+                                disabled={updateUserStatus.isPending}
+                              >
+                                <SelectTrigger className="w-[120px] h-8">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="active">Active</SelectItem>
+                                  <SelectItem value="inactive">Inactive</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            ) : (
+                              <Badge variant={statusDisplay.variant}>
+                                {statusDisplay.label}
+                              </Badge>
+                            )}
                           </TableCell>
                                 <TableCell>
                                   {member.last_login_at
@@ -1007,6 +1188,7 @@ export const SettingsPage = () => {
                       <Input
                         id="current-password"
                         type="password"
+                        autoComplete="off"
                         value={passwordForm.current_password}
                         onChange={(e) => setPasswordForm({ ...passwordForm, current_password: e.target.value })}
                         placeholder="Enter current password"
@@ -1017,6 +1199,7 @@ export const SettingsPage = () => {
                       <Input
                         id="new-password"
                         type="password"
+                        autoComplete="new-password"
                         value={passwordForm.password}
                         onChange={(e) => setPasswordForm({ ...passwordForm, password: e.target.value })}
                         placeholder="Enter new password"
@@ -1028,6 +1211,7 @@ export const SettingsPage = () => {
                     <Input
                       id="confirm-password"
                       type="password"
+                      autoComplete="new-password"
                       value={passwordForm.password_confirmation}
                       onChange={(e) => setPasswordForm({ ...passwordForm, password_confirmation: e.target.value })}
                       placeholder="Confirm new password"
@@ -1089,6 +1273,7 @@ export const SettingsPage = () => {
                 <Label htmlFor="invite-name">Name *</Label>
                 <Input
                   id="invite-name"
+                  autoComplete="off"
                   value={inviteForm.name}
                   onChange={(e) => setInviteForm({ ...inviteForm, name: e.target.value })}
                   placeholder="Enter full name"
@@ -1099,6 +1284,7 @@ export const SettingsPage = () => {
                 <Input
                   id="invite-email"
                   type="email"
+                  autoComplete="off"
                   value={inviteForm.email}
                   onChange={(e) => setInviteForm({ ...inviteForm, email: e.target.value })}
                   placeholder="Enter email address"
@@ -1106,23 +1292,57 @@ export const SettingsPage = () => {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="invite-password">Password *</Label>
-                <Input
-                  id="invite-password"
-                  type="password"
-                  value={inviteForm.password}
-                  onChange={(e) => setInviteForm({ ...inviteForm, password: e.target.value })}
-                  placeholder="Enter password (min 8 characters)"
-                />
+                <div className="relative">
+                  <Input
+                    id="invite-password"
+                    type={showInvitePassword ? 'text' : 'password'}
+                    autoComplete="new-password"
+                    className="pr-10"
+                    value={inviteForm.password}
+                    onChange={(e) => setInviteForm({ ...inviteForm, password: e.target.value })}
+                    placeholder="Enter password (min 8 characters)"
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                    onClick={() => setShowInvitePassword(!showInvitePassword)}
+                  >
+                    {showInvitePassword ? (
+                      <EyeOff className="h-4 w-4 text-muted-foreground" />
+                    ) : (
+                      <Eye className="h-4 w-4 text-muted-foreground" />
+                    )}
+                  </Button>
+                </div>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="invite-password-confirm">Confirm Password *</Label>
-                <Input
-                  id="invite-password-confirm"
-                  type="password"
-                  value={inviteForm.password_confirmation}
-                  onChange={(e) => setInviteForm({ ...inviteForm, password_confirmation: e.target.value })}
-                  placeholder="Confirm password"
-                />
+                <div className="relative">
+                  <Input
+                    id="invite-password-confirm"
+                    type={showInviteConfirmPassword ? 'text' : 'password'}
+                    autoComplete="new-password"
+                    className="pr-10"
+                    value={inviteForm.password_confirmation}
+                    onChange={(e) => setInviteForm({ ...inviteForm, password_confirmation: e.target.value })}
+                    placeholder="Confirm password"
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                    onClick={() => setShowInviteConfirmPassword(!showInviteConfirmPassword)}
+                  >
+                    {showInviteConfirmPassword ? (
+                      <EyeOff className="h-4 w-4 text-muted-foreground" />
+                    ) : (
+                      <Eye className="h-4 w-4 text-muted-foreground" />
+                    )}
+                  </Button>
+                </div>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="invite-role">Role *</Label>

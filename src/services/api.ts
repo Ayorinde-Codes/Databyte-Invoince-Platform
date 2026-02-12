@@ -67,48 +67,43 @@ class ApiService {
       headers['Authorization'] = `Bearer ${token}`;
     }
 
-    try {
-      const response = await fetch(url, {
-        method: 'GET',
-        headers,
-      });
+    const response = await fetch(url, {
+      method: 'GET',
+      headers,
+    });
 
-      // Check content type first
-      const contentType = response.headers.get('content-type') || '';
-      
-      if (!response.ok) {
-        // Try to get error message from response
-        let errorMessage = `Download failed: ${response.statusText}`;
-        if (contentType.includes('application/json')) {
-          try {
-            const errorData = await response.json();
-            errorMessage = errorData.message || errorMessage;
-          } catch {
-            // If parsing fails, use status text
-          }
-        }
-        throw new Error(errorMessage);
-      }
+    // Check content type first
+    const contentType = response.headers.get('content-type') || '';
 
-      // Check if response is actually a file (blob) or JSON error
+    if (!response.ok) {
+      // Try to get error message from response
+      let errorMessage = `Download failed: ${response.statusText}`;
       if (contentType.includes('application/json')) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Export failed');
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.message || errorMessage;
+        } catch {
+          // If parsing fails, use status text
+        }
       }
-
-      const blob = await response.blob();
-      const downloadUrl = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = downloadUrl;
-      link.download = filename;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(downloadUrl);
-    } catch (error) {
-      console.error('File download error:', error);
-      throw error;
+      throw new Error(errorMessage);
     }
+
+    // Check if response is actually a file (blob) or JSON error
+    if (contentType.includes('application/json')) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || 'Export failed');
+    }
+
+    const blob = await response.blob();
+    const downloadUrl = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = downloadUrl;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(downloadUrl);
   }
 
   private async makeRequest<T>(
@@ -164,8 +159,6 @@ class ApiService {
           responseData = { message: text || 'Request failed' };
         }
       } catch (parseError) {
-        // If JSON parsing fails, create a basic error response
-        console.error('Failed to parse response:', parseError);
         responseData = {
           message: `Request failed with status ${response.status}`,
         };
@@ -244,6 +237,18 @@ class ApiService {
     }) as Promise<AuthApiResponse>;
   }
 
+  async getMe(): Promise<AuthApiResponse> {
+    return this.makeRequest<AuthApiResponse['data']>(API_ENDPOINTS.auth.me, {
+      method: 'GET',
+    }) as Promise<AuthApiResponse>;
+  }
+
+  async getMyActivity(): Promise<{ status: boolean; message: string; data?: { activity: Array<{ id: string; action: string; description: string | null; event_type: string | null; created_at: string | null }> } }> {
+    return this.makeRequest(API_ENDPOINTS.auth.meActivity, {
+      method: 'GET',
+    }) as Promise<{ status: boolean; message: string; data?: { activity: Array<{ id: string; action: string; description: string | null; event_type: string | null; created_at: string | null }> } }>;
+  }
+
   async register(userData: {
     company_name: string;
     company_email: string;
@@ -277,7 +282,7 @@ class ApiService {
         method: 'POST',
       });
     } catch (error) {
-      console.warn('Logout request failed:', error);
+      // Silently handle logout errors - user is already being logged out locally
     } finally {
       removeLocalStorage(AUTH_CONFIG.token_key);
       removeLocalStorage(AUTH_CONFIG.user_key);
@@ -1286,6 +1291,13 @@ class ApiService {
     });
   }
 
+  async updateUserStatus(data: { user_id: number; status: 'active' | 'inactive' }) {
+    return this.makeRequest(API_ENDPOINTS.auth.updateUserStatus, {
+      method: 'POST',
+      body: data,
+    });
+  }
+
   // ==================== FIRS INTEGRATION ====================
 
   async generateIRN(data: {
@@ -1444,6 +1456,70 @@ class ApiService {
   async deleteService(id: number) {
     return this.makeRequest(API_ENDPOINTS.services.delete.replace(':id', id.toString()), {
       method: 'DELETE',
+    });
+  }
+
+  // ==================== ADMIN COMPANIES ====================
+
+  async getAdminCompanies(params?: {
+    status?: string;
+    subscription_status?: string;
+    search?: string;
+    per_page?: number;
+    page?: number;
+  }) {
+    const queryParams = new URLSearchParams();
+    if (params?.status) queryParams.append('status', params.status);
+    if (params?.subscription_status) queryParams.append('subscription_status', params.subscription_status);
+    if (params?.search) queryParams.append('search', params.search);
+    if (params?.per_page) queryParams.append('per_page', params.per_page.toString());
+    if (params?.page) queryParams.append('page', params.page.toString());
+    const endpoint = queryParams.toString()
+      ? `${API_ENDPOINTS.admin.companies.list}?${queryParams}`
+      : API_ENDPOINTS.admin.companies.list;
+    return this.makeRequest(endpoint);
+  }
+
+  async getAdminCompany(id: number) {
+    return this.makeRequest(API_ENDPOINTS.admin.companies.get.replace(':id', id.toString()));
+  }
+
+  async updateAdminCompany(id: number, data: { status?: 'pending' | 'active' | 'inactive' | 'suspended'; subscription_status?: 'active' | 'suspended' | 'cancelled' }) {
+    return this.makeRequest(API_ENDPOINTS.admin.companies.update.replace(':id', id.toString()), {
+      method: 'PUT',
+      body: data,
+    });
+  }
+
+  // ==================== ADMIN USERS ====================
+
+  async getAdminUsers(params?: {
+    status?: string;
+    company_id?: number;
+    search?: string;
+    per_page?: number;
+    page?: number;
+  }) {
+    const queryParams = new URLSearchParams();
+    if (params?.status) queryParams.append('status', params.status);
+    if (params?.company_id) queryParams.append('company_id', params.company_id.toString());
+    if (params?.search) queryParams.append('search', params.search);
+    if (params?.per_page) queryParams.append('per_page', params.per_page.toString());
+    if (params?.page) queryParams.append('page', params.page.toString());
+    const endpoint = queryParams.toString()
+      ? `${API_ENDPOINTS.admin.users.list}?${queryParams}`
+      : API_ENDPOINTS.admin.users.list;
+    return this.makeRequest(endpoint);
+  }
+
+  async getAdminUser(id: number) {
+    return this.makeRequest(API_ENDPOINTS.admin.users.get.replace(':id', id.toString()));
+  }
+
+  async updateAdminUser(id: number, data: { status?: 'active' | 'inactive'; is_blocked?: boolean }) {
+    return this.makeRequest(API_ENDPOINTS.admin.users.update.replace(':id', id.toString()), {
+      method: 'PUT',
+      body: data,
     });
   }
 
