@@ -35,6 +35,7 @@ interface InvoiceChartProps {
   description?: string;
   data: ChartData[];
   className?: string;
+  valueFormat?: 'currency' | 'number' | 'percent';
 }
 
 const COLORS = [
@@ -52,7 +53,14 @@ export const InvoiceChart: React.FC<InvoiceChartProps> = ({
   description,
   data,
   className = '',
+  valueFormat = 'currency',
 }) => {
+  const isCount = valueFormat === 'number';
+  const isPercent = valueFormat === 'percent';
+  const formatValue = (value: number) =>
+    isPercent ? `${Number(value).toFixed(1)}%` : isCount ? String(value) : formatCurrency(value, 'NGN', false);
+  const valueLabel = isPercent ? 'Rate' : isCount ? 'Count' : 'Amount';
+
   const renderBarChart = () => (
     <ResponsiveContainer width="100%" height={300}>
       <BarChart data={data}>
@@ -62,10 +70,10 @@ export const InvoiceChart: React.FC<InvoiceChartProps> = ({
           fontSize={12}
           tickLine={false}
           axisLine={false}
-          tickFormatter={(value) => formatCurrency(value, 'NGN', false)}
+          tickFormatter={(value) => formatValue(value)}
         />
         <Tooltip
-          formatter={(value: number) => [formatCurrency(value), 'Amount']}
+          formatter={(value: number) => [formatValue(value), valueLabel]}
           labelStyle={{ color: '#374151' }}
           contentStyle={{
             backgroundColor: '#fff',
@@ -82,8 +90,6 @@ export const InvoiceChart: React.FC<InvoiceChartProps> = ({
     typeof item.amount === 'number' ? item.amount : item.value;
 
   const renderPieChart = () => {
-    // Filter out zero values for the pie chart (they won't render anyway)
-    // But keep all data for the legend below
     const chartData = data.filter(item => item.value > 0);
     
     return (
@@ -154,10 +160,10 @@ export const InvoiceChart: React.FC<InvoiceChartProps> = ({
           fontSize={12}
           tickLine={false}
           axisLine={false}
-          tickFormatter={(value) => formatCurrency(value, 'NGN', false)}
+          tickFormatter={(value) => formatValue(value)}
         />
         <Tooltip
-          formatter={(value: number) => [formatCurrency(value), 'Amount']}
+          formatter={(value: number) => [formatValue(value), valueLabel]}
           labelStyle={{ color: '#374151' }}
           contentStyle={{
             backgroundColor: '#fff',

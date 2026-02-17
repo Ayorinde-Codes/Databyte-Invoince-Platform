@@ -276,6 +276,34 @@ class ApiService {
     }) as Promise<AuthApiResponse>;
   }
 
+  async forgotPassword(data: { email: string; user_type: 'company' | 'user' }) {
+    return this.makeRequest<{ expires_at: string; entity_type: string }>(
+      API_ENDPOINTS.auth.forgotPassword,
+      {
+        method: 'POST',
+        body: data,
+        requiresAuth: false,
+      }
+    );
+  }
+
+  async resetPassword(data: {
+    email: string;
+    user_type: 'company' | 'user';
+    otp_code: string;
+    password: string;
+    password_confirmation: string;
+  }) {
+    return this.makeRequest<{ entity_type: string; email: string }>(
+      API_ENDPOINTS.auth.resetPassword,
+      {
+        method: 'POST',
+        body: data,
+        requiresAuth: false,
+      }
+    );
+  }
+
   async logout() {
     try {
       await this.makeRequest(API_ENDPOINTS.auth.logout, {

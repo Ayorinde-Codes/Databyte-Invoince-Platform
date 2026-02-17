@@ -54,8 +54,18 @@ interface InvoiceRecord {
   total_amount: string | number;
   status: string | { value?: string | null } | null;
   firs_status?: string | null;
+  payment_terms?: string | null;
+  created_at?: string | null;
   customer?: { id: number; party_name: string; email?: string } | null;
   vendor?: { id: number; party_name: string; email?: string } | null;
+}
+
+interface CustomerRecord {
+  id: number;
+  party_name: string;
+  code?: string;
+  email?: string;
+  created_at?: string | null;
 }
 
 // Helper to safely extract invoice data from response
@@ -74,6 +84,14 @@ const extractInvoiceData = (response: unknown): InvoiceRecord[] => {
     return invoices as InvoiceRecord[];
   }
   return [];
+};
+
+const extractCustomerData = (response: unknown): CustomerRecord[] => {
+  if (!response || typeof response !== 'object') return [];
+  const data = (response as Record<string, unknown>)?.data;
+  if (!data || typeof data !== 'object') return [];
+  const list = (data as Record<string, unknown>)?.data;
+  return Array.isArray(list) ? (list as CustomerRecord[]) : [];
 };
 
 export const ReportsPage = () => {
@@ -119,6 +137,16 @@ export const ReportsPage = () => {
         ...(serviceCode ? { source_system: serviceCode } : {}),
       }),
     enabled: shouldFetchInvoices,
+  });
+
+  const { data: customersResponse } = useQuery({
+    queryKey: ['dashboard', 'customers', 'reports', serviceCode],
+    queryFn: () =>
+      apiService.getDashboardCustomers({
+        per_page: 1000,
+        ...(dashboardData?.service?.id ? { service_id: dashboardData.service.id } : {}),
+      }),
+    enabled: shouldFetchInvoices && !!dashboardData?.service?.id,
   });
 
   const error = dashboardError || arInvoicesError || apInvoicesError;
@@ -182,6 +210,29 @@ export const ReportsPage = () => {
       value: monthlyRevenue[month] || 0,
     }));
   }, [arInvoicesResponse, isSuperAdmin, dashboardData]);
+
+  const invoiceVolumeByMonth = useMemo(() => {
+    const arInvoices = extractInvoiceData(arInvoicesResponse);
+    const apInvoices = extractInvoiceData(apInvoicesResponse);
+    const allInvoices = [...arInvoices, ...apInvoices];
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const buckets: { key: string; label: string; count: number }[] = [];
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date();
+      d.setMonth(d.getMonth() - i);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      const label = `${monthNames[d.getMonth()]} ${String(d.getFullYear()).slice(2)}`;
+      buckets.push({ key, label, count: 0 });
+    }
+    allInvoices.forEach((inv: InvoiceRecord) => {
+      if (!inv.invoice_date) return;
+      const dt = new Date(inv.invoice_date);
+      const key = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}`;
+      const b = buckets.find(x => x.key === key);
+      if (b) b.count += 1;
+    });
+    return buckets.map(b => ({ name: b.label, value: b.count }));
+  }, [arInvoicesResponse, apInvoicesResponse]);
 
   // Calculate Invoice Status Distribution from real data
   const invoiceStatusData = useMemo(() => {
@@ -364,21 +415,137 @@ export const ReportsPage = () => {
       }));
   }, [arInvoicesResponse]);
 
-  // Mock data for features that need historical data (customer analytics, performance metrics)
-  const customerAnalyticsData = [
-    { name: 'New Customers', value: 45 },
-    { name: 'Returning', value: 128 },
-    { name: 'Enterprise', value: 23 },
-    { name: 'SME', value: 146 },
-  ];
+  const customerAnalyticsData = useMemo(() => {
+    const customers = extractCustomerData(customersResponse);
+    const now = new Date();
+    const thisYear = now.getFullYear();
+    const thisMonth = now.getMonth();
+    let newThisMonth = 0;
+    customers.forEach((c: CustomerRecord) => {
+      if (!c.created_at) return;
+      const d = new Date(c.created_at);
+      if (d.getFullYear() === thisYear && d.getMonth() === thisMonth) newThisMonth += 1;
+    });
+    const existing = Math.max(0, customers.length - newThisMonth);
+    return [
+      { name: 'New This Month', value: newThisMonth },
+      { name: 'Existing', value: existing },
+    ];
+  }, [customersResponse]);
+
+  const customerInsights = useMemo(() => {
+    const customers = extractCustomerData(customersResponse);
+    const arInvoices = extractInvoiceData(arInvoicesResponse);
+    const now = new Date();
+    const thisYear = now.getFullYear();
+    const thisMonth = now.getMonth();
+    const lastMonth = thisMonth === 0 ? 11 : thisMonth - 1;
+    const lastMonthYear = thisMonth === 0 ? thisYear - 1 : thisYear;
+    const activeThisMonth = new Set<number>();
+    const activeLastMonth = new Set<number>();
+    let totalRevenueFromInvoices = 0;
+    arInvoices.forEach((inv: InvoiceRecord) => {
+      totalRevenueFromInvoices += parseFloat(String(inv.total_amount || '0'));
+      const d = inv.invoice_date ? new Date(inv.invoice_date) : null;
+      if (!d || !inv.customer?.id) return;
+      if (d.getFullYear() === thisYear && d.getMonth() === thisMonth) activeThisMonth.add(inv.customer.id);
+      if (d.getFullYear() === lastMonthYear && d.getMonth() === lastMonth) activeLastMonth.add(inv.customer.id);
+    });
+    const totalCustomers = dashboardData?.counts?.customers ?? customers.length;
+    const activeThisMonthCount = activeThisMonth.size;
+    const activeLastMonthCount = activeLastMonth.size;
+    const retention = activeLastMonthCount > 0
+      ? Math.round((activeThisMonthCount / activeLastMonthCount) * 1000) / 10
+      : (activeThisMonthCount > 0 ? 100 : 0);
+    const avgValue = totalCustomers > 0 ? Math.round(totalRevenueFromInvoices / totalCustomers) : 0;
+    return {
+      totalCustomers,
+      activeThisMonth: activeThisMonthCount,
+      retention,
+      avgCustomerValue: avgValue,
+    };
+  }, [customersResponse, arInvoicesResponse, dashboardData]);
+
+  const paymentTermsData = useMemo(() => {
+    const allInvoices = [
+      ...extractInvoiceData(arInvoicesResponse),
+      ...extractInvoiceData(apInvoicesResponse),
+    ];
+    if (allInvoices.length === 0) return [];
+    const terms: Record<string, number> = {};
+    allInvoices.forEach((inv: InvoiceRecord) => {
+      const t = (inv.payment_terms || 'Other').trim() || 'Other';
+      const normalized = t.toLowerCase().includes('30') ? 'Net 30' : t.toLowerCase().includes('15') ? 'Net 15' : t.toLowerCase().includes('receipt') || t.toLowerCase().includes('due') ? 'Due on Receipt' : t;
+      terms[normalized] = (terms[normalized] || 0) + 1;
+    });
+    const total = allInvoices.length;
+    return Object.entries(terms)
+      .map(([name, count]) => ({ name, count: Math.round((count / total) * 100) }))
+      .sort((a, b) => b.count - a.count);
+  }, [arInvoicesResponse, apInvoicesResponse]);
+
+  const collectionRate = useMemo(() => {
+    const allInvoices = [
+      ...extractInvoiceData(arInvoicesResponse),
+      ...extractInvoiceData(apInvoicesResponse),
+    ];
+    if (allInvoices.length === 0) return null;
+    const paid = allInvoices.filter((inv: InvoiceRecord) => {
+      const s = typeof inv.status === 'string' ? inv.status : (inv.status as { value?: string })?.value;
+      return String(s || '').toLowerCase() === 'paid';
+    }).length;
+    return Math.round((paid / allInvoices.length) * 1000) / 10;
+  }, [arInvoicesResponse, apInvoicesResponse]);
+
+  const dailyComplianceData = useMemo(() => {
+    const invoices = extractInvoiceData(arInvoicesResponse).filter((inv: InvoiceRecord) => inv.firs_status || inv.created_at);
+    if (invoices.length === 0) return [];
+    const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const byDay: Record<number, { approved: number; total: number }> = {};
+    for (let i = 0; i <= 6; i++) byDay[i] = { approved: 0, total: 0 };
+    invoices.forEach((inv: InvoiceRecord) => {
+      const dateStr = inv.created_at || inv.invoice_date;
+      if (!dateStr) return;
+      const day = new Date(dateStr).getDay();
+      byDay[day].total += 1;
+      if (inv.firs_status === 'approved' || inv.firs_status === 'submitted') byDay[day].approved += 1;
+    });
+    return dayNames.map((name, i) => ({
+      name,
+      value: byDay[i].total > 0 ? Math.round((byDay[i].approved / byDay[i].total) * 1000) / 10 : 0,
+    }));
+  }, [arInvoicesResponse]);
+
+  const revenueInsights = useMemo(() => {
+    if (monthlyRevenueData.length === 0) return { highestMonth: '—', highestValue: 0, growthRate: null, ytdRevenue: 0 };
+    const withValues = monthlyRevenueData.filter(d => Number(d.value) > 0);
+    const max = withValues.length ? withValues.reduce((a, b) => (Number(a.value) >= Number(b.value) ? a : b)) : null;
+    const currentYear = new Date().getFullYear();
+    const ytd = monthlyRevenueData.reduce((sum, d) => {
+      const v = Number(d.value);
+      return sum + v;
+    }, 0);
+    return {
+      highestMonth: max ? `${max.name} - ${formatCurrency(max.value)}` : '—',
+      highestValue: max ? Number(max.value) : 0,
+      growthRate: revenueGrowth,
+      ytdRevenue: ytd,
+    };
+  }, [monthlyRevenueData, revenueGrowth]);
+
+  const rejectionRate = useMemo(() => {
+    const total = firsComplianceData.reduce((s, d) => s + d.value, 0);
+    const rejected = firsComplianceData.find(d => d.name === 'Rejected')?.value ?? 0;
+    return total > 0 ? Math.round((rejected / total) * 1000) / 10 : 0;
+  }, [firsComplianceData]);
 
   const performanceMetrics = [
     {
       title: 'Invoice Processing Time',
-      value: '2.3 mins',
-      change: -15.2,
-      changeType: 'decrease' as const,
-      description: 'Average time to process',
+      value: '—',
+      change: undefined as number | undefined,
+      changeType: 'increase' as const,
+      description: 'Average time to process (not tracked)',
     },
     {
       title: 'FIRS Approval Rate',
@@ -389,17 +556,17 @@ export const ReportsPage = () => {
     },
     {
       title: 'Payment Collection',
-      value: '89.2%',
-      change: 4.5,
+      value: collectionRate != null ? `${collectionRate}%` : '—',
+      change: undefined,
       changeType: 'increase' as const,
-      description: 'On-time payment rate',
+      description: 'Share of invoices paid',
     },
     {
       title: 'System Uptime',
-      value: '99.9%',
-      change: 0.1,
+      value: '—',
+      change: undefined,
       changeType: 'increase' as const,
-      description: 'Platform availability',
+      description: 'Platform availability (not tracked)',
     },
   ];
 
@@ -642,25 +809,27 @@ export const ReportsPage = () => {
                     <span className="text-sm text-muted-foreground">
                       Highest Month
                     </span>
-                    <span className="font-medium">June - ₦15.75M</span>
+                    <span className="font-medium">{revenueInsights.highestMonth}</span>
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-sm text-muted-foreground">
                       Growth Rate
                     </span>
-                    <span className="font-medium text-green-600">+18.5%</span>
+                    <span className="font-medium text-green-600">
+                      {revenueInsights.growthRate != null ? `${revenueInsights.growthRate >= 0 ? '+' : ''}${revenueInsights.growthRate}%` : '—'}
+                    </span>
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-sm text-muted-foreground">
                       Projected Next Month
                     </span>
-                    <span className="font-medium">₦16.8M</span>
+                    <span className="font-medium">—</span>
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-sm text-muted-foreground">
-                      YTD Revenue
+                      Revenue (chart period)
                     </span>
-                    <span className="font-medium">₦84.55M</span>
+                    <span className="font-medium">{formatCurrency(revenueInsights.ytdRevenue)}</span>
                   </div>
                 </CardContent>
               </Card>
@@ -723,14 +892,8 @@ export const ReportsPage = () => {
                 type="bar"
                 title="Invoice Volume by Month"
                 description="Number of invoices processed monthly"
-                data={[
-                  { name: 'Jan', value: 45 },
-                  { name: 'Feb', value: 52 },
-                  { name: 'Mar', value: 61 },
-                  { name: 'Apr', value: 58 },
-                  { name: 'May', value: 67 },
-                  { name: 'Jun', value: 72 },
-                ]}
+                data={invoiceVolumeByMonth}
+                valueFormat="number"
               />
 
               <InvoiceChart
@@ -748,24 +911,10 @@ export const ReportsPage = () => {
                   <CardTitle className="text-lg">Processing Time</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-3xl font-bold mb-2">2.3 mins</div>
+                  <div className="text-3xl font-bold mb-2">—</div>
                   <p className="text-sm text-muted-foreground">
-                    Average time to process an invoice
+                    Average time to process (not tracked)
                   </p>
-                  <div className="mt-4 space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span>Draft to Sent</span>
-                      <span>1.2 mins</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span>FIRS Submission</span>
-                      <span>0.8 mins</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span>Approval</span>
-                      <span>0.3 mins</span>
-                    </div>
-                  </div>
                 </CardContent>
               </Card>
 
@@ -775,18 +924,16 @@ export const ReportsPage = () => {
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-3">
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm">Net 30</span>
-                      <Badge variant="secondary">65%</Badge>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm">Net 15</span>
-                      <Badge variant="secondary">25%</Badge>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm">Due on Receipt</span>
-                      <Badge variant="secondary">10%</Badge>
-                    </div>
+                    {paymentTermsData.length > 0 ? (
+                      paymentTermsData.map((term, i) => (
+                        <div key={i} className="flex justify-between items-center">
+                          <span className="text-sm">{term.name}</span>
+                          <Badge variant="secondary">{term.count}%</Badge>
+                        </div>
+                      ))
+                    ) : (
+                      <p className="text-sm text-muted-foreground">No payment terms data</p>
+                    )}
                   </div>
                 </CardContent>
               </Card>
@@ -797,25 +944,11 @@ export const ReportsPage = () => {
                 </CardHeader>
                 <CardContent>
                   <div className="text-3xl font-bold mb-2 text-green-600">
-                    89.2%
+                    {collectionRate != null ? `${collectionRate}%` : '—'}
                   </div>
                   <p className="text-sm text-muted-foreground">
-                    On-time payment collection rate
+                    Share of invoices with status Paid
                   </p>
-                  <div className="mt-4 space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span>0-30 days</span>
-                      <span className="text-green-600">89.2%</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span>31-60 days</span>
-                      <span className="text-yellow-600">7.3%</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span>60+ days</span>
-                      <span className="text-red-600">3.5%</span>
-                    </div>
-                  </div>
                 </CardContent>
               </Card>
             </div>
@@ -840,25 +973,25 @@ export const ReportsPage = () => {
                     <span className="text-sm text-muted-foreground">
                       Approval Rate
                     </span>
-                    <span className="font-medium text-green-600">97.8%</span>
+                    <span className="font-medium text-green-600">{complianceRate.toFixed(1)}%</span>
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-sm text-muted-foreground">
                       Avg Approval Time
                     </span>
-                    <span className="font-medium">4.2 hours</span>
+                    <span className="font-medium">—</span>
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-sm text-muted-foreground">
                       Rejection Rate
                     </span>
-                    <span className="font-medium text-red-600">2.2%</span>
+                    <span className="font-medium text-red-600">{rejectionRate}%</span>
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-sm text-muted-foreground">
                       Resubmission Success
                     </span>
-                    <span className="font-medium">95.5%</span>
+                    <span className="font-medium">—</span>
                   </div>
                 </CardContent>
               </Card>
@@ -869,23 +1002,16 @@ export const ReportsPage = () => {
               <CardHeader>
                 <CardTitle>Compliance Timeline</CardTitle>
                 <CardDescription>
-                  FIRS submission and approval timeline
+                  FIRS approval rate by day of week (from invoice data)
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 <InvoiceChart
                   type="line"
-                  title="Daily Compliance Rate"
-                  description="Daily FIRS approval rate over time"
-                  data={[
-                    { name: 'Mon', value: 98.2 },
-                    { name: 'Tue', value: 97.8 },
-                    { name: 'Wed', value: 98.5 },
-                    { name: 'Thu', value: 97.1 },
-                    { name: 'Fri', value: 98.9 },
-                    { name: 'Sat', value: 99.2 },
-                    { name: 'Sun', value: 98.7 },
-                  ]}
+                  title="Approval Rate by Day"
+                  description="FIRS approval rate by day of week"
+                  data={dailyComplianceData.length > 0 ? dailyComplianceData : [{ name: '—', value: 0 }]}
+                  valueFormat="percent"
                 />
               </CardContent>
             </Card>
@@ -899,6 +1025,7 @@ export const ReportsPage = () => {
                 title="Customer Acquisition"
                 description="New customers acquired monthly"
                 data={customerAnalyticsData}
+                valueFormat="number"
               />
 
               <Card>
@@ -910,76 +1037,65 @@ export const ReportsPage = () => {
                     <span className="text-sm text-muted-foreground">
                       Total Customers
                     </span>
-                    <span className="font-medium">342</span>
+                    <span className="font-medium">{customerInsights.totalCustomers}</span>
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-sm text-muted-foreground">
                       Active This Month
                     </span>
-                    <span className="font-medium">298</span>
+                    <span className="font-medium">{customerInsights.activeThisMonth}</span>
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-sm text-muted-foreground">
                       Customer Retention
                     </span>
-                    <span className="font-medium text-green-600">94.2%</span>
+                    <span className="font-medium text-green-600">{customerInsights.retention}%</span>
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-sm text-muted-foreground">
                       Avg Customer Value
                     </span>
-                    <span className="font-medium">₦46,052</span>
+                    <span className="font-medium">{formatCurrency(customerInsights.avgCustomerValue)}</span>
                   </div>
                 </CardContent>
               </Card>
             </div>
 
-            {/* Customer Segments */}
+            {/* Customer summary (segment data not available - show totals from real data) */}
             <Card>
               <CardHeader>
-                <CardTitle>Customer Segments</CardTitle>
+                <CardTitle>Customer Summary</CardTitle>
                 <CardDescription>
-                  Revenue breakdown by customer segments
+                  From your customer and invoice data
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                   <div className="text-center p-6 border rounded-lg">
                     <div className="text-2xl font-bold text-blue-600 mb-2">
-                      23
+                      {customerInsights.totalCustomers}
                     </div>
-                    <div className="text-sm font-medium mb-1">Enterprise</div>
+                    <div className="text-sm font-medium mb-1">Total Customers</div>
                     <div className="text-xs text-muted-foreground">
-                      ₦8.2M revenue
-                    </div>
-                    <div className="text-xs text-green-600 mt-1">
-                      +15.3% growth
+                      From ERP sync
                     </div>
                   </div>
-
                   <div className="text-center p-6 border rounded-lg">
                     <div className="text-2xl font-bold text-green-600 mb-2">
-                      146
+                      {customerInsights.activeThisMonth}
                     </div>
-                    <div className="text-sm font-medium mb-1">SME</div>
+                    <div className="text-sm font-medium mb-1">With Invoices This Month</div>
                     <div className="text-xs text-muted-foreground">
-                      ₦5.8M revenue
-                    </div>
-                    <div className="text-xs text-green-600 mt-1">
-                      +22.1% growth
+                      Unique customers
                     </div>
                   </div>
-
                   <div className="text-center p-6 border rounded-lg">
                     <div className="text-2xl font-bold text-purple-600 mb-2">
-                      173
+                      {topCustomers.length}
                     </div>
-                    <div className="text-sm font-medium mb-1">Startups</div>
+                    <div className="text-sm font-medium mb-1">Top Revenue Customers</div>
                     <div className="text-xs text-muted-foreground">
-                      ₦1.75M revenue
-                    </div>
-                    <div className="text-xs text-green-600 mt-1">
-                      +35.7% growth
+                      In chart above
                     </div>
                   </div>
                 </div>

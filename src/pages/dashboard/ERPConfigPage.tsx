@@ -317,7 +317,7 @@ export const ERPConfigPage = () => {
     setting_value: {
       server_details: {
         host: '',
-        port: 1433,
+        port: 8124,
         protocol: 'http' as 'http' | 'https',
         ssl_verify: false,
         database: '',
@@ -920,7 +920,7 @@ export const ERPConfigPage = () => {
         setting_value: {
           server_details: {
             host: '',
-            port: 1433,
+            port: 8124,
             protocol: 'http' as 'http' | 'https',
             ssl_verify: false,
             database: '',
@@ -1429,7 +1429,7 @@ export const ERPConfigPage = () => {
                                     port:
                                       selectedERP === 'sage_300' ||
                                       selectedERP === 'sage_x3'
-                                        ? 1433
+                                        ? 8124
                                         : 5432,
                                     protocol: 'http' as 'http' | 'https',
                                     ssl_verify: false,
@@ -2314,7 +2314,7 @@ export const ERPConfigPage = () => {
                       irn_service_id: e.target.value,
                     })
                   }
-                  placeholder="Enter IRN Service ID (e.g., 1A77F9BA) - Optional"
+                  placeholder="Enter IRN Service ID (e.g., YOUR_SERVICE_ID) - Optional"
                 />
                 <p className="text-xs text-muted-foreground">
                   Service ID code for IRN generation template. Typically 8
@@ -3633,7 +3633,7 @@ export const ERPConfigPage = () => {
                                   }}
                                   placeholder="API password"
                                   className="pr-10"
-                                  autoComplete="off"
+                                  autoComplete="new-password"
                                 />
                                 <Button
                                   type="button"
@@ -4673,12 +4673,12 @@ export const ERPConfigPage = () => {
                             ...erpCreateForm.setting_value,
                             server_details: {
                               ...erpCreateForm.setting_value.server_details,
-                              port: parseInt(e.target.value) || 1433,
+                              port: parseInt(e.target.value) || 8124,
                             },
                           },
                         })
                       }
-                      placeholder="1433"
+                      placeholder="8124"
                       autoComplete="off"
                     />
                   </div>
@@ -4977,7 +4977,7 @@ export const ERPConfigPage = () => {
                           }}
                           placeholder="API password"
                           className={`pr-10 ${formErrors['api_credentials.password'] || formErrors.password ? 'border-red-500' : ''}`}
-                          autoComplete="off"
+                          autoComplete="new-password"
                         />
                         <Button
                           type="button"
@@ -5664,7 +5664,7 @@ export const ERPConfigPage = () => {
                       setting_value: {
                         server_details: {
                           host: '',
-                          port: 1433,
+                          port: 8124,
                           protocol: 'http' as 'http' | 'https',
                           ssl_verify: false,
                           database: '',
