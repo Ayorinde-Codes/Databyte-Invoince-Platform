@@ -493,13 +493,13 @@ export const SettingsPage = () => {
           onValueChange={setActiveTab}
           className="space-y-6"
         >
-          <TabsList className="grid w-full grid-cols-6">
-            <TabsTrigger value="company">Company</TabsTrigger>
-            <TabsTrigger value="team">Team</TabsTrigger>
-            <TabsTrigger value="api">API Keys</TabsTrigger>
-            <TabsTrigger value="webhooks">Webhooks</TabsTrigger>
-            <TabsTrigger value="notifications">Notifications</TabsTrigger>
-            <TabsTrigger value="security">Security</TabsTrigger>
+          <TabsList className="flex w-full overflow-x-auto flex-nowrap gap-1 pb-2 md:grid md:grid-cols-6 md:overflow-visible">
+            <TabsTrigger value="company" className="flex-shrink-0">Company</TabsTrigger>
+            <TabsTrigger value="team" className="flex-shrink-0">Team</TabsTrigger>
+            <TabsTrigger value="api" className="flex-shrink-0">API Keys</TabsTrigger>
+            <TabsTrigger value="webhooks" className="flex-shrink-0">Webhooks</TabsTrigger>
+            <TabsTrigger value="notifications" className="flex-shrink-0">Notifications</TabsTrigger>
+            <TabsTrigger value="security" className="flex-shrink-0">Security</TabsTrigger>
           </TabsList>
 
           {/* Company Settings */}

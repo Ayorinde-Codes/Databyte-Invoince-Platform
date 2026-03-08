@@ -179,10 +179,10 @@ export const RecentInvoices: React.FC<RecentInvoicesProps> = ({
           {invoices.map((invoice) => (
             <div
               key={invoice.id}
-              className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors"
+              className="flex flex-col gap-3 p-4 border rounded-lg hover:bg-muted/50 transition-colors sm:flex-row sm:items-center sm:justify-between"
             >
-              <div className="flex items-center space-x-4">
-                <Avatar className="h-10 w-10">
+              <div className="flex items-center space-x-4 min-w-0 flex-1">
+                <Avatar className="h-10 w-10 flex-shrink-0">
                   <AvatarImage
                     src={invoice.customerAvatar}
                     alt={invoice.customer}
@@ -192,12 +192,12 @@ export const RecentInvoices: React.FC<RecentInvoicesProps> = ({
                   </AvatarFallback>
                 </Avatar>
 
-                <div>
-                  <div className="flex items-center space-x-2 mb-1">
-                    <p className="font-medium text-sm">{invoice.id}</p>
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2 mb-1">
+                    <p className="font-medium text-sm truncate">{invoice.id}</p>
                     {getStatusBadge(invoice.status)}
                   </div>
-                  <p className="text-sm text-muted-foreground">
+                  <p className="text-sm text-muted-foreground truncate">
                     {invoice.customer}
                   </p>
                   <div className="mt-1">
@@ -206,9 +206,9 @@ export const RecentInvoices: React.FC<RecentInvoicesProps> = ({
                 </div>
               </div>
 
-              <div className="flex items-center space-x-4">
-                <div className="text-right">
-                  <p className="font-semibold">
+              <div className="flex items-center justify-between gap-2 sm:justify-end sm:flex-shrink-0">
+                <div className="text-left sm:text-right min-w-0">
+                  <p className="font-semibold truncate sm:whitespace-normal">
                     {formatCurrency(invoice.amount)}
                   </p>
                   <p className="text-sm text-muted-foreground">
@@ -223,7 +223,7 @@ export const RecentInvoices: React.FC<RecentInvoicesProps> = ({
 
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                    <Button variant="ghost" size="sm" className="h-8 w-8 p-0 flex-shrink-0">
                       <MoreHorizontal className="h-4 w-4" />
                     </Button>
                   </DropdownMenuTrigger>

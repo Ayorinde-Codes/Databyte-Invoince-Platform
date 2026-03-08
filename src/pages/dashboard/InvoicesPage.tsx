@@ -26,6 +26,9 @@ import {
   X,
   FileSpreadsheet,
   FileText as FileTextIcon,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -200,6 +203,8 @@ interface ExportParams {
   batch_number?: string;
   customer_id?: number;
   vendor_id?: number;
+  invoice_id?: number;
+  invoice_number?: string;
 }
 
 export const InvoicesPage = () => {
@@ -213,6 +218,8 @@ export const InvoicesPage = () => {
   const [dateTo, setDateTo] = useState<Date | undefined>(undefined);
   const [batchNumber, setBatchNumber] = useState('');
   const [partyFilter, setPartyFilter] = useState<number | null>(null);
+  const [sortBy, setSortBy] = useState<string>('created_at');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [showDetailsDialog, setShowDetailsDialog] = useState(false);
@@ -323,6 +330,39 @@ export const InvoicesPage = () => {
   const canValidateFIRS = hasPermission('firs.validate');
   const canSignFIRS = hasPermission('firs.submit');
 
+  const handleSort = useCallback((column: string) => {
+    setSortBy((prev) => {
+      if (prev === column) {
+        setSortOrder((o) => (o === 'asc' ? 'desc' : 'asc'));
+        return column;
+      }
+      setSortOrder('desc');
+      return column;
+    });
+    setPage(1);
+  }, []);
+
+  const SortableHead = useCallback(({ column, label }: { column: string; label: React.ReactNode }) => (
+    <TableHead>
+      <button
+        type="button"
+        onClick={() => handleSort(column)}
+        className="flex items-center gap-1 hover:text-foreground font-medium"
+      >
+        {label}
+        {sortBy === column ? (
+          sortOrder === 'asc' ? (
+            <ArrowUp className="w-4 h-4" />
+          ) : (
+            <ArrowDown className="w-4 h-4" />
+          )
+        ) : (
+          <ArrowUpDown className="w-4 h-4 opacity-50" />
+        )}
+      </button>
+    </TableHead>
+  ), [sortBy, sortOrder, handleSort]);
+
   const queryParams = {
     per_page: 15,
     page,
@@ -332,6 +372,8 @@ export const InvoicesPage = () => {
     ...(batchNumber && { batch_number: batchNumber }),
     ...(partyFilter && activeTab === 'ar' && { customer_id: partyFilter }),
     ...(partyFilter && activeTab === 'ap' && { vendor_id: partyFilter }),
+    sort_by: sortBy,
+    sort_order: sortOrder,
   };
   const {
     data: arData,
@@ -358,11 +400,20 @@ export const InvoicesPage = () => {
   const deleteAR = useDeleteARInvoice();
   const deleteAP = useDeleteAPInvoice();
   const totalInvoices = (typeof pagination.total === 'number') ? pagination.total : 0;
-  const totalAmount = invoices.reduce(
-    (sum: number, inv: Invoice) =>
-      sum + (parseFloat(String(inv.total_amount)) || 0),
-    0
-  );
+
+  const totalsByCurrency = ((): Record<string, number> => {
+    const fromApi = currentDataObj && typeof currentDataObj === 'object' && 'totals_by_currency' in currentDataObj && currentDataObj.totals_by_currency;
+    if (fromApi && typeof fromApi === 'object' && !Array.isArray(fromApi)) {
+      return fromApi as Record<string, number>;
+    }
+    const byCurrency: Record<string, number> = {};
+    invoices.forEach((inv: Invoice) => {
+      const c = (inv.currency || 'NGN').toUpperCase();
+      byCurrency[c] = (byCurrency[c] || 0) + (parseFloat(String(inv.total_amount)) || 0);
+    });
+    return byCurrency;
+  })();
+
   const paidInvoices = invoices.filter(
     (inv: Invoice) => inv.status === 'paid'
   ).length;
@@ -896,34 +947,39 @@ export const InvoicesPage = () => {
     }
   };
 
-  const handleExportPdf = async () => {
+  const handleExportPdf = async (invoice?: Invoice) => {
     try {
       const exportParams: ExportParams = {};
-      if (statusFilter !== 'all') {
-        exportParams.status = statusFilter;
-      }
-      if (dateFrom) {
-        exportParams.date_from = format(dateFrom, 'yyyy-MM-dd');
-      }
-      if (dateTo) {
-        exportParams.date_to = format(dateTo, 'yyyy-MM-dd');
-      }
-      if (batchNumber) {
-        exportParams.batch_number = batchNumber;
-      }
-      if (partyFilter && activeTab === 'ar') {
-        exportParams.customer_id = partyFilter;
-      }
-      if (partyFilter && activeTab === 'ap') {
-        exportParams.vendor_id = partyFilter;
+      if (invoice) {
+        exportParams.invoice_id = invoice.id;
+        exportParams.invoice_number = invoice.invoice_number;
+      } else {
+        if (statusFilter !== 'all') {
+          exportParams.status = statusFilter;
+        }
+        if (dateFrom) {
+          exportParams.date_from = format(dateFrom, 'yyyy-MM-dd');
+        }
+        if (dateTo) {
+          exportParams.date_to = format(dateTo, 'yyyy-MM-dd');
+        }
+        if (batchNumber) {
+          exportParams.batch_number = batchNumber;
+        }
+        if (partyFilter && activeTab === 'ar') {
+          exportParams.customer_id = partyFilter;
+        }
+        if (partyFilter && activeTab === 'ap') {
+          exportParams.vendor_id = partyFilter;
+        }
       }
 
       if (activeTab === 'ar') {
         await apiService.exportARInvoicesPdf(exportParams);
-        toast.success('PDF export started');
+        toast.success(invoice ? 'PDF download started' : 'PDF export started');
       } else {
         await apiService.exportAPInvoicesPdf(exportParams);
-        toast.success('PDF export started');
+        toast.success(invoice ? 'PDF download started' : 'PDF export started');
       }
     } catch (error) {
       toast.error(extractErrorMessage(error, 'Failed to export PDF'));
@@ -1153,22 +1209,38 @@ export const InvoicesPage = () => {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">
-                Total Amount
+                {Object.keys(totalsByCurrency).length <= 1 ? 'Total Amount' : 'Totals by currency'}
               </CardTitle>
               <DollarSign className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
               {isLoading ? (
                 <Skeleton className="h-8 w-32" />
-              ) : (
+              ) : Object.keys(totalsByCurrency).length === 0 ? (
+                <div className="text-2xl font-bold">—</div>
+              ) : Object.keys(totalsByCurrency).length === 1 ? (
                 <>
                   <div
                     className="text-2xl font-bold break-words overflow-hidden text-ellipsis line-clamp-2"
-                    title={formatCurrency(totalAmount)}
+                    title={formatCurrency(Object.values(totalsByCurrency)[0], Object.keys(totalsByCurrency)[0])}
                   >
-                {formatCurrency(totalAmount)}
-              </div>
+                    {formatCurrency(Object.values(totalsByCurrency)[0], Object.keys(totalsByCurrency)[0])}
+                  </div>
                   <p className="text-xs text-muted-foreground">Total value</p>
+                </>
+              ) : (
+                <>
+                  <div className="space-y-1.5">
+                    {Object.entries(totalsByCurrency).map(([currency, amount]) => (
+                      <div key={currency} className="flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground font-medium">{currency}</span>
+                        <span className="font-bold tabular-nums">
+                          {formatCurrency(amount, currency)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-2">Total value per currency</p>
                 </>
               )}
             </CardContent>
@@ -1455,17 +1527,18 @@ export const InvoicesPage = () => {
               <Table>
                 <TableHeader>
                   <TableRow>
-                            <TableHead className="w-[40px]"></TableHead>
-                    <TableHead>Invoice</TableHead>
-                            <TableHead>
-                              {activeTab === 'ar' ? 'Customer' : 'Vendor'}
-                            </TableHead>
-                    <TableHead>Amount</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>FIRS Status</TableHead>
-                    <TableHead>FIRS Type</TableHead>
-                    <TableHead>Date</TableHead>
-                    <TableHead>Due Date</TableHead>
+                    <TableHead className="w-[40px]"></TableHead>
+                    <SortableHead column="invoice_number" label="Invoice" />
+                    <SortableHead
+                      column={activeTab === 'ar' ? 'customer_name' : 'vendor_name'}
+                      label={activeTab === 'ar' ? 'Customer' : 'Vendor'}
+                    />
+                    <SortableHead column="total_amount" label="Amount" />
+                    <SortableHead column="status" label="Status" />
+                    <SortableHead column="firs_status" label="FIRS Status" />
+                    <SortableHead column="firs_invoice_type_code" label="FIRS Type" />
+                    <SortableHead column="invoice_date" label="Date" />
+                    <SortableHead column="due_date" label="Due Date" />
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -1616,7 +1689,7 @@ export const InvoicesPage = () => {
                             <DropdownMenuItem
                               onClick={(e) => {
                                 e.stopPropagation();
-                                handleExportPdf();
+                                handleExportPdf(invoice);
                               }}
                             >
                               <Download className="mr-2 h-4 w-4" />

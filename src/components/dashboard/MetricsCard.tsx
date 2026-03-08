@@ -1,4 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { TrendingUp, TrendingDown, Minus } from 'lucide-react';
 import {
@@ -14,6 +15,8 @@ interface MetricsCardProps {
   change?: number;
   changeType?: 'increase' | 'decrease' | 'neutral';
   format?: 'currency' | 'number' | 'percentage' | 'text';
+  /** Currency code for format="currency" (e.g. NGN, USD). Default NGN. */
+  currency?: string;
   icon?: React.ComponentType<{ className?: string }>;
   description?: string;
   trend?: number[];
@@ -26,6 +29,7 @@ export const MetricsCard: React.FC<MetricsCardProps> = ({
   change,
   changeType = 'neutral',
   format = 'number',
+  currency = 'NGN',
   icon: Icon,
   description,
   className = '',
@@ -37,7 +41,8 @@ export const MetricsCard: React.FC<MetricsCardProps> = ({
       case 'currency': {
         // Abbreviate large currency values for better display
         const absVal = Math.abs(val as number);
-        const currencyInfo = CURRENCIES.NGN || { symbol: '₦', decimal_places: 2 };
+        const currencyKey = (currency || 'NGN').toUpperCase() as keyof typeof CURRENCIES;
+        const currencyInfo = CURRENCIES[currencyKey] || CURRENCIES.NGN || { symbol: '₦', decimal_places: 2 };
         const symbol = currencyInfo.symbol;
         
         if (absVal >= 1000000000) {
@@ -52,7 +57,7 @@ export const MetricsCard: React.FC<MetricsCardProps> = ({
           const abbreviated = ((val as number) / 1000).toFixed(1);
           return `${symbol}${abbreviated}K`;
         }
-        return formatCurrency(val as number);
+        return formatCurrency(val as number, currency || 'NGN');
       }
       case 'percentage': {
         return formatPercentage((val as number) / 100);
@@ -95,15 +100,15 @@ export const MetricsCard: React.FC<MetricsCardProps> = ({
   };
 
   return (
-    <Card className={className}>
+    <Card className={cn('min-w-0 overflow-visible', className)}>
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-sm font-medium text-muted-foreground">
+        <CardTitle className="text-sm font-medium text-muted-foreground min-w-0">
           {title}
         </CardTitle>
-        {Icon && <Icon className="h-4 w-4 text-muted-foreground" />}
+        {Icon && <Icon className="h-4 w-4 text-muted-foreground flex-shrink-0" />}
       </CardHeader>
-      <CardContent>
-        <div className="text-2xl font-bold mb-1 break-words overflow-hidden text-ellipsis line-clamp-2" title={typeof value === 'number' && format === 'currency' ? formatCurrency(value) : String(value)}>
+      <CardContent className="min-w-0">
+        <div className="text-2xl font-bold mb-1 break-words min-w-0" title={typeof value === 'number' && format === 'currency' ? formatCurrency(value, currency || 'NGN') : String(value)}>
           {formatValue(value)}
         </div>
 
