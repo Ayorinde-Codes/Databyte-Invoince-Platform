@@ -107,7 +107,7 @@ export const NotificationsPage = () => {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">Notifications</h1>
+            <h1 className="text-3xl font-bold tracking-tight text-foreground">Notifications</h1>
             <p className="text-muted-foreground">
               Manage and view all your notifications
             </p>
@@ -142,7 +142,7 @@ export const NotificationsPage = () => {
           <CardContent>
             <div className="flex flex-wrap gap-4">
               <div className="flex-1 min-w-[200px]">
-                <label className="text-sm font-medium mb-2 block">Status</label>
+                <label className="text-sm font-medium mb-2 block text-foreground">Status</label>
                 <Tabs value={filter} onValueChange={(v) => {
                   setFilter(v as 'all' | 'unread' | 'read');
                   setPage(1);
@@ -157,7 +157,7 @@ export const NotificationsPage = () => {
                 </Tabs>
               </div>
               <div className="flex-1 min-w-[200px]">
-                <label className="text-sm font-medium mb-2 block">Type</label>
+                <label className="text-sm font-medium mb-2 block text-foreground">Type</label>
                 <Select
                   value={typeFilter}
                   onValueChange={(v) => {
@@ -215,15 +215,15 @@ export const NotificationsPage = () => {
           <CardContent>
             {isLoading ? (
               <div className="flex items-center justify-center py-12">
-                <Loader2 className="w-8 h-8 animate-spin text-gray-400" />
+                <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
               </div>
             ) : notifications.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-12 text-center">
-                <Bell className="w-16 h-16 text-gray-300 mb-4" />
-                <p className="text-lg font-medium text-gray-900 mb-2">
+                <Bell className="w-16 h-16 text-muted-foreground/50 mb-4" />
+                <p className="text-lg font-medium text-foreground mb-2">
                   No notifications found
                 </p>
-                <p className="text-sm text-gray-500">
+                <p className="text-sm text-muted-foreground">
                   {filter !== 'all' || typeFilter !== 'all'
                     ? 'Try adjusting your filters'
                     : 'You\'re all caught up!'}
@@ -237,8 +237,8 @@ export const NotificationsPage = () => {
                     className={cn(
                       'flex items-start space-x-4 p-4 rounded-lg border transition-colors',
                       notification.read
-                        ? 'bg-white hover:bg-gray-50'
-                        : 'bg-blue-50 hover:bg-blue-100 border-blue-200'
+                        ? 'bg-card hover:bg-accent/50 dark:hover:bg-white/5 border-border'
+                        : 'bg-blue-50 dark:bg-blue-950/40 hover:bg-blue-100 dark:hover:bg-blue-900/50 border-blue-200 dark:border-blue-800'
                     )}
                   >
                     <div
@@ -258,10 +258,8 @@ export const NotificationsPage = () => {
                           <div className="flex items-center gap-2 mb-1">
                             <p
                               className={cn(
-                                'text-sm font-semibold',
-                                notification.read
-                                  ? 'text-gray-700'
-                                  : 'text-gray-900'
+                                'text-sm font-semibold text-foreground',
+                                notification.read && 'text-muted-foreground'
                               )}
                             >
                               {notification.title}
@@ -270,10 +268,10 @@ export const NotificationsPage = () => {
                               {getTypeLabel(notification.type)}
                             </Badge>
                           </div>
-                          <p className="text-sm text-gray-600 mb-2">
+                          <p className="text-sm text-muted-foreground mb-2">
                             {notification.message}
                           </p>
-                          <p className="text-xs text-gray-400">
+                          <p className="text-xs text-muted-foreground/80">
                             {formatTimeAgo(notification.created_at)}
                           </p>
                         </div>
@@ -285,7 +283,7 @@ export const NotificationsPage = () => {
                                   <Button
                                     variant="ghost"
                                     size="sm"
-                                    className="h-8 w-8 p-0"
+                                    className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground"
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       markAsRead(notification.id);
@@ -309,7 +307,7 @@ export const NotificationsPage = () => {
                                 <Button
                                   variant="ghost"
                                   size="sm"
-                                  className="h-8 w-8 p-0 text-gray-400 hover:text-red-500"
+                                  className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive"
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     deleteNotification(notification.id);
@@ -333,8 +331,8 @@ export const NotificationsPage = () => {
 
             {/* Pagination */}
             {pagination && pagination.last_page > 1 && (
-              <div className="flex items-center justify-between mt-6 pt-6 border-t">
-                <div className="text-sm text-gray-600">
+              <div className="flex items-center justify-between mt-6 pt-6 border-t border-border">
+                <div className="text-sm text-muted-foreground">
                   Showing {((pagination.current_page - 1) * pagination.per_page) + 1} to{' '}
                   {Math.min(pagination.current_page * pagination.per_page, pagination.total)} of{' '}
                   {pagination.total} notifications

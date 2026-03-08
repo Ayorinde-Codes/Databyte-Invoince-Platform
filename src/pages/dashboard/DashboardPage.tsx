@@ -154,6 +154,17 @@ const extractInvoiceData = (response: unknown): InvoiceRecord[] => {
   return [];
 };
 
+const extractTotalsByCurrency = (response: unknown): Record<string, number> => {
+  if (!response || typeof response !== 'object') return {};
+  const data = (response as Record<string, unknown>).data;
+  if (!data || typeof data !== 'object') return {};
+  const totals = (data as Record<string, unknown>).totals_by_currency;
+  if (totals && typeof totals === 'object' && !Array.isArray(totals)) {
+    return totals as Record<string, number>;
+  }
+  return {};
+};
+
 export const DashboardPage = () => {
   const { user, company } = useAuth();
   const { canWrite, isSuperAdmin: isUserSuperAdmin } = usePermissions();
@@ -204,25 +215,33 @@ export const DashboardPage = () => {
 
   const error = dashboardError || arInvoicesError || apInvoicesError;
 
+  const dashboardTotalsByCurrency = useMemo(() => {
+    const ar = extractTotalsByCurrency(arInvoicesResponse);
+    const ap = extractTotalsByCurrency(apInvoicesResponse);
+    const merged: Record<string, number> = {};
+    [ar, ap].forEach((m) => {
+      Object.entries(m).forEach(([ccy, amount]) => {
+        merged[ccy] = (merged[ccy] || 0) + amount;
+      });
+    });
+    return merged;
+  }, [arInvoicesResponse, apInvoicesResponse]);
+
+  const dashboardCurrencyKeys = Object.keys(dashboardTotalsByCurrency);
+  const singleCurrencyCode = dashboardCurrencyKeys.length === 1 ? dashboardCurrencyKeys[0] : null;
+  const singleCurrencyTotal = singleCurrencyCode ? dashboardTotalsByCurrency[singleCurrencyCode] : null;
+
   // Calculate Total Revenue from real invoice data (for regular company dashboard)
   const totalRevenue = useMemo(() => {
     // For super-admin, use metrics.total_revenue
     if (isSuperAdmin && dashboardData?.metrics?.total_revenue) {
       return dashboardData.metrics.total_revenue;
     }
-    
+    if (singleCurrencyTotal != null) return singleCurrencyTotal;
     const arInvoices = extractInvoiceData(arInvoicesResponse);
-
-    if (arInvoices.length === 0) {
-      return 0;
-    }
-
-    const total = arInvoices.reduce<number>((sum, invoice) => {
-      return sum + getNumericValue(invoice.total_amount);
-    }, 0);
-    
-    return total;
-  }, [arInvoicesResponse, isSuperAdmin, dashboardData]);
+    if (arInvoices.length === 0) return 0;
+    return arInvoices.reduce<number>((sum, invoice) => sum + getNumericValue(invoice.total_amount), 0);
+  }, [arInvoicesResponse, isSuperAdmin, dashboardData, singleCurrencyTotal]);
 
   // Calculate Revenue Trend (last 6 months) from real data
   const revenueChartData = useMemo(() => {
@@ -290,10 +309,9 @@ export const DashboardPage = () => {
       overdue: '#EF4444',       // Red
     };
 
-    // Initialize all statuses with 0
-    const statusCounts: Record<string, { count: number; total: number }> = {};
+    const statusCounts: Record<string, { count: number; total: number; byCurrency: Record<string, number> }> = {};
     allPossibleStatuses.forEach(status => {
-      statusCounts[status] = { count: 0, total: 0 };
+      statusCounts[status] = { count: 0, total: 0, byCurrency: {} };
     });
 
     // If still loading invoices, return all statuses with 0 values
@@ -305,27 +323,27 @@ export const DashboardPage = () => {
       }));
     }
 
-    // If invoices are loaded, process them
+    // If invoices are loaded, process them (track by currency so we don't show mixed NGN)
     const arInvoices = extractInvoiceData(arInvoicesResponse);
     const apInvoices = extractInvoiceData(apInvoicesResponse);
     const allInvoices: InvoiceRecord[] = [...arInvoices, ...apInvoices];
 
-    // Populate status counts from actual invoice data
     allInvoices.forEach((invoice) => {
-      // Handle status - could be string or enum object
       const status = normalizeInvoiceStatus(invoice.status);
-      
-      if (statusCounts[status]) {
-        statusCounts[status].count += 1;
-        statusCounts[status].total += getNumericValue(invoice.total_amount);
-      }
+      if (!statusCounts[status]) return;
+      const amount = getNumericValue(invoice.total_amount);
+      const ccy = ((invoice as InvoiceRecord & { currency?: string }).currency || 'NGN').toUpperCase();
+      statusCounts[status].count += 1;
+      statusCounts[status].total += amount;
+      statusCounts[status].byCurrency[ccy] = (statusCounts[status].byCurrency[ccy] || 0) + amount;
     });
 
-    // Create chart data for ALL statuses (including those with 0)
+    // Create chart data for ALL statuses; amountByCurrency lets the legend show per-currency instead of one NGN sum
     const chartData = allPossibleStatuses.map(status => ({
       name: status.charAt(0).toUpperCase() + status.slice(1),
       value: statusCounts[status].count,
       amount: statusCounts[status].total,
+      amountByCurrency: Object.keys(statusCounts[status].byCurrency).length > 0 ? statusCounts[status].byCurrency : undefined,
       color: statusColors[status] || '#6B7280',
       count: statusCounts[status].count,
     }));
@@ -547,7 +565,7 @@ export const DashboardPage = () => {
 
         {/* Metrics Cards */}
         {metrics && (
-        <div className={`grid grid-cols-1 md:grid-cols-2 ${isSuperAdmin ? 'lg:grid-cols-4' : 'lg:grid-cols-5'} gap-6`}>
+        <div className={`grid grid-cols-1 md:grid-cols-2 gap-6 ${isSuperAdmin ? 'lg:grid-cols-[repeat(auto-fit,minmax(200px,1fr))]' : 'lg:grid-cols-[repeat(auto-fit,minmax(200px,1fr))]'}`}>
           {isSuperAdmin ? (
             <>
               <MetricsCard
@@ -616,15 +634,40 @@ export const DashboardPage = () => {
             </>
           ) : (
             <>
-              <MetricsCard
-                title="Total Revenue"
-                value={metrics.totalRevenue}
-                change={metrics.revenueGrowth}
-                changeType={metrics.revenueGrowth != null ? (metrics.revenueGrowth >= 0 ? "increase" : "decrease") : "neutral"}
-                format="currency"
-                icon={DollarSign}
-                description="Revenue from AR invoices"
-              />
+              {dashboardCurrencyKeys.length > 1 ? (
+                <Card className="min-w-0 w-full" style={{ minWidth: 'min(100%, 20rem)' }}>
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium text-muted-foreground">
+                      Revenue by currency
+                    </CardTitle>
+                    <DollarSign className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                  </CardHeader>
+                  <CardContent className="min-w-0 overflow-visible">
+                    <div className="space-y-1.5">
+                      {dashboardCurrencyKeys.map((ccy) => (
+                        <div key={ccy} className="flex items-center justify-between gap-2 text-sm min-w-0">
+                          <span className="text-muted-foreground font-medium flex-shrink-0">{ccy}</span>
+                          <span className="font-bold tabular-nums text-right whitespace-nowrap overflow-visible">
+                            {formatCurrency(dashboardTotalsByCurrency[ccy], ccy)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-2">AR + AP by currency</p>
+                  </CardContent>
+                </Card>
+              ) : (
+                <MetricsCard
+                  title="Total Revenue"
+                  value={metrics.totalRevenue}
+                  change={metrics.revenueGrowth}
+                  changeType={metrics.revenueGrowth != null ? (metrics.revenueGrowth >= 0 ? "increase" : "decrease") : "neutral"}
+                  format="currency"
+                  currency={singleCurrencyCode || 'NGN'}
+                  icon={DollarSign}
+                  description="Revenue from AR invoices"
+                />
+              )}
               <MetricsCard
                 title="Total Invoices"
                 value={metrics.totalInvoices}
@@ -667,7 +710,7 @@ export const DashboardPage = () => {
         )}
 
         {/* Charts Section */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
           {isSuperAdmin ? (
             <>
               {dashboardData?.companies_chart_data && (
@@ -702,6 +745,7 @@ export const DashboardPage = () => {
                 title="Invoice Status Distribution"
                 description="Current invoice status breakdown"
                 data={statusChartData || []}
+                totalsByCurrency={Object.keys(dashboardTotalsByCurrency).length > 0 ? dashboardTotalsByCurrency : undefined}
               />
             </>
           )}

@@ -94,6 +94,15 @@ const extractCustomerData = (response: unknown): CustomerRecord[] => {
   return Array.isArray(list) ? (list as CustomerRecord[]) : [];
 };
 
+const extractTotalsByCurrency = (response: unknown): Record<string, number> => {
+  if (!response || typeof response !== 'object') return {};
+  const data = (response as Record<string, unknown>).data;
+  if (!data || typeof data !== 'object') return {};
+  const totals = (data as Record<string, unknown>).totals_by_currency;
+  if (totals && typeof totals === 'object' && !Array.isArray(totals)) return totals as Record<string, number>;
+  return {};
+};
+
 export const ReportsPage = () => {
   const [dateRange, setDateRange] = useState('last_30_days');
   const [reportType, setReportType] = useState('overview');
@@ -151,20 +160,30 @@ export const ReportsPage = () => {
 
   const error = dashboardError || arInvoicesError || apInvoicesError;
 
+  const reportsTotalsByCurrency = useMemo(() => {
+    const ar = extractTotalsByCurrency(arInvoicesResponse);
+    const ap = extractTotalsByCurrency(apInvoicesResponse);
+    const merged: Record<string, number> = {};
+    [ar, ap].forEach((m) => {
+      Object.entries(m).forEach(([ccy, amount]) => {
+        merged[ccy] = (merged[ccy] || 0) + amount;
+      });
+    });
+    return merged;
+  }, [arInvoicesResponse, apInvoicesResponse]);
+
+  const reportsCurrencyKeys = Object.keys(reportsTotalsByCurrency);
+  const reportsSingleCurrency = reportsCurrencyKeys.length === 1 ? reportsCurrencyKeys[0] : null;
+  const reportsSingleTotal = reportsSingleCurrency ? reportsTotalsByCurrency[reportsSingleCurrency] : null;
+
   // Calculate Total Revenue from real invoice data
   const totalRevenue = useMemo(() => {
-    if (isSuperAdmin && dashboardData?.metrics?.total_revenue) {
-      return dashboardData.metrics.total_revenue;
-    }
-    
+    if (isSuperAdmin && dashboardData?.metrics?.total_revenue) return dashboardData.metrics.total_revenue;
+    if (reportsSingleTotal != null) return reportsSingleTotal;
     const arInvoices = extractInvoiceData(arInvoicesResponse);
     if (arInvoices.length === 0) return 0;
-    const total = arInvoices.reduce((sum: number, invoice: InvoiceRecord) => {
-      return sum + parseFloat(String(invoice.total_amount || '0'));
-    }, 0);
-    
-    return total;
-  }, [arInvoicesResponse, isSuperAdmin, dashboardData]);
+    return arInvoices.reduce((sum: number, inv: InvoiceRecord) => sum + parseFloat(String(inv.total_amount || '0')), 0);
+  }, [arInvoicesResponse, isSuperAdmin, dashboardData, reportsSingleTotal]);
 
   // Calculate Revenue Trend (last 6 months) from real data
   const monthlyRevenueData = useMemo(() => {
@@ -264,37 +283,37 @@ export const ReportsPage = () => {
       overdue: '#EF4444',       // Red
     };
 
-    // Initialize all statuses with 0
-    const statusCounts: Record<string, { count: number; total: number }> = {};
+    // Initialize all statuses with 0 and per-currency amounts
+    const statusCounts: Record<string, { count: number; total: number; byCurrency: Record<string, number> }> = {};
     allPossibleStatuses.forEach(status => {
-      statusCounts[status] = { count: 0, total: 0 };
+      statusCounts[status] = { count: 0, total: 0, byCurrency: {} };
     });
 
-    // Populate status counts from actual invoice data
+    // Populate status counts from actual invoice data (track by currency to avoid mixed NGN display)
     allInvoices.forEach((invoice: InvoiceRecord) => {
-      // Handle status - could be string or enum object
       let status: string = 'draft';
       if (invoice.status) {
-        if (typeof invoice.status === 'string') {
-          status = invoice.status;
-        } else if (typeof invoice.status === 'object' && 'value' in invoice.status) {
+        if (typeof invoice.status === 'string') status = invoice.status;
+        else if (typeof invoice.status === 'object' && 'value' in invoice.status) {
           const statusValue = (invoice.status as { value?: string | null }).value;
           status = statusValue && typeof statusValue === 'string' ? statusValue : 'draft';
         }
       }
       status = String(status).toLowerCase();
-      
-      if (statusCounts[status]) {
-        statusCounts[status].count += 1;
-        statusCounts[status].total += parseFloat(String(invoice.total_amount || '0'));
-      }
+      if (!statusCounts[status]) return;
+      const amount = parseFloat(String(invoice.total_amount || '0'));
+      const ccy = ((invoice as InvoiceRecord & { currency?: string }).currency || 'NGN').toUpperCase();
+      statusCounts[status].count += 1;
+      statusCounts[status].total += amount;
+      statusCounts[status].byCurrency[ccy] = (statusCounts[status].byCurrency[ccy] || 0) + amount;
     });
 
-    // Create chart data for ALL statuses (including those with 0)
+    // Create chart data; amountByCurrency lets legend show per-currency instead of one NGN sum
     const chartData = allPossibleStatuses.map(status => ({
       name: status.charAt(0).toUpperCase() + status.slice(1),
       value: statusCounts[status].count,
       amount: statusCounts[status].total,
+      amountByCurrency: Object.keys(statusCounts[status].byCurrency).length > 0 ? statusCounts[status].byCurrency : undefined,
       color: statusColors[status] || '#6B7280',
       count: statusCounts[status].count,
     }));
@@ -662,27 +681,52 @@ export const ReportsPage = () => {
           onValueChange={setReportType}
           className="space-y-6"
         >
-          <TabsList className="grid w-full grid-cols-5">
-            <TabsTrigger value="overview">Overview</TabsTrigger>
-            <TabsTrigger value="revenue">Revenue</TabsTrigger>
-            <TabsTrigger value="invoices">Invoices</TabsTrigger>
-            <TabsTrigger value="compliance">FIRS Compliance</TabsTrigger>
-            <TabsTrigger value="customers">Customers</TabsTrigger>
+          <TabsList className="flex w-full overflow-x-auto flex-nowrap gap-1 pb-2 md:grid md:grid-cols-5 md:overflow-visible">
+            <TabsTrigger value="overview" className="flex-shrink-0">Overview</TabsTrigger>
+            <TabsTrigger value="revenue" className="flex-shrink-0">Revenue</TabsTrigger>
+            <TabsTrigger value="invoices" className="flex-shrink-0">Invoices</TabsTrigger>
+            <TabsTrigger value="compliance" className="flex-shrink-0">FIRS Compliance</TabsTrigger>
+            <TabsTrigger value="customers" className="flex-shrink-0">Customers</TabsTrigger>
           </TabsList>
 
           {/* Overview Tab */}
           <TabsContent value="overview" className="space-y-6">
             {/* Key Metrics */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              <MetricsCard
-                title="Total Revenue"
-                value={overviewMetrics.totalRevenue}
-                change={overviewMetrics.revenueGrowth}
-                changeType={overviewMetrics.revenueGrowth != null ? (overviewMetrics.revenueGrowth >= 0 ? 'increase' : 'decrease') : 'neutral'}
-                format="currency"
-                icon={DollarSign}
-                description="Revenue this period"
-              />
+              {reportsCurrencyKeys.length > 1 ? (
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium text-muted-foreground">
+                      Revenue by currency
+                    </CardTitle>
+                    <DollarSign className="h-4 w-4 text-muted-foreground" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-1.5">
+                      {reportsCurrencyKeys.map((ccy) => (
+                        <div key={ccy} className="flex items-center justify-between text-sm">
+                          <span className="text-muted-foreground font-medium">{ccy}</span>
+                          <span className="font-bold tabular-nums">
+                            {formatCurrency(reportsTotalsByCurrency[ccy], ccy)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-2">Revenue this period</p>
+                  </CardContent>
+                </Card>
+              ) : (
+                <MetricsCard
+                  title="Total Revenue"
+                  value={overviewMetrics.totalRevenue}
+                  change={overviewMetrics.revenueGrowth}
+                  changeType={overviewMetrics.revenueGrowth != null ? (overviewMetrics.revenueGrowth >= 0 ? 'increase' : 'decrease') : 'neutral'}
+                  format="currency"
+                  currency={reportsSingleCurrency || 'NGN'}
+                  icon={DollarSign}
+                  description="Revenue this period"
+                />
+              )}
 
               <MetricsCard
                 title="Total Invoices"
@@ -700,6 +744,7 @@ export const ReportsPage = () => {
                 change={overviewMetrics.avgGrowth}
                 changeType="neutral"
                 format="currency"
+                currency={reportsSingleCurrency || 'NGN'}
                 icon={TrendingUp}
                 description="Average per invoice"
               />
@@ -729,6 +774,7 @@ export const ReportsPage = () => {
                 title="Invoice Status Distribution"
                 description="Current invoice status breakdown"
                 data={invoiceStatusData}
+                totalsByCurrency={reportsCurrencyKeys.length > 0 ? reportsTotalsByCurrency : undefined}
               />
             </div>
 

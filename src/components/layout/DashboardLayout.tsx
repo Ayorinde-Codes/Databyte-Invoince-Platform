@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   BarChart3,
@@ -7,7 +7,6 @@ import {
   User,
   Database,
   LogOut,
-  Search,
   Menu,
   X,
   Home,
@@ -18,10 +17,12 @@ import {
   Package,
   Building2,
   Cog,
+  Moon,
+  Sun,
 } from 'lucide-react';
+import { useTheme } from 'next-themes';
 
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
   DropdownMenu,
@@ -31,6 +32,11 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { useAuth } from '../../hooks/useAuth';
 import { usePermissions } from '../../hooks/usePermissions';
 import NotificationDropdown from './NotificationDropdown';
@@ -44,7 +50,13 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
 }) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [themeMounted, setThemeMounted] = useState(false);
   const { user, company, logout } = useAuth();
+  const { setTheme, resolvedTheme } = useTheme();
+
+  useEffect(() => {
+    setThemeMounted(true);
+  }, []);
   const { canManageERP, canManageSettings, hasPermission, isSuperAdmin } = usePermissions();
   const location = useLocation();
   const navigate = useNavigate();
@@ -166,16 +178,16 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 dark:bg-slate-900">
       {/* Mobile sidebar */}
       <div
         className={`fixed inset-0 z-50 lg:hidden ${sidebarOpen ? 'block' : 'hidden'}`}
       >
         <div
-          className="fixed inset-0 bg-gray-600 bg-opacity-75"
+          className="fixed inset-0 bg-gray-600 bg-opacity-75 dark:bg-black/60"
           onClick={() => setSidebarOpen(false)}
         />
-        <div className="fixed inset-y-0 left-0 flex w-64 flex-col bg-white">
+        <div className="fixed inset-y-0 left-0 flex w-64 flex-col bg-white dark:bg-slate-900 border-r border-transparent dark:border-slate-800">
           <div className="flex h-16 items-center justify-between px-4">
             <div className="flex items-center space-x-2">
               <img 
@@ -183,12 +195,13 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                 alt="Databytes Logo" 
                 className="w-8 h-8 object-contain"
               />
-              <span className="text-xl font-bold">Databytes</span>
+              <span className="text-xl font-bold text-gray-900 dark:text-white">Databytes</span>
             </div>
             <Button
               variant="ghost"
               size="sm"
               onClick={() => setSidebarOpen(false)}
+              className="text-gray-600 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-800"
             >
               <X className="w-5 h-5" />
             </Button>
@@ -201,7 +214,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                 className={`group flex items-center px-2 py-2 text-sm font-medium rounded-md ${
                   item.current
                     ? 'bg-primary text-primary-foreground'
-                    : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                    : 'text-gray-600 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800 hover:text-gray-900 dark:hover:text-white'
                 }`}
                 onClick={() => setSidebarOpen(false)}
               >
@@ -219,7 +232,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
           sidebarCollapsed ? 'lg:w-16' : 'lg:w-64'
         }`}
       >
-        <div className="flex flex-col flex-grow bg-white border-r border-gray-200 shadow-lg">
+        <div className="flex flex-col flex-grow bg-white dark:bg-slate-900 border-r border-gray-200 dark:border-slate-700 shadow-lg">
           <div className="flex h-16 items-center justify-between px-4">
             <div
               className={`flex items-center space-x-2 transition-all duration-300 ${
@@ -232,14 +245,14 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                 className="w-8 h-8 object-contain"
               />
               {!sidebarCollapsed && (
-                <span className="text-xl font-bold">Databytes</span>
+                <span className="text-xl font-bold text-gray-900 dark:text-white">Databytes</span>
               )}
             </div>
             <Button
               variant="ghost"
               size="sm"
               onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-              className="hidden lg:flex"
+              className="hidden lg:flex text-gray-600 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-800"
             >
               <Menu className="w-4 h-4" />
             </Button>
@@ -252,7 +265,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                 className={`group flex items-center px-2 py-2 text-sm font-medium rounded-md transition-all duration-200 ${
                   item.current
                     ? 'bg-primary text-primary-foreground shadow-md'
-                    : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900 hover:shadow-sm'
+                    : 'text-gray-600 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800 hover:text-gray-900 dark:hover:text-white hover:shadow-sm'
                 } ${sidebarCollapsed ? 'justify-center' : ''}`}
                 title={sidebarCollapsed ? item.name : ''}
               >
@@ -269,7 +282,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
           </nav>
 
           {/* Bottom section */}
-          <div className="flex-shrink-0 p-4 border-t border-gray-200">
+          <div className="flex-shrink-0 p-4 border-t border-gray-200 dark:border-slate-700">
             <div
               className={`flex items-center ${sidebarCollapsed ? 'justify-center' : 'space-x-3'}`}
             >
@@ -285,10 +298,10 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
               </Avatar>
               {!sidebarCollapsed && (
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-900 truncate">
+                  <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
                     {user?.name}
                   </p>
-                  <p className="text-xs text-gray-500 truncate">
+                  <p className="text-xs text-gray-500 dark:text-slate-400 truncate">
                     {company?.name}
                   </p>
                 </div>
@@ -303,7 +316,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
         className={`transition-all duration-300 ${sidebarCollapsed ? 'lg:pl-16' : 'lg:pl-64'}`}
       >
         {/* Top navigation */}
-        <div className="sticky top-0 z-40 bg-white/95 backdrop-blur-sm border-b border-gray-200 shadow-sm">
+        <div className="sticky top-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm border-b border-gray-200 dark:border-gray-800 shadow-sm">
           <div className="flex h-16 items-center justify-between px-4 sm:px-6 lg:px-8">
             <div className="flex items-center">
               <Button
@@ -314,25 +327,44 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
               >
                 <Menu className="w-5 h-5" />
               </Button>
-
-              <div className="hidden sm:block ml-4 lg:ml-0">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                  <Input placeholder="Search..." className="pl-10 w-64" />
-                </div>
-              </div>
             </div>
 
             <div className="flex items-center space-x-4">
               {/* Notifications */}
               <NotificationDropdown />
 
+              {/* Theme toggle: sun in dark mode (switch to light), moon in light mode (switch to dark) */}
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-9 w-9 rounded-full hover:bg-black/10 dark:hover:bg-white/10 transition-colors"
+                    onClick={() => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')}
+                    aria-label={resolvedTheme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+                  >
+                    {!themeMounted ? (
+                      <span className="h-5 w-5 block" aria-hidden />
+                    ) : resolvedTheme === 'dark' ? (
+                      <Sun className="h-5 w-5 text-amber-400 dark:text-amber-400" />
+                    ) : (
+                      <Moon className="h-5 w-5 text-slate-600 dark:text-slate-300" />
+                    )}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">
+                  {themeMounted && resolvedTheme === 'dark'
+                    ? 'Switch to light mode'
+                    : 'Switch to dark mode'}
+                </TooltipContent>
+              </Tooltip>
+
               {/* User menu */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button
                     variant="ghost"
-                    className="relative h-8 w-8 rounded-full"
+                    className="relative h-8 w-8 rounded-full hover:bg-gray-100 dark:hover:bg-white/10"
                   >
                     <Avatar className="h-8 w-8">
                       <AvatarImage
@@ -392,7 +424,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
         </div>
 
         {/* Page content */}
-        <main className="p-6">{children}</main>
+        <main className="p-6 bg-gray-50 dark:bg-slate-900 min-h-[calc(100vh-4rem)]">{children}</main>
       </div>
     </div>
   );

@@ -1489,15 +1489,15 @@ export const ERPConfigPage = () => {
 
         <Tabs defaultValue="configurations" className="space-y-6">
           <TabsList
-            className={`grid w-full ${isSuperAdmin ? 'grid-cols-4' : 'grid-cols-3'}`}
+            className={`flex w-full overflow-x-auto flex-nowrap gap-1 pb-2 md:grid md:w-full md:overflow-visible ${isSuperAdmin ? 'md:grid-cols-4' : 'md:grid-cols-3'}`}
           >
-            <TabsTrigger value="configurations">Configurations</TabsTrigger>
-            <TabsTrigger value="access-point-providers">
+            <TabsTrigger value="configurations" className="flex-shrink-0">Configurations</TabsTrigger>
+            <TabsTrigger value="access-point-providers" className="flex-shrink-0">
               Access Point Providers
             </TabsTrigger>
-            <TabsTrigger value="settings">Settings</TabsTrigger>
+            <TabsTrigger value="settings" className="flex-shrink-0">Settings</TabsTrigger>
             {isSuperAdmin && (
-              <TabsTrigger value="sync-logs">Sync Logs</TabsTrigger>
+              <TabsTrigger value="sync-logs" className="flex-shrink-0">Sync Logs</TabsTrigger>
             )}
           </TabsList>
 

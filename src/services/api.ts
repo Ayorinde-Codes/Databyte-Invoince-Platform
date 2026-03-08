@@ -451,6 +451,9 @@ class ApiService {
     date_from?: string;
     date_to?: string;
     source_system?: string;
+    customer_id?: number;
+    sort_by?: string;
+    sort_order?: 'asc' | 'desc';
   }) {
     const queryParams = new URLSearchParams();
     if (params?.per_page) queryParams.append('per_page', params.per_page.toString());
@@ -460,6 +463,9 @@ class ApiService {
     if (params?.date_from) queryParams.append('date_from', params.date_from);
     if (params?.date_to) queryParams.append('date_to', params.date_to);
     if (params?.source_system) queryParams.append('source_system', params.source_system);
+    if (params?.customer_id) queryParams.append('customer_id', params.customer_id.toString());
+    if (params?.sort_by) queryParams.append('sort_by', params.sort_by);
+    if (params?.sort_order) queryParams.append('sort_order', params.sort_order);
     
     const endpoint = queryParams.toString() 
       ? `${API_ENDPOINTS.invoices.ar.list}?${queryParams}`
@@ -634,6 +640,9 @@ class ApiService {
     date_to?: string;
     customer_id?: number;
     source_system?: string;
+    /** Pass to export a single invoice and its lines only */
+    invoice_id?: number;
+    invoice_number?: string;
   }) {
     const queryParams: Record<string, string> = {};
     if (params?.status) queryParams.status = params.status;
@@ -642,8 +651,11 @@ class ApiService {
     if (params?.date_to) queryParams.date_to = params.date_to;
     if (params?.customer_id) queryParams.customer_id = params.customer_id.toString();
     if (params?.source_system) queryParams.source_system = params.source_system;
+    if (params?.invoice_id != null) queryParams.invoice_id = params.invoice_id.toString();
 
-    const filename = `ar_invoices_${new Date().toISOString().split('T')[0]}.pdf`;
+    const filename = params?.invoice_id != null
+      ? `ar_invoice_${(params.invoice_number || params.invoice_id).toString().replace(/[^a-zA-Z0-9-_]/g, '_')}.pdf`
+      : `ar_invoices_${new Date().toISOString().split('T')[0]}.pdf`;
     return this.downloadFile(API_ENDPOINTS.invoices.ar.exportPdf, filename, queryParams);
   }
 
@@ -657,6 +669,9 @@ class ApiService {
     date_from?: string;
     date_to?: string;
     source_system?: string;
+    vendor_id?: number;
+    sort_by?: string;
+    sort_order?: 'asc' | 'desc';
   }) {
     const queryParams = new URLSearchParams();
     if (params?.per_page) queryParams.append('per_page', params.per_page.toString());
@@ -666,6 +681,9 @@ class ApiService {
     if (params?.date_from) queryParams.append('date_from', params.date_from);
     if (params?.date_to) queryParams.append('date_to', params.date_to);
     if (params?.source_system) queryParams.append('source_system', params.source_system);
+    if (params?.vendor_id) queryParams.append('vendor_id', params.vendor_id.toString());
+    if (params?.sort_by) queryParams.append('sort_by', params.sort_by);
+    if (params?.sort_order) queryParams.append('sort_order', params.sort_order);
     
     const endpoint = queryParams.toString() 
       ? `${API_ENDPOINTS.invoices.ap.list}?${queryParams}`
@@ -828,6 +846,9 @@ class ApiService {
     date_to?: string;
     vendor_id?: number;
     source_system?: string;
+    /** Pass to export a single invoice and its lines only */
+    invoice_id?: number;
+    invoice_number?: string;
   }) {
     const queryParams: Record<string, string> = {};
     if (params?.status) queryParams.status = params.status;
@@ -836,8 +857,11 @@ class ApiService {
     if (params?.date_to) queryParams.date_to = params.date_to;
     if (params?.vendor_id) queryParams.vendor_id = params.vendor_id.toString();
     if (params?.source_system) queryParams.source_system = params.source_system;
+    if (params?.invoice_id != null) queryParams.invoice_id = params.invoice_id.toString();
 
-    const filename = `ap_invoices_${new Date().toISOString().split('T')[0]}.pdf`;
+    const filename = params?.invoice_id != null
+      ? `ap_invoice_${(params.invoice_number || params.invoice_id).toString().replace(/[^a-zA-Z0-9-_]/g, '_')}.pdf`
+      : `ap_invoices_${new Date().toISOString().split('T')[0]}.pdf`;
     return this.downloadFile(API_ENDPOINTS.invoices.ap.exportPdf, filename, queryParams);
   }
 

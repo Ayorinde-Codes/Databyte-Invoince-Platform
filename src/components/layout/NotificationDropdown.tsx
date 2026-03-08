@@ -65,7 +65,7 @@ const NotificationDropdown = () => {
         <Button
           variant="ghost"
           size="sm"
-          className="relative hover:bg-gray-100 transition-colors"
+          className="relative hover:bg-gray-100 dark:hover:bg-white/10 transition-colors text-gray-700 dark:text-slate-200"
         >
           <Bell className="w-5 h-5" />
           {unreadCount > 0 && (
@@ -75,14 +75,14 @@ const NotificationDropdown = () => {
           )}
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-80">
+      <DropdownMenuContent align="end" className="w-80 bg-popover text-popover-foreground">
         <div className="flex items-center justify-between px-2 py-1.5">
-          <DropdownMenuLabel>Notifications</DropdownMenuLabel>
+          <DropdownMenuLabel className="text-foreground">Notifications</DropdownMenuLabel>
           {unreadCount > 0 && (
             <Button
               variant="ghost"
               size="sm"
-              className="h-7 text-xs"
+              className="h-7 text-xs text-muted-foreground hover:text-foreground"
               onClick={() => markAllAsRead()}
               disabled={isMarkingAllAsRead}
             >
@@ -100,12 +100,12 @@ const NotificationDropdown = () => {
         <ScrollArea className="h-[400px]">
           {isLoading ? (
             <div className="flex items-center justify-center py-8">
-              <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
+              <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
             </div>
           ) : notifications.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-8 text-center">
-              <Bell className="w-12 h-12 text-gray-300 mb-2" />
-              <p className="text-sm text-gray-500">No notifications</p>
+              <Bell className="w-12 h-12 text-muted-foreground/50 mb-2" />
+              <p className="text-sm text-muted-foreground">No notifications</p>
             </div>
           ) : (
             <div className="space-y-1 p-2">
@@ -115,8 +115,8 @@ const NotificationDropdown = () => {
                   className={cn(
                     'flex items-start space-x-3 p-2 rounded-md cursor-pointer transition-colors',
                     notification.read
-                      ? 'hover:bg-gray-50'
-                      : 'bg-blue-50 hover:bg-blue-100'
+                      ? 'hover:bg-accent/50 dark:hover:bg-white/5'
+                      : 'bg-blue-50 dark:bg-blue-950/40 hover:bg-blue-100 dark:hover:bg-blue-900/50'
                   )}
                   onClick={() => handleNotificationClick(notification)}
                 >
@@ -129,17 +129,17 @@ const NotificationDropdown = () => {
                   <div className="flex-1 min-w-0">
                     <p
                       className={cn(
-                        'text-sm font-medium',
-                        notification.read ? 'text-gray-700' : 'text-gray-900'
+                        'text-sm font-medium text-foreground',
+                        notification.read && 'text-muted-foreground'
                       )}
                     >
                       {notification.title}
                     </p>
-                    <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">
+                    <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
                       {notification.message}
                     </p>
                     <div className="flex items-center justify-between mt-1">
-                      <p className="text-xs text-gray-400">
+                      <p className="text-xs text-muted-foreground/80">
                         {formatTimeAgo(notification.created_at)}
                       </p>
                       <TooltipProvider>
@@ -150,7 +150,7 @@ const NotificationDropdown = () => {
                                 <Button
                                   variant="ghost"
                                   size="sm"
-                                  className="h-6 w-6 p-0"
+                                  className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     markAsRead(notification.id);
@@ -174,7 +174,7 @@ const NotificationDropdown = () => {
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                className="h-6 w-6 p-0 text-gray-400 hover:text-red-500"
+                                className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive"
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   deleteNotification(notification.id);
@@ -203,7 +203,7 @@ const NotificationDropdown = () => {
             <div className="p-2">
               <Button
                 variant="ghost"
-                className="w-full text-sm"
+                className="w-full text-sm text-foreground hover:bg-accent/50 dark:hover:bg-white/5"
                 onClick={() => navigate('/dashboard/notifications')}
               >
                 View all notifications
