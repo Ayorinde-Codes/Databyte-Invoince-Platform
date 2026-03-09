@@ -1401,7 +1401,7 @@ export const InvoicesPage = () => {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={handleExportPdf}
+                  onClick={() => handleExportPdf()}
                   disabled={isLoading}
                 >
                   <FileTextIcon className="w-4 h-4 mr-2" />
