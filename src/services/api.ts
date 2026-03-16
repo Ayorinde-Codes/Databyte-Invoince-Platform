@@ -447,6 +447,7 @@ class ApiService {
     per_page?: number;
     page?: number;
     status?: string;
+    invoice_type?: string;
     batch_number?: string;
     date_from?: string;
     date_to?: string;
@@ -459,6 +460,7 @@ class ApiService {
     if (params?.per_page) queryParams.append('per_page', params.per_page.toString());
     if (params?.page) queryParams.append('page', params.page.toString());
     if (params?.status) queryParams.append('status', params.status);
+    if (params?.invoice_type) queryParams.append('invoice_type', params.invoice_type);
     if (params?.batch_number) queryParams.append('batch_number', params.batch_number);
     if (params?.date_from) queryParams.append('date_from', params.date_from);
     if (params?.date_to) queryParams.append('date_to', params.date_to);
@@ -615,6 +617,7 @@ class ApiService {
 
   async exportARInvoicesExcel(params?: {
     status?: string;
+    invoice_type?: string;
     batch_number?: string;
     date_from?: string;
     date_to?: string;
@@ -623,6 +626,7 @@ class ApiService {
   }) {
     const queryParams: Record<string, string> = {};
     if (params?.status) queryParams.status = params.status;
+    if (params?.invoice_type) queryParams.invoice_type = params.invoice_type;
     if (params?.batch_number) queryParams.batch_number = params.batch_number;
     if (params?.date_from) queryParams.date_from = params.date_from;
     if (params?.date_to) queryParams.date_to = params.date_to;
@@ -635,6 +639,7 @@ class ApiService {
 
   async exportARInvoicesPdf(params?: {
     status?: string;
+    invoice_type?: string;
     batch_number?: string;
     date_from?: string;
     date_to?: string;
@@ -646,6 +651,7 @@ class ApiService {
   }) {
     const queryParams: Record<string, string> = {};
     if (params?.status) queryParams.status = params.status;
+    if (params?.invoice_type) queryParams.invoice_type = params.invoice_type;
     if (params?.batch_number) queryParams.batch_number = params.batch_number;
     if (params?.date_from) queryParams.date_from = params.date_from;
     if (params?.date_to) queryParams.date_to = params.date_to;
