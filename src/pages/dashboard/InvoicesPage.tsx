@@ -140,6 +140,9 @@ interface InvoiceItem {
   product_category: string | null;
 }
 
+/** DB enum: sales | credit_note | debit_note | proforma | quotation */
+type ARDocumentType = 'sales' | 'credit_note' | 'debit_note' | 'proforma' | 'quotation';
+
 interface Invoice {
   id: number;
   invoice_number: string;
@@ -147,6 +150,7 @@ interface Invoice {
   due_date: string;
   total_amount: number;
   status: string;
+  invoice_type?: ARDocumentType | string;
   firs_status: string | null;
   firs_irn: string | null;
   firs_qr_code: string | null;
@@ -198,6 +202,7 @@ interface AxiosErrorLike {
 
 interface ExportParams {
   status?: string;
+  invoice_type?: string;
   date_from?: string;
   date_to?: string;
   batch_number?: string;
@@ -213,6 +218,8 @@ export const InvoicesPage = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [firsFilter, setFirsFilter] = useState('all');
+  /** AR only: filter by document type (sales vs credit note) */
+  const [arDocumentTypeFilter, setArDocumentTypeFilter] = useState<'all' | 'sales' | 'credit_note'>('all');
   const [page, setPage] = useState(1);
   const [dateFrom, setDateFrom] = useState<Date | undefined>(undefined);
   const [dateTo, setDateTo] = useState<Date | undefined>(undefined);
@@ -310,7 +317,18 @@ export const InvoicesPage = () => {
     const value = typeLabel.toLowerCase();
     return value.includes('credit note') || value.includes('debit note');
   }, [getInvoiceTypeLabel]);
-  
+
+  const getDocumentTypeLabel = useCallback((invoiceType: string | undefined | null): string => {
+    if (!invoiceType) return '';
+    const t = String(invoiceType).toLowerCase();
+    if (t === 'credit_note') return 'Credit note';
+    if (t === 'sales') return 'Sales';
+    if (t === 'debit_note') return 'Debit note';
+    if (t === 'proforma') return 'Proforma';
+    if (t === 'quotation') return 'Quotation';
+    return invoiceType;
+  }, []);
+
   const getHsnCodeValue = (code: string | { hscode?: string; code?: string; value?: string; name?: string }): string => {
     if (typeof code === 'string') return code;
     return code.hscode || code.code || code.value || code.name || '';
@@ -367,6 +385,7 @@ export const InvoicesPage = () => {
     per_page: 15,
     page,
     ...(statusFilter !== 'all' && { status: statusFilter }),
+    ...(activeTab === 'ar' && arDocumentTypeFilter !== 'all' && { invoice_type: arDocumentTypeFilter }),
     ...(dateFrom && { date_from: format(dateFrom, 'yyyy-MM-dd') }),
     ...(dateTo && { date_to: format(dateTo, 'yyyy-MM-dd') }),
     ...(batchNumber && { batch_number: batchNumber }),
@@ -919,6 +938,9 @@ export const InvoicesPage = () => {
       if (statusFilter !== 'all') {
         exportParams.status = statusFilter;
       }
+      if (activeTab === 'ar' && arDocumentTypeFilter !== 'all') {
+        exportParams.invoice_type = arDocumentTypeFilter;
+      }
       if (dateFrom) {
         exportParams.date_from = format(dateFrom, 'yyyy-MM-dd');
       }
@@ -956,6 +978,9 @@ export const InvoicesPage = () => {
       } else {
         if (statusFilter !== 'all') {
           exportParams.status = statusFilter;
+        }
+        if (activeTab === 'ar' && arDocumentTypeFilter !== 'all') {
+          exportParams.invoice_type = arDocumentTypeFilter;
         }
         if (dateFrom) {
           exportParams.date_from = format(dateFrom, 'yyyy-MM-dd');
@@ -1272,7 +1297,7 @@ export const InvoicesPage = () => {
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Pending FIRS</CardTitle>
+              <CardTitle className="text-sm font-medium">Pending NRS</CardTitle>
               <Shield className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
@@ -1306,12 +1331,12 @@ export const InvoicesPage = () => {
               onValueChange={(value) => {
                 setActiveTab(value as InvoiceType);
                 setPage(1);
-                // Reset party filter when switching tabs
                 setPartyFilter(null);
+                setArDocumentTypeFilter('all');
               }}
             >
               <TabsList className="mb-6">
-                <TabsTrigger value="ar">Sales Invoices</TabsTrigger>
+                <TabsTrigger value="ar">Sales / Credit Notes</TabsTrigger>
                 <TabsTrigger value="ap">Purchase Invoices</TabsTrigger>
               </TabsList>
 
@@ -1363,10 +1388,10 @@ export const InvoicesPage = () => {
                   }}
                 >
                 <SelectTrigger className="w-[180px]">
-                  <SelectValue placeholder="FIRS Status" />
+                  <SelectValue placeholder="NRS Status" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All FIRS Status</SelectItem>
+                  <SelectItem value="all">All NRS Status</SelectItem>
                   <SelectItem value="approved">Approved</SelectItem>
                   <SelectItem value="pending">Pending</SelectItem>
                     <SelectItem value="signed">Signed</SelectItem>
@@ -1375,6 +1400,25 @@ export const InvoicesPage = () => {
                   <SelectItem value="not_submitted">Not Submitted</SelectItem>
                 </SelectContent>
               </Select>
+
+                {activeTab === 'ar' && (
+                  <Select
+                    value={arDocumentTypeFilter}
+                    onValueChange={(value: 'all' | 'sales' | 'credit_note') => {
+                      setArDocumentTypeFilter(value);
+                      setPage(1);
+                    }}
+                  >
+                    <SelectTrigger className="w-[180px]">
+                      <SelectValue placeholder="Document type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All (Sales & Credit notes)</SelectItem>
+                      <SelectItem value="sales">Sales invoices only</SelectItem>
+                      <SelectItem value="credit_note">Credit notes only</SelectItem>
+                    </SelectContent>
+                  </Select>
+                )}
 
                 <Button
                   variant="outline"
@@ -1484,7 +1528,7 @@ export const InvoicesPage = () => {
                 />
 
                 {/* Clear Filters Button */}
-                {(dateFrom || dateTo || batchNumber || partyFilter) && (
+                {(dateFrom || dateTo || batchNumber || partyFilter || (activeTab === 'ar' && arDocumentTypeFilter !== 'all')) && (
                   <Button
                     variant="ghost"
                     size="sm"
@@ -1493,6 +1537,7 @@ export const InvoicesPage = () => {
                       setDateTo(undefined);
                       setBatchNumber('');
                       setPartyFilter(null);
+                      if (activeTab === 'ar') setArDocumentTypeFilter('all');
                       setPage(1);
                     }}
                     className="w-full sm:w-auto"
@@ -1572,8 +1617,13 @@ export const InvoicesPage = () => {
                                   </TableCell>
                       <TableCell>
                         <div>
-                                      <div className="font-medium">
+                                      <div className="font-medium flex items-center gap-2">
                                         {invoice.invoice_number}
+                                        {activeTab === 'ar' && invoice.invoice_type && (
+                                          <Badge variant={invoice.invoice_type === 'credit_note' ? 'secondary' : 'outline'} className="text-[10px] font-normal">
+                                            {getDocumentTypeLabel(invoice.invoice_type)}
+                                          </Badge>
+                                        )}
                                       </div>
                           <div className="text-sm text-muted-foreground">
                                         {invoice.items?.length || 0} items
@@ -2108,7 +2158,14 @@ export const InvoicesPage = () => {
                   <p className="text-sm font-medium text-muted-foreground">
                     Invoice Number
                   </p>
-                  <p className="text-sm">{selectedInvoice.invoice_number}</p>
+                  <p className="text-sm flex items-center gap-2">
+                    {selectedInvoice.invoice_number}
+                    {activeTab === 'ar' && selectedInvoice.invoice_type && (
+                      <Badge variant={selectedInvoice.invoice_type === 'credit_note' ? 'secondary' : 'outline'} className="text-[10px] font-normal">
+                        {getDocumentTypeLabel(selectedInvoice.invoice_type)}
+                      </Badge>
+                    )}
+                  </p>
                 </div>
                 <div>
                   <p className="text-sm font-medium text-muted-foreground">

@@ -24,6 +24,7 @@ export const useARInvoices = (params?: {
   per_page?: number;
   page?: number;
   status?: string;
+  invoice_type?: string;
   batch_number?: string;
   date_from?: string;
   date_to?: string;
