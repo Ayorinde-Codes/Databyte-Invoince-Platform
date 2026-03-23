@@ -455,6 +455,7 @@ class ApiService {
     customer_id?: number;
     sort_by?: string;
     sort_order?: 'asc' | 'desc';
+    search?: string;
   }) {
     const queryParams = new URLSearchParams();
     if (params?.per_page) queryParams.append('per_page', params.per_page.toString());
@@ -468,6 +469,7 @@ class ApiService {
     if (params?.customer_id) queryParams.append('customer_id', params.customer_id.toString());
     if (params?.sort_by) queryParams.append('sort_by', params.sort_by);
     if (params?.sort_order) queryParams.append('sort_order', params.sort_order);
+    if (params?.search) queryParams.append('search', params.search);
     
     const endpoint = queryParams.toString() 
       ? `${API_ENDPOINTS.invoices.ar.list}?${queryParams}`
@@ -623,6 +625,7 @@ class ApiService {
     date_to?: string;
     customer_id?: number;
     source_system?: string;
+    search?: string;
   }) {
     const queryParams: Record<string, string> = {};
     if (params?.status) queryParams.status = params.status;
@@ -632,6 +635,7 @@ class ApiService {
     if (params?.date_to) queryParams.date_to = params.date_to;
     if (params?.customer_id) queryParams.customer_id = params.customer_id.toString();
     if (params?.source_system) queryParams.source_system = params.source_system;
+    if (params?.search) queryParams.search = params.search;
 
     const filename = `ar_invoices_${new Date().toISOString().split('T')[0]}.xlsx`;
     return this.downloadFile(API_ENDPOINTS.invoices.ar.exportExcel, filename, queryParams);
@@ -645,6 +649,7 @@ class ApiService {
     date_to?: string;
     customer_id?: number;
     source_system?: string;
+    search?: string;
     /** Pass to export a single invoice and its lines only */
     invoice_id?: number;
     invoice_number?: string;
@@ -657,6 +662,7 @@ class ApiService {
     if (params?.date_to) queryParams.date_to = params.date_to;
     if (params?.customer_id) queryParams.customer_id = params.customer_id.toString();
     if (params?.source_system) queryParams.source_system = params.source_system;
+    if (params?.search) queryParams.search = params.search;
     if (params?.invoice_id != null) queryParams.invoice_id = params.invoice_id.toString();
 
     const filename = params?.invoice_id != null
@@ -678,6 +684,7 @@ class ApiService {
     vendor_id?: number;
     sort_by?: string;
     sort_order?: 'asc' | 'desc';
+    search?: string;
   }) {
     const queryParams = new URLSearchParams();
     if (params?.per_page) queryParams.append('per_page', params.per_page.toString());
@@ -690,6 +697,7 @@ class ApiService {
     if (params?.vendor_id) queryParams.append('vendor_id', params.vendor_id.toString());
     if (params?.sort_by) queryParams.append('sort_by', params.sort_by);
     if (params?.sort_order) queryParams.append('sort_order', params.sort_order);
+    if (params?.search) queryParams.append('search', params.search);
     
     const endpoint = queryParams.toString() 
       ? `${API_ENDPOINTS.invoices.ap.list}?${queryParams}`
@@ -832,6 +840,7 @@ class ApiService {
     date_to?: string;
     vendor_id?: number;
     source_system?: string;
+    search?: string;
   }) {
     const queryParams: Record<string, string> = {};
     if (params?.status) queryParams.status = params.status;
@@ -840,6 +849,7 @@ class ApiService {
     if (params?.date_to) queryParams.date_to = params.date_to;
     if (params?.vendor_id) queryParams.vendor_id = params.vendor_id.toString();
     if (params?.source_system) queryParams.source_system = params.source_system;
+    if (params?.search) queryParams.search = params.search;
 
     const filename = `ap_invoices_${new Date().toISOString().split('T')[0]}.xlsx`;
     return this.downloadFile(API_ENDPOINTS.invoices.ap.exportExcel, filename, queryParams);
@@ -852,6 +862,7 @@ class ApiService {
     date_to?: string;
     vendor_id?: number;
     source_system?: string;
+    search?: string;
     /** Pass to export a single invoice and its lines only */
     invoice_id?: number;
     invoice_number?: string;
@@ -863,6 +874,7 @@ class ApiService {
     if (params?.date_to) queryParams.date_to = params.date_to;
     if (params?.vendor_id) queryParams.vendor_id = params.vendor_id.toString();
     if (params?.source_system) queryParams.source_system = params.source_system;
+    if (params?.search) queryParams.search = params.search;
     if (params?.invoice_id != null) queryParams.invoice_id = params.invoice_id.toString();
 
     const filename = params?.invoice_id != null

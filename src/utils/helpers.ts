@@ -1,17 +1,26 @@
-import { format, parseISO, isValid, differenceInDays, addDays } from 'date-fns';
+import { format, parseISO, isValid, differenceInDays } from 'date-fns';
 import { CURRENCIES, DATE_FORMATS } from './constants';
 import type { StatusBadge } from '../types';
 
+/** Shown when a date is missing or cannot be parsed (never the string "Invalid Date"). */
+export const EMPTY_DATE_DISPLAY = '';
+
 // Date and Time Utilities
 export const formatDate = (
-  date: string | Date,
+  date: string | Date | null | undefined,
   formatStr: string = DATE_FORMATS.display
 ): string => {
+  if (date === null || date === undefined) {
+    return EMPTY_DATE_DISPLAY;
+  }
+  if (typeof date === 'string' && date.trim() === '') {
+    return EMPTY_DATE_DISPLAY;
+  }
   try {
     const dateObj = typeof date === 'string' ? parseISO(date) : date;
-    return isValid(dateObj) ? format(dateObj, formatStr) : 'Invalid Date';
+    return isValid(dateObj) ? format(dateObj, formatStr) : EMPTY_DATE_DISPLAY;
   } catch {
-    return 'Invalid Date';
+    return EMPTY_DATE_DISPLAY;
   }
 };
 
@@ -23,9 +32,15 @@ export const formatTime = (date: string | Date): string => {
   return formatDate(date, DATE_FORMATS.time);
 };
 
-export const getRelativeDate = (date: string | Date): string => {
+export const getRelativeDate = (date: string | Date | null | undefined): string => {
+  if (date === null || date === undefined || (typeof date === 'string' && date.trim() === '')) {
+    return EMPTY_DATE_DISPLAY;
+  }
   try {
     const dateObj = typeof date === 'string' ? parseISO(date) : date;
+    if (!isValid(dateObj)) {
+      return EMPTY_DATE_DISPLAY;
+    }
     const now = new Date();
     const diffDays = differenceInDays(now, dateObj);
 
@@ -35,12 +50,15 @@ export const getRelativeDate = (date: string | Date): string => {
     if (diffDays > 0) return `${diffDays} days ago`;
     return `In ${Math.abs(diffDays)} days`;
   } catch {
-    return 'Unknown';
+    return EMPTY_DATE_DISPLAY;
   }
 };
 
-export const isOverdue = (dueDate: string | Date): boolean => {
+export const isOverdue = (dueDate: string | Date | null | undefined): boolean => {
   try {
+    if (dueDate === null || dueDate === undefined || (typeof dueDate === 'string' && dueDate.trim() === '')) {
+      return false;
+    }
     const dateObj = typeof dueDate === 'string' ? parseISO(dueDate) : dueDate;
     return isValid(dateObj) && dateObj < new Date();
   } catch {
@@ -48,9 +66,15 @@ export const isOverdue = (dueDate: string | Date): boolean => {
   }
 };
 
-export const getDaysUntilDue = (dueDate: string | Date): number => {
+export const getDaysUntilDue = (dueDate: string | Date | null | undefined): number => {
   try {
+    if (dueDate === null || dueDate === undefined || (typeof dueDate === 'string' && dueDate.trim() === '')) {
+      return 0;
+    }
     const dateObj = typeof dueDate === 'string' ? parseISO(dueDate) : dueDate;
+    if (!isValid(dateObj)) {
+      return 0;
+    }
     return differenceInDays(dateObj, new Date());
   } catch {
     return 0;
