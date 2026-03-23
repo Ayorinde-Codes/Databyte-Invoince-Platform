@@ -32,6 +32,7 @@ export const useARInvoices = (params?: {
   customer_id?: number;
   sort_by?: string;
   sort_order?: 'asc' | 'desc';
+  search?: string;
 }) => {
   return useQuery({
     queryKey: ['invoices', 'ar', params],
@@ -250,6 +251,7 @@ export const useAPInvoices = (params?: {
   vendor_id?: number;
   sort_by?: string;
   sort_order?: 'asc' | 'desc';
+  search?: string;
 }) => {
   return useQuery({
     queryKey: ['invoices', 'ap', params],

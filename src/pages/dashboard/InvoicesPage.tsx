@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import {
@@ -210,12 +210,14 @@ interface ExportParams {
   vendor_id?: number;
   invoice_id?: number;
   invoice_number?: string;
+  search?: string;
 }
 
 export const InvoicesPage = () => {
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<InvoiceType>('ar');
   const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [firsFilter, setFirsFilter] = useState('all');
   /** AR only: filter by document type (sales vs credit note) */
@@ -381,6 +383,20 @@ export const InvoicesPage = () => {
     </TableHead>
   ), [sortBy, sortOrder, handleSort]);
 
+  useEffect(() => {
+    const trimmed = searchTerm.trim();
+    if (trimmed === '') {
+      setDebouncedSearch('');
+      return;
+    }
+    const timer = setTimeout(() => setDebouncedSearch(trimmed), 300);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedSearch]);
+
   const queryParams = {
     per_page: 15,
     page,
@@ -391,6 +407,7 @@ export const InvoicesPage = () => {
     ...(batchNumber && { batch_number: batchNumber }),
     ...(partyFilter && activeTab === 'ar' && { customer_id: partyFilter }),
     ...(partyFilter && activeTab === 'ap' && { vendor_id: partyFilter }),
+    ...(debouncedSearch && { search: debouncedSearch }),
     sort_by: sortBy,
     sort_order: sortOrder,
   };
@@ -443,6 +460,7 @@ export const InvoicesPage = () => {
     (inv: Invoice) => !inv.firs_status || inv.firs_status === 'pending'
   ).length;
 
+  /** FIRS status filter is still client-side on the loaded page; invoice number/customer search is server-side via `search`. */
   const filteredInvoices = invoices.filter((invoice: Invoice) => {
     const matchesFirs =
       firsFilter === 'all' ||
@@ -454,18 +472,7 @@ export const InvoicesPage = () => {
         firsFilter !== 'cancelled' &&
         invoice.firs_status === firsFilter);
 
-    const matchesSearch =
-      !searchTerm ||
-      invoice.invoice_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (activeTab === 'ar'
-        ? invoice.customer?.party_name
-            ?.toLowerCase()
-            .includes(searchTerm.toLowerCase())
-        : invoice.vendor?.party_name
-            ?.toLowerCase()
-            .includes(searchTerm.toLowerCase()));
-
-    return matchesFirs && matchesSearch;
+    return matchesFirs;
   });
   
 
@@ -956,6 +963,9 @@ export const InvoicesPage = () => {
       if (partyFilter && activeTab === 'ap') {
         exportParams.vendor_id = partyFilter;
       }
+      if (debouncedSearch) {
+        exportParams.search = debouncedSearch;
+      }
 
       if (activeTab === 'ar') {
         await apiService.exportARInvoicesExcel(exportParams);
@@ -996,6 +1006,9 @@ export const InvoicesPage = () => {
         }
         if (partyFilter && activeTab === 'ap') {
           exportParams.vendor_id = partyFilter;
+        }
+        if (debouncedSearch) {
+          exportParams.search = debouncedSearch;
         }
       }
 

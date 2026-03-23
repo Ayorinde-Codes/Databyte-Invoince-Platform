@@ -26,7 +26,12 @@ const registerSchema = z.object({
     .regex(/[0-9]/, 'Password must contain at least one number')
     .regex(/[^A-Za-z0-9]/, 'Password must contain at least one special character'),
   confirm_password: z.string(),
-  phone: z.string().min(10, 'Phone number must be at least 10 characters'),
+  phone: z
+    .string()
+    .refine(
+      (val) => val.trim() === '' || val.trim().length >= 10,
+      'Phone number must be at least 10 characters'
+    ),
   address: z.string().min(5, 'Address must be at least 5 characters'),
   tin: z.string()
     .min(1, 'TIN is required')

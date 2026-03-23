@@ -157,6 +157,27 @@ type SyncOptions = {
   date_to?: string;
 };
 
+/** New ERP presets: daily at 02:00 in the browser timezone (server still validates / normalizes). */
+function getDefaultSyncSettings(): {
+  sync_frequency: number;
+  daily_sync_at: string;
+  sync_timezone: string;
+} {
+  let tz = 'UTC';
+  if (typeof Intl !== 'undefined') {
+    try {
+      tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    } catch {
+      tz = 'UTC';
+    }
+  }
+  return {
+    sync_frequency: 1440,
+    daily_sync_at: '02:00',
+    sync_timezone: tz,
+  };
+}
+
 type ERPSyncStatus = {
   has_pending_jobs: boolean;
   pending_jobs_count?: number;
@@ -342,9 +363,11 @@ export const ERPConfigPage = () => {
         can_read_tax_categories: true,
       },
       sync_settings: {
-        sync_frequency: 60, // Default: 60 minutes (hourly) - recommended
+        ...getDefaultSyncSettings(),
       },
       invoice_sync_start_date: '' as string,
+      /** Sage X3: must match FLD CPY on documents (company code) */
+      company_code: '' as string,
     },
     is_active: true,
   });
@@ -639,7 +662,7 @@ export const ERPConfigPage = () => {
         typeof settingValue.sync_settings !== 'object' ||
         Array.isArray(settingValue.sync_settings)
       ) {
-        settingValue.sync_settings = { sync_frequency: 60 };
+        settingValue.sync_settings = { ...getDefaultSyncSettings() };
       } else {
         const syncSettings = settingValue.sync_settings as Record<
           string,
@@ -649,7 +672,22 @@ export const ERPConfigPage = () => {
           syncSettings.sync_frequency === undefined ||
           syncSettings.sync_frequency === ''
         ) {
-          syncSettings.sync_frequency = 60;
+          syncSettings.sync_frequency = getDefaultSyncSettings().sync_frequency;
+        }
+        const freq = Number(syncSettings.sync_frequency);
+        if (freq === 1440) {
+          if (
+            syncSettings.daily_sync_at === undefined ||
+            syncSettings.daily_sync_at === ''
+          ) {
+            syncSettings.daily_sync_at = '02:00';
+          }
+          if (
+            syncSettings.sync_timezone === undefined ||
+            syncSettings.sync_timezone === ''
+          ) {
+            syncSettings.sync_timezone = getDefaultSyncSettings().sync_timezone;
+          }
         }
       }
 
@@ -788,6 +826,15 @@ export const ERPConfigPage = () => {
         toast.error('Pool alias is required for Sage X3 API connections');
         return;
       }
+      if (
+        erpType === 'sage_x3' &&
+        !String(erpCreateForm.setting_value.company_code ?? '').trim()
+      ) {
+        toast.error(
+          'Company code is required for Sage X3 (must match Sage CPY on invoices)'
+        );
+        return;
+      }
     } else if (connectionType === 'database') {
       if (!hasDbCredentials) {
         toast.error(
@@ -834,6 +881,15 @@ export const ERPConfigPage = () => {
         !erpCreateForm.setting_value.server_details.pool_alias
       ) {
         toast.error('Pool alias is required for Sage X3 API connections');
+        return;
+      }
+      if (
+        erpType === 'sage_x3' &&
+        !String(erpCreateForm.setting_value.company_code ?? '').trim()
+      ) {
+        toast.error(
+          'Company code is required for Sage X3 (must match Sage CPY on invoices)'
+        );
         return;
       }
 
@@ -945,9 +1001,10 @@ export const ERPConfigPage = () => {
             can_read_tax_categories: true,
           },
           sync_settings: {
-            sync_frequency: 60,
+            ...getDefaultSyncSettings(),
           },
           invoice_sync_start_date: '',
+          company_code: '',
         },
         is_active: true,
       });
@@ -1053,14 +1110,29 @@ export const ERPConfigPage = () => {
         typeof sv.sync_settings !== 'object' ||
         Array.isArray(sv.sync_settings)
       ) {
-        sv.sync_settings = { sync_frequency: 60 };
+        sv.sync_settings = { ...getDefaultSyncSettings() };
       } else {
         const syncSettings = sv.sync_settings as Record<string, unknown>;
         if (
           syncSettings.sync_frequency === undefined ||
           syncSettings.sync_frequency === ''
         ) {
-          syncSettings.sync_frequency = 60;
+          syncSettings.sync_frequency = getDefaultSyncSettings().sync_frequency;
+        }
+        const freq = Number(syncSettings.sync_frequency);
+        if (freq === 1440) {
+          if (
+            syncSettings.daily_sync_at === undefined ||
+            syncSettings.daily_sync_at === ''
+          ) {
+            syncSettings.daily_sync_at = '02:00';
+          }
+          if (
+            syncSettings.sync_timezone === undefined ||
+            syncSettings.sync_timezone === ''
+          ) {
+            syncSettings.sync_timezone = getDefaultSyncSettings().sync_timezone;
+          }
         }
       }
 
@@ -1463,9 +1535,10 @@ export const ERPConfigPage = () => {
                                     can_read_tax_categories: true,
                                   },
                                   sync_settings: {
-                                    sync_frequency: 60,
+                                    ...getDefaultSyncSettings(),
                                   },
                                   invoice_sync_start_date: '',
+                                  company_code: '',
                                 },
                                 is_active: true,
                               });
@@ -3379,6 +3452,41 @@ export const ERPConfigPage = () => {
                                 </p>
                               </div>
                             )}
+                          {erpSetting.erp_type === 'sage_x3' && (
+                            <div className="space-y-2">
+                              <Label
+                                htmlFor="edit-company-code"
+                                className="text-xs capitalize"
+                              >
+                                Company code{' '}
+                                <span className="text-red-500">*</span>
+                              </Label>
+                              <Input
+                                id="edit-company-code"
+                                type="text"
+                                value={String(
+                                  erpEditForm.setting_value?.company_code ??
+                                    erpSetting.setting_value?.company_code ??
+                                    ''
+                                )}
+                                onChange={(e) => {
+                                  const newSettingValue = {
+                                    ...(erpEditForm.setting_value || {}),
+                                  };
+                                  newSettingValue.company_code = e.target.value;
+                                  setErpEditForm({
+                                    ...erpEditForm,
+                                    setting_value: newSettingValue,
+                                  });
+                                }}
+                                placeholder="e.g., PFL"
+                              />
+                              <p className="text-xs text-muted-foreground">
+                                Must match Sage X3 CPY on AR/AP documents. Only
+                                this company&apos;s invoices are synced.
+                              </p>
+                            </div>
+                          )}
                           {/* Add api_version field for Sage 300 if it doesn't exist in server_details */}
                           {erpSetting.erp_type === 'sage_300' &&
                             (() => {
@@ -4194,7 +4302,7 @@ export const ERPConfigPage = () => {
                                       (erpSetting.setting_value.sync_settings as
                                         { sync_frequency?: number } | undefined)
                                         ?.sync_frequency ??
-                                      60
+                                      1440
                                   )
                                 )
                                   ? (
@@ -4204,9 +4312,9 @@ export const ERPConfigPage = () => {
                                       (erpSetting.setting_value.sync_settings as
                                         { sync_frequency?: number } | undefined)
                                         ?.sync_frequency ??
-                                      60
+                                      1440
                                     ).toString()
-                                  : '60'
+                                  : '1440'
                               )}
                               onValueChange={(value) => {
                                 const newSettingValue = {
@@ -4225,7 +4333,7 @@ export const ERPConfigPage = () => {
                                             unknown
                                           >),
                                         }
-                                      : { sync_frequency: 60 };
+                                      : { ...getDefaultSyncSettings() };
                                 }
                                 const syncSettingsObj =
                                   newSettingValue.sync_settings as Record<
@@ -4234,6 +4342,21 @@ export const ERPConfigPage = () => {
                                   >;
                                 syncSettingsObj.sync_frequency =
                                   parseInt(value);
+                                if (syncSettingsObj.sync_frequency === 1440) {
+                                  if (
+                                    syncSettingsObj.daily_sync_at === undefined ||
+                                    syncSettingsObj.daily_sync_at === ''
+                                  ) {
+                                    syncSettingsObj.daily_sync_at = '02:00';
+                                  }
+                                  if (
+                                    syncSettingsObj.sync_timezone === undefined ||
+                                    syncSettingsObj.sync_timezone === ''
+                                  ) {
+                                    syncSettingsObj.sync_timezone =
+                                      getDefaultSyncSettings().sync_timezone;
+                                  }
+                                }
                                 setErpEditForm({
                                   ...erpEditForm,
                                   setting_value: newSettingValue,
@@ -4248,7 +4371,7 @@ export const ERPConfigPage = () => {
                                   Every 30 minutes
                                 </SelectItem>
                                 <SelectItem value="60">
-                                  Every hour (Recommended)
+                                  Every hour
                                 </SelectItem>
                                 <SelectItem value="240">
                                   Every 4 hours
@@ -4257,13 +4380,117 @@ export const ERPConfigPage = () => {
                                   Every 6 hours
                                 </SelectItem>
                                 <SelectItem value="1440">
-                                  Daily (once per day)
+                                  Daily at set time (Recommended)
                                 </SelectItem>
                                 <SelectItem value="10080">
                                   Weekly (once per week)
                                 </SelectItem>
                               </SelectContent>
                             </Select>
+                            {Number(
+                              (erpEditForm.setting_value?.sync_settings as
+                                | { sync_frequency?: number }
+                                | undefined)?.sync_frequency ??
+                                (erpSetting.setting_value?.sync_settings as
+                                  | { sync_frequency?: number }
+                                  | undefined)?.sync_frequency ??
+                                1440
+                            ) === 1440 && (
+                              <>
+                                <div className="space-y-2">
+                                  <Label className="text-xs">
+                                    Daily sync time (local)
+                                  </Label>
+                                  <Input
+                                    type="time"
+                                    value={(() => {
+                                      const raw = String(
+                                        (
+                                          erpEditForm.setting_value
+                                            ?.sync_settings as
+                                            | { daily_sync_at?: string }
+                                            | undefined
+                                        )?.daily_sync_at ??
+                                          (
+                                            erpSetting.setting_value
+                                              ?.sync_settings as
+                                              | { daily_sync_at?: string }
+                                              | undefined
+                                          )?.daily_sync_at ??
+                                          '02:00'
+                                      );
+                                      if (/^\d:\d{2}$/.test(raw)) {
+                                        return `0${raw}`;
+                                      }
+                                      return raw.length >= 5
+                                        ? raw.slice(0, 5)
+                                        : '02:00';
+                                    })()}
+                                    onChange={(e) => {
+                                      const newSettingValue = {
+                                        ...(erpEditForm.setting_value || {}),
+                                      };
+                                      if (!newSettingValue.sync_settings) {
+                                        newSettingValue.sync_settings = {};
+                                      }
+                                      const ss = newSettingValue.sync_settings as Record<
+                                        string,
+                                        unknown
+                                      >;
+                                      ss.daily_sync_at = e.target.value;
+                                      setErpEditForm({
+                                        ...erpEditForm,
+                                        setting_value: newSettingValue,
+                                      });
+                                    }}
+                                  />
+                                </div>
+                                <div className="space-y-2">
+                                  <Label className="text-xs">
+                                    Timezone (IANA)
+                                  </Label>
+                                  <Input
+                                    value={String(
+                                      (
+                                        erpEditForm.setting_value
+                                          ?.sync_settings as
+                                          | { sync_timezone?: string }
+                                          | undefined
+                                      )?.sync_timezone ??
+                                        (
+                                          erpSetting.setting_value
+                                            ?.sync_settings as
+                                            | { sync_timezone?: string }
+                                            | undefined
+                                        )?.sync_timezone ??
+                                        getDefaultSyncSettings().sync_timezone
+                                    )}
+                                    onChange={(e) => {
+                                      const newSettingValue = {
+                                        ...(erpEditForm.setting_value || {}),
+                                      };
+                                      if (!newSettingValue.sync_settings) {
+                                        newSettingValue.sync_settings = {};
+                                      }
+                                      const ss = newSettingValue.sync_settings as Record<
+                                        string,
+                                        unknown
+                                      >;
+                                      ss.sync_timezone = e.target.value;
+                                      setErpEditForm({
+                                        ...erpEditForm,
+                                        setting_value: newSettingValue,
+                                      });
+                                    }}
+                                    placeholder="Africa/Lagos"
+                                  />
+                                  <p className="text-[11px] text-muted-foreground">
+                                    &quot;Daily&quot; runs after this local time each
+                                    day (e.g. 02:00).
+                                  </p>
+                                </div>
+                              </>
+                            )}
                           </div>
                           {/* Invoice sync start date */}
                           <div className="space-y-2">
@@ -4788,6 +5015,35 @@ export const ERPConfigPage = () => {
                     <p className="text-xs text-muted-foreground">
                       Required for Sage X3 API connections. Identifies the Sage
                       X3 environment (e.g., Production, Development).
+                    </p>
+                  </div>
+                )}
+                {erpCreateForm.erp_type === 'sage_x3' && (
+                  <div className="space-y-2">
+                    <Label htmlFor="create-company-code">
+                      Company code <span className="text-red-500">*</span>
+                    </Label>
+                    <Input
+                      id="create-company-code"
+                      value={
+                        (erpCreateForm.setting_value.company_code as string) ||
+                        ''
+                      }
+                      onChange={(e) =>
+                        setErpCreateForm({
+                          ...erpCreateForm,
+                          setting_value: {
+                            ...erpCreateForm.setting_value,
+                            company_code: e.target.value,
+                          },
+                        })
+                      }
+                      placeholder="e.g., PFL"
+                      autoComplete="off"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Must match the Sage X3 company code (CPY) on invoices and
+                      credit notes. Only documents for this company are synced.
                     </p>
                   </div>
                 )}
@@ -5399,18 +5655,29 @@ export const ERPConfigPage = () => {
                         : 'custom'
                     }
                     onValueChange={(value) => {
+                      const prev = erpCreateForm.setting_value.sync_settings;
                       const numValue =
                         value === 'custom'
-                          ? erpCreateForm.setting_value.sync_settings
-                              .sync_frequency
-                          : parseInt(value);
+                          ? prev.sync_frequency
+                          : parseInt(value, 10);
+                      const next: Record<string, unknown> = {
+                        ...prev,
+                        sync_frequency: numValue,
+                      };
+                      if (numValue === 1440) {
+                        if (!next.daily_sync_at) {
+                          next.daily_sync_at = '02:00';
+                        }
+                        if (!next.sync_timezone) {
+                          next.sync_timezone =
+                            getDefaultSyncSettings().sync_timezone;
+                        }
+                      }
                       setErpCreateForm({
                         ...erpCreateForm,
                         setting_value: {
                           ...erpCreateForm.setting_value,
-                          sync_settings: {
-                            sync_frequency: numValue,
-                          },
+                          sync_settings: next as typeof prev,
                         },
                       });
                     }}
@@ -5420,12 +5687,12 @@ export const ERPConfigPage = () => {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="30">Every 30 minutes</SelectItem>
-                      <SelectItem value="60">
-                        Every hour (Recommended)
-                      </SelectItem>
+                      <SelectItem value="60">Every hour</SelectItem>
                       <SelectItem value="240">Every 4 hours</SelectItem>
                       <SelectItem value="360">Every 6 hours</SelectItem>
-                      <SelectItem value="1440">Daily (once per day)</SelectItem>
+                      <SelectItem value="1440">
+                        Daily at set time (Recommended)
+                      </SelectItem>
                       <SelectItem value="10080">
                         Weekly (once per week)
                       </SelectItem>
@@ -5459,7 +5726,9 @@ export const ERPConfigPage = () => {
                             setting_value: {
                               ...erpCreateForm.setting_value,
                               sync_settings: {
-                                sync_frequency: parseInt(e.target.value) || 60,
+                                ...erpCreateForm.setting_value.sync_settings,
+                                sync_frequency:
+                                  parseInt(e.target.value, 10) || 1440,
                               },
                             },
                           })
@@ -5473,9 +5742,72 @@ export const ERPConfigPage = () => {
                     </div>
                   )}
                   <p className="text-xs text-muted-foreground">
-                    Recommended: Hourly (60 minutes) for most businesses. More
-                    frequent syncing may impact ERP system performance.
+                    Recommended: Daily at a quiet time (default 02:00 in your
+                    timezone). Hourly or shorter intervals remain available but
+                    may add load on your ERP.
                   </p>
+                  {erpCreateForm.setting_value.sync_settings.sync_frequency ===
+                    1440 && (
+                    <>
+                      <div className="space-y-2">
+                        <Label htmlFor="create-daily-sync-time">
+                          Daily sync time (local)
+                        </Label>
+                        <Input
+                          id="create-daily-sync-time"
+                          type="time"
+                          value={(() => {
+                            const raw = String(
+                              erpCreateForm.setting_value.sync_settings
+                                .daily_sync_at ?? '02:00'
+                            );
+                            if (/^\d:\d{2}$/.test(raw)) {
+                              return `0${raw}`;
+                            }
+                            return raw.length >= 5 ? raw.slice(0, 5) : '02:00';
+                          })()}
+                          onChange={(e) =>
+                            setErpCreateForm({
+                              ...erpCreateForm,
+                              setting_value: {
+                                ...erpCreateForm.setting_value,
+                                sync_settings: {
+                                  ...erpCreateForm.setting_value.sync_settings,
+                                  daily_sync_at: e.target.value,
+                                },
+                              },
+                            })
+                          }
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="create-sync-timezone">
+                          Timezone (IANA)
+                        </Label>
+                        <Input
+                          id="create-sync-timezone"
+                          value={
+                            erpCreateForm.setting_value.sync_settings
+                              .sync_timezone ??
+                            getDefaultSyncSettings().sync_timezone
+                          }
+                          onChange={(e) =>
+                            setErpCreateForm({
+                              ...erpCreateForm,
+                              setting_value: {
+                                ...erpCreateForm.setting_value,
+                                sync_settings: {
+                                  ...erpCreateForm.setting_value.sync_settings,
+                                  sync_timezone: e.target.value,
+                                },
+                              },
+                            })
+                          }
+                          placeholder="Africa/Lagos"
+                        />
+                      </div>
+                    </>
+                  )}
                 </div>
                 <div className="space-y-2">
                   <Label>
@@ -5689,9 +6021,10 @@ export const ERPConfigPage = () => {
                           can_read_tax_categories: true,
                         },
                         sync_settings: {
-                          sync_frequency: 60,
+                          ...getDefaultSyncSettings(),
                         },
                         invoice_sync_start_date: '',
+                        company_code: '',
                       },
                       is_active: true,
                     });
@@ -5708,6 +6041,10 @@ export const ERPConfigPage = () => {
                     (erpCreateForm.erp_type === 'sage_300' &&
                       !erpCreateForm.setting_value.server_details.database) ||
                     !erpCreateForm.erp_type ||
+                    (erpCreateForm.erp_type === 'sage_x3' &&
+                      !String(
+                        erpCreateForm.setting_value.company_code ?? ''
+                      ).trim()) ||
                     (erpCreateForm.erp_type === 'sage_300' ||
                     erpCreateForm.erp_type === 'sage_x3'
                       ? !(
