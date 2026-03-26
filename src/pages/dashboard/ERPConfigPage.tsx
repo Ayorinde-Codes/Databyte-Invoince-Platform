@@ -3595,6 +3595,118 @@ export const ERPConfigPage = () => {
                                 </p>
                               </div>
                             )}
+
+                          {(erpSetting.erp_type === 'sage_300' ||
+                            erpSetting.erp_type === 'sage_evolution') &&
+                            erpSetting.setting_value.server_details && (
+                              <div className="space-y-2">
+                                <Label
+                                  htmlFor="edit-server-database"
+                                  className="text-xs"
+                                >
+                                  Database Name{' '}
+                                  <span className="text-red-500">*</span>
+                                  {erpSetting.erp_type === 'sage_300' && (
+                                    <span className="text-xs text-muted-foreground ml-1 font-normal">
+                                      (Also used for API)
+                                    </span>
+                                  )}
+                                </Label>
+                                <Input
+                                  id="edit-server-database"
+                                  type="text"
+                                  value={
+                                    erpEditForm.setting_value?.server_details &&
+                                    typeof erpEditForm.setting_value
+                                      .server_details === 'object' &&
+                                    !Array.isArray(
+                                      erpEditForm.setting_value.server_details
+                                    ) &&
+                                    'database' in
+                                      (erpEditForm.setting_value
+                                        .server_details as Record<
+                                        string,
+                                        unknown
+                                      >)
+                                      ? String(
+                                          (
+                                            erpEditForm.setting_value
+                                              .server_details as Record<
+                                              string,
+                                              unknown
+                                            >
+                                          ).database || ''
+                                        )
+                                      : erpSetting.setting_value
+                                            .server_details &&
+                                          typeof erpSetting.setting_value
+                                            .server_details === 'object' &&
+                                          !Array.isArray(
+                                            erpSetting.setting_value
+                                              .server_details
+                                          ) &&
+                                          'database' in
+                                            (erpSetting.setting_value
+                                              .server_details as Record<
+                                              string,
+                                              unknown
+                                            >)
+                                        ? String(
+                                            (
+                                              erpSetting.setting_value
+                                                .server_details as Record<
+                                                string,
+                                                unknown
+                                              >
+                                            ).database || ''
+                                          )
+                                        : ''
+                                  }
+                                  onChange={(e) => {
+                                    const newSettingValue = {
+                                      ...(erpEditForm.setting_value || {}),
+                                    };
+                                    if (!newSettingValue.server_details) {
+                                      const serverDetails =
+                                        erpSetting.setting_value
+                                          ?.server_details;
+                                      newSettingValue.server_details =
+                                        serverDetails &&
+                                        typeof serverDetails === 'object' &&
+                                        !Array.isArray(serverDetails)
+                                          ? {
+                                              ...(serverDetails as Record<
+                                                string,
+                                                unknown
+                                              >),
+                                            }
+                                          : {};
+                                    }
+                                    if (
+                                      newSettingValue.server_details &&
+                                      typeof newSettingValue.server_details ===
+                                        'object' &&
+                                      !Array.isArray(
+                                        newSettingValue.server_details
+                                      )
+                                    ) {
+                                      (
+                                        newSettingValue.server_details as Record<
+                                          string,
+                                          unknown
+                                        >
+                                      ).database = e.target.value;
+                                    }
+                                    setErpEditForm({
+                                      ...erpEditForm,
+                                      setting_value: newSettingValue,
+                                    });
+                                  }}
+                                  placeholder="Database name"
+                                  autoComplete="off"
+                                />
+                              </div>
+                            )}
                         </div>
                       )}
 
@@ -3807,19 +3919,16 @@ export const ERPConfigPage = () => {
                             </Alert>
                           )}
 
-                          {/* Database Name - Moved from Server Details */}
-                          {erpSetting.setting_value.server_details && (
+                          {/* Database name for Sage X3 (often edited alongside DB credentials). Sage 300 /
+                              Evolution use server_details field above — avoid duplicating here. */}
+                          {erpSetting.erp_type === 'sage_x3' &&
+                            erpSetting.setting_value.server_details && (
                             <div className="space-y-2">
                               <Label
                                 htmlFor="edit-database"
                                 className="text-xs"
                               >
                                 Database Name
-                                {erpSetting.erp_type === 'sage_300' && (
-                                  <span className="text-xs text-muted-foreground ml-1">
-                                    (Also used for API)
-                                  </span>
-                                )}
                               </Label>
                               <Input
                                 id="edit-database"
