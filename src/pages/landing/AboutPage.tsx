@@ -58,7 +58,7 @@ const AboutPage = () => {
                 </h2>
                 <p className="text-lg text-gray-600 leading-relaxed">
                   To empower Nigerian businesses with cutting-edge e-invoicing
-                  solutions that ensure 100% FIRS compliance while reducing
+                  solutions that ensure 100% NRS compliance while reducing
                   operational complexity and costs. We believe that technology
                   should simplify, not complicate business processes.
                 </p>
@@ -113,7 +113,7 @@ const AboutPage = () => {
                         Compliance
                       </h4>
                       <p className="text-gray-600 text-sm">
-                        100% adherence to FIRS regulations and requirements
+                        100% adherence to NRS regulations and requirements
                       </p>
                     </div>
                   </div>
@@ -240,7 +240,7 @@ const AboutPage = () => {
               </CardHeader>
               <CardContent>
                 <p className="text-gray-600 text-sm">
-                  Former FIRS official with deep expertise in Nigerian tax
+                  Former tax official with deep expertise in Nigerian tax
                   regulations and e-invoicing requirements.
                 </p>
               </CardContent>

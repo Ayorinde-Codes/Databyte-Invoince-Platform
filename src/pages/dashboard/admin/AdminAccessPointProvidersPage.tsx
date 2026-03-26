@@ -111,7 +111,7 @@ export const AdminAccessPointProvidersPage = () => {
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <div>
                 <CardTitle>Providers</CardTitle>
-                <CardDescription>FIRS Access Point Providers available to companies.</CardDescription>
+                <CardDescription>NRS Access Point Providers available to companies.</CardDescription>
               </div>
             </CardHeader>
             <CardContent>

@@ -44,13 +44,13 @@ export const FeaturesPage = () => {
     },
     {
       icon: Shield,
-      title: 'FIRS Compliance',
+      title: 'NRS Compliance',
       description:
         'Automated e-invoicing compliance with Nigerian tax authority',
       details: [
         'Automatic UBL generation',
         'Digital signature integration',
-        'Real-time FIRS validation',
+        'Real-time NRS validation',
         'IRN generation',
         'QR code creation',
         'Compliance tracking',
@@ -170,7 +170,7 @@ export const FeaturesPage = () => {
           </h1>
 
           <p className="text-xl text-muted-foreground max-w-3xl mx-auto mb-8 leading-relaxed">
-            From ERP integration to FIRS compliance, our platform provides all
+            From ERP integration to NRS compliance, our platform provides all
             the tools you need to streamline your invoice management process and
             ensure regulatory compliance.
           </p>
@@ -242,7 +242,7 @@ export const FeaturesPage = () => {
                   <div>
                     <h4 className="font-semibold">Automated Processing</h4>
                     <p className="text-muted-foreground">
-                      Automatic invoice processing and FIRS submission
+                      Automatic invoice processing and NRS submission
                     </p>
                   </div>
                 </div>
@@ -273,9 +273,9 @@ export const FeaturesPage = () => {
                 <div className="flex items-start space-x-3">
                   <Shield className="w-5 h-5 text-primary mt-1" />
                   <div>
-                    <h4 className="font-semibold">FIRS Certified</h4>
+                    <h4 className="font-semibold">NRS Certified</h4>
                     <p className="text-muted-foreground">
-                      Officially certified for FIRS e-invoicing compliance
+                      Officially certified for NRS e-invoicing compliance
                     </p>
                   </div>
                 </div>
@@ -335,7 +335,7 @@ export const FeaturesPage = () => {
                 <span className="text-xl font-bold">Databyte</span>
               </Link>
               <p className="text-muted-foreground">
-                The leading FIRS e-invoicing compliance platform for Nigerian
+                The leading NRS e-invoicing compliance platform for Nigerian
                 businesses.
               </p>
             </div>

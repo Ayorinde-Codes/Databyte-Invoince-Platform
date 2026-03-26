@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   Users,
   Plus,
@@ -144,6 +145,7 @@ const extractPaginatedParties = (value: unknown): PaginatedParties => {
 };
 
 export const PartiesPage = () => {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState<PartyType>('customer');
   const [searchTerm, setSearchTerm] = useState('');
   const [sourceSystemFilter, setSourceSystemFilter] = useState('all');
@@ -176,6 +178,40 @@ export const PartiesPage = () => {
     isLoading,
     refetch,
   } = useParties(queryParams);
+
+  /** Deep link from invoices (e.g. NRS validation): /dashboard/parties?editParty=123&partyType=customer */
+  useEffect(() => {
+    const raw = searchParams.get('editParty');
+    if (raw == null || raw === '') {
+      return;
+    }
+    const id = parseInt(raw, 10);
+    if (Number.isNaN(id) || id < 1) {
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          next.delete('editParty');
+          next.delete('partyType');
+          return next;
+        },
+        { replace: true }
+      );
+      return;
+    }
+    const typeParam = searchParams.get('partyType');
+    setActiveTab(typeParam === 'vendor' ? 'vendor' : 'customer');
+    setEditingPartyId(id);
+    setShowEditDialog(true);
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.delete('editParty');
+        next.delete('partyType');
+        return next;
+      },
+      { replace: true }
+    );
+  }, [searchParams, setSearchParams]);
 
   const deleteParty = useDeleteParty();
   const updateParty = useUpdateParty();

@@ -29,10 +29,10 @@ export const useCreateFIRSConfiguration = () => {
       apiService.createFIRSConfiguration(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['firs', 'configuration'] });
-      toast.success('FIRS configuration created successfully');
+      toast.success('NRS configuration created successfully');
     },
     onError: (error: unknown) => {
-      toast.error(extractErrorMessage(error, 'Failed to create FIRS configuration'));
+      toast.error(extractErrorMessage(error, 'Failed to create NRS configuration'));
     },
   });
 };
@@ -51,10 +51,10 @@ export const useUpdateFIRSConfiguration = () => {
     }) => apiService.updateFIRSConfiguration(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['firs', 'configuration'] });
-      toast.success('FIRS configuration updated successfully');
+      toast.success('NRS configuration updated successfully');
     },
     onError: (error: unknown) => {
-      toast.error(extractErrorMessage(error, 'Failed to update FIRS configuration'));
+      toast.error(extractErrorMessage(error, 'Failed to update NRS configuration'));
     },
   });
 };
@@ -67,10 +67,10 @@ export const useDeleteFIRSConfiguration = () => {
     mutationFn: (id: number) => apiService.deleteFIRSConfiguration(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['firs', 'configuration'] });
-      toast.success('FIRS configuration deleted successfully');
+      toast.success('NRS configuration deleted successfully');
     },
     onError: (error: unknown) => {
-      toast.error(extractErrorMessage(error, 'Failed to delete FIRS configuration'));
+      toast.error(extractErrorMessage(error, 'Failed to delete NRS configuration'));
     },
   });
 };
@@ -80,10 +80,10 @@ export const useTestFIRSConnection = () => {
   return useMutation({
     mutationFn: (id: number) => apiService.testFIRSConnection(id),
     onSuccess: () => {
-      toast.success('FIRS connection test successful');
+      toast.success('NRS connection test successful');
     },
     onError: (error: unknown) => {
-      toast.error(extractErrorMessage(error, 'FIRS connection test failed'));
+      toast.error(extractErrorMessage(error, 'NRS connection test failed'));
     },
   });
 };

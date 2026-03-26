@@ -39,7 +39,7 @@ const APIDocsPage = () => {
             </h1>
             <p className="text-xl text-gray-600 leading-relaxed max-w-3xl mx-auto">
               Comprehensive guides and API references for integrating your ERP
-              systems with FIRS e-invoicing platform. Get started in minutes
+              systems with NRS e-invoicing platform. Get started in minutes
               with our detailed documentation.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
@@ -127,7 +127,7 @@ const APIDocsPage = () => {
                 </CardHeader>
                 <CardContent>
                   <p className="text-gray-600 text-sm mb-4">
-                    Send your first invoice and receive confirmation from FIRS
+                    Send your first invoice and receive confirmation from NRS
                     within seconds.
                   </p>
                   <Button variant="outline" size="sm">
@@ -166,7 +166,7 @@ const APIDocsPage = () => {
                     </Badge>
                   </div>
                   <CardDescription>
-                    Complete guide to integrating Sage 300 with FIRS
+                    Complete guide to integrating Sage 300 with NRS
                     e-invoicing.
                   </CardDescription>
                 </CardHeader>
@@ -272,10 +272,10 @@ const APIDocsPage = () => {
                         </Button>
                       </div>
                       <h5 className="font-semibold text-gray-900 text-sm mb-2">
-                        Fetch FIRS Invoice
+                        Fetch NRS Invoice
                       </h5>
                       <p className="text-gray-600 text-xs">
-                        Prepare a specific invoice type (AP/AR) for FIRS
+                        Prepare a specific invoice type (AP/AR) for NRS
                         submission.
                       </p>
                     </div>
@@ -296,7 +296,7 @@ const APIDocsPage = () => {
                         Save Submitted Invoice
                       </h5>
                       <p className="text-gray-600 text-xs">
-                        Save an AP/AR invoice after successful FIRS submission.
+                        Save an AP/AR invoice after successful NRS submission.
                         invoiceId format: BatchNumber-EntryNumber
                       </p>
                     </div>
@@ -422,7 +422,7 @@ const APIDocsPage = () => {
                         <CheckCircle className="w-5 h-5 text-green-500 mt-0.5" />
                         <div>
                           <h5 className="font-semibold text-gray-900 text-sm">
-                            FIRS Compliance
+                            NRS Compliance
                           </h5>
                           <p className="text-gray-600 text-xs">
                             100% compliant invoice generation

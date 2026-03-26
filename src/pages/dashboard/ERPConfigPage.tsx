@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   Database,
   Plus,
@@ -221,6 +222,7 @@ type SyncProgressData = {
 
 // Sub-component to display sync progress for an ERP setting
 const ERPSyncProgressDisplay = ({ erpId }: { erpId: number }) => {
+  const queryClient = useQueryClient();
   const { data: progressResponse } = useERPSyncProgress(erpId);
   const progressData = progressResponse?.data as SyncProgressData | undefined;
   const [lastStatus, setLastStatus] = useState<string | null>(null);
@@ -231,13 +233,22 @@ const ERPSyncProgressDisplay = ({ erpId }: { erpId: number }) => {
       if (lastStatus === 'processing' || lastStatus === 'queued') {
         if (progressData.status === 'completed') {
           toast.success('ERP sync completed successfully!');
+
+          // The sync runs async in background; refresh cached UI data now that it finished.
+          queryClient.invalidateQueries({ queryKey: ['erp', 'settings'] });
+          queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+          queryClient.invalidateQueries({ queryKey: ['invoices'] });
+          queryClient.invalidateQueries({ queryKey: ['invoices', 'ar'] });
+          queryClient.invalidateQueries({ queryKey: ['invoices', 'ap'] });
+          queryClient.invalidateQueries({ queryKey: ['parties'] });
+          queryClient.invalidateQueries({ queryKey: ['products'] });
         } else if (progressData.status === 'failed') {
           toast.error(progressData.error_message || 'ERP sync failed');
         }
       }
       setLastStatus(progressData.status);
     }
-  }, [progressData?.status, lastStatus, progressData?.error_message]);
+  }, [progressData?.status, lastStatus, progressData?.error_message, queryClient]);
 
   // Only show if there's an active sync
   if (
@@ -1887,7 +1898,7 @@ export const ERPConfigPage = () => {
                 <CardTitle>Access Point Providers</CardTitle>
                 <CardDescription>
                   Manage your Access Point Provider credentials (Hoptool, Flick,
-                  etc.) for FIRS integration
+                  etc.) for NRS integration
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -2012,7 +2023,7 @@ export const ERPConfigPage = () => {
                                                 onClick={
                                                   handleResyncFirsProfile
                                                 }
-                                                title="Resync FIRS Profile"
+                                                title="Resync NRS Profile"
                                                 disabled={
                                                   resyncFirsProfile.isPending
                                                 }
@@ -2085,10 +2096,9 @@ export const ERPConfigPage = () => {
               <CardHeader>
                 <div className="flex justify-between items-center">
                   <div>
-                    <CardTitle>FIRS Configuration</CardTitle>
+                    <CardTitle>NRS Configuration</CardTitle>
                     <CardDescription>
-                      Configure your FIRS (Federal Inland Revenue Service)
-                      e-invoicing settings
+                      Configure your NRS e-invoicing settings
                     </CardDescription>
                   </div>
                   {canManageERP() && (
@@ -2278,8 +2288,8 @@ export const ERPConfigPage = () => {
                 ) : (
                   <Alert>
                     <AlertDescription>
-                      No FIRS configuration found. Click "Add Configuration" to
-                      set up your FIRS integration.
+                      No NRS configuration found. Click "Add Configuration" to
+                      set up your NRS integration.
                     </AlertDescription>
                   </Alert>
                 )}
@@ -2329,7 +2339,7 @@ export const ERPConfigPage = () => {
           )}
         </Tabs>
 
-        {/* FIRS Configuration Dialog */}
+        {/* NRS Configuration Dialog */}
         <Dialog
           open={showFIRSConfigDialog}
           onOpenChange={setShowFIRSConfigDialog}
@@ -2338,11 +2348,11 @@ export const ERPConfigPage = () => {
             <DialogHeader>
               <DialogTitle>
                 {firsConfiguration
-                  ? 'Edit FIRS Configuration'
-                  : 'Add FIRS Configuration'}
+                  ? 'Edit NRS Configuration'
+                  : 'Add NRS Configuration'}
               </DialogTitle>
               <DialogDescription>
-                Configure your FIRS e-invoicing integration settings
+                Configure your NRS e-invoicing integration settings
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-4">
@@ -2357,7 +2367,7 @@ export const ERPConfigPage = () => {
                       business_id: e.target.value,
                     })
                   }
-                  placeholder="Enter your FIRS Business ID"
+                  placeholder="Enter your NRS Business ID"
                 />
               </div>
 
@@ -2372,7 +2382,7 @@ export const ERPConfigPage = () => {
                       service_id: e.target.value,
                     })
                   }
-                  placeholder="Enter your FIRS Service ID (Entity ID)"
+                  placeholder="Enter your NRS Service ID (Entity ID)"
                 />
               </div>
 

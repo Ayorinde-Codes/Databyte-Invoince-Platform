@@ -228,7 +228,7 @@ export const RegisterPage = () => {
               Join thousands of businesses streamlining their invoice management
             </h1>
             <p className="text-xl text-primary-foreground/80 leading-relaxed">
-              Get started with our comprehensive FIRS e-invoicing compliance platform. 
+              Get started with our comprehensive NRS e-invoicing compliance platform. 
               Integrate with your ERP, automate compliance, and focus on growing your business.
             </p>
           </div>

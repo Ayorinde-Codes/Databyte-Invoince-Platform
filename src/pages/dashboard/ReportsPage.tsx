@@ -567,7 +567,7 @@ export const ReportsPage = () => {
       description: 'Average time to process (not tracked)',
     },
     {
-      title: 'FIRS Approval Rate',
+      title: 'NRS Approval Rate',
       value: `${overviewMetrics.complianceRate.toFixed(1)}%`,
       change: overviewMetrics.complianceGrowth,
       changeType: 'increase' as const,
@@ -685,7 +685,7 @@ export const ReportsPage = () => {
             <TabsTrigger value="overview" className="flex-shrink-0">Overview</TabsTrigger>
             <TabsTrigger value="revenue" className="flex-shrink-0">Revenue</TabsTrigger>
             <TabsTrigger value="invoices" className="flex-shrink-0">Invoices</TabsTrigger>
-            <TabsTrigger value="compliance" className="flex-shrink-0">FIRS Compliance</TabsTrigger>
+            <TabsTrigger value="compliance" className="flex-shrink-0">NRS Compliance</TabsTrigger>
             <TabsTrigger value="customers" className="flex-shrink-0">Customers</TabsTrigger>
           </TabsList>
 
@@ -750,7 +750,7 @@ export const ReportsPage = () => {
               />
 
               <MetricsCard
-                title="FIRS Compliance"
+                title="NRS Compliance"
                 value={overviewMetrics.complianceRate}
                 change={overviewMetrics.complianceGrowth}
                 changeType={overviewMetrics.complianceGrowth != null ? (overviewMetrics.complianceGrowth >= 0 ? 'increase' : 'decrease') : 'neutral'}
@@ -1000,13 +1000,13 @@ export const ReportsPage = () => {
             </div>
           </TabsContent>
 
-          {/* FIRS Compliance Tab */}
+          {/* NRS Compliance Tab */}
           <TabsContent value="compliance" className="space-y-6">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <InvoiceChart
                 type="pie"
-                title="FIRS Compliance Status"
-                description="Current FIRS submission status"
+                title="NRS Compliance Status"
+                description="Current NRS submission status"
                 data={firsComplianceData}
               />
 
@@ -1048,14 +1048,14 @@ export const ReportsPage = () => {
               <CardHeader>
                 <CardTitle>Compliance Timeline</CardTitle>
                 <CardDescription>
-                  FIRS approval rate by day of week (from invoice data)
+                  NRS approval rate by day of week (from invoice data)
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 <InvoiceChart
                   type="line"
                   title="Approval Rate by Day"
-                  description="FIRS approval rate by day of week"
+                  description="NRS approval rate by day of week"
                   data={dailyComplianceData.length > 0 ? dailyComplianceData : [{ name: '—', value: 0 }]}
                   valueFormat="percent"
                 />

@@ -26,14 +26,14 @@ export const PricingPage = () => {
     {
       name: 'Starter',
       description:
-        'Perfect for small businesses getting started with FIRS compliance',
+        'Perfect for small businesses getting started with NRS compliance',
       price: '₦25,000',
       period: 'per month',
       popular: false,
       features: [
         'Up to 500 invoices/month',
         '1 ERP integration',
-        'Basic FIRS compliance',
+        'Basic NRS compliance',
         'Email support',
         'Standard reporting',
         '5 users included',
@@ -53,7 +53,7 @@ export const PricingPage = () => {
       features: [
         'Up to 2,500 invoices/month',
         '3 ERP integrations',
-        'Advanced FIRS compliance',
+        'Advanced NRS compliance',
         'Priority email & chat support',
         'Advanced reporting & analytics',
         '15 users included',
@@ -72,7 +72,7 @@ export const PricingPage = () => {
       features: [
         'Unlimited invoices',
         'Unlimited ERP integrations',
-        'Full FIRS compliance suite',
+        'Full NRS compliance suite',
         '24/7 dedicated support',
         'Custom reporting & analytics',
         'Unlimited users',
@@ -170,7 +170,7 @@ export const PricingPage = () => {
           </h1>
 
           <p className="text-xl text-muted-foreground max-w-3xl mx-auto mb-8 leading-relaxed">
-            Choose the perfect plan for your business. All plans include FIRS
+            Choose the perfect plan for your business. All plans include NRS
             compliance, ERP integration, and our core features. No hidden fees,
             no surprises.
           </p>
@@ -360,7 +360,7 @@ export const PricingPage = () => {
             Ready to Get Started?
           </h2>
           <p className="text-xl text-muted-foreground mb-8">
-            Join hundreds of companies already using Databyte for their FIRS
+            Join hundreds of companies already using Databyte for their NRS
             compliance needs.
           </p>
 
@@ -394,7 +394,7 @@ export const PricingPage = () => {
                 <span className="text-xl font-bold">Databyte</span>
               </Link>
               <p className="text-muted-foreground">
-                The leading FIRS e-invoicing compliance platform for Nigerian
+                The leading NRS e-invoicing compliance platform for Nigerian
                 businesses.
               </p>
             </div>

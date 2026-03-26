@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import {
@@ -29,6 +30,7 @@ import {
   ArrowUpDown,
   ArrowUp,
   ArrowDown,
+  ExternalLink,
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -116,6 +118,7 @@ import { usePermissions } from '@/hooks/usePermissions';
 import { apiService, ApiError } from '@/services/api';
 import { toast } from 'sonner';
 import { extractErrorMessage } from '@/utils/error';
+import { mergeInvoiceIntoListCaches } from '@/utils/mergeInvoiceInListCaches';
 import { useHsnCodes, useInvoiceTypes } from '@/hooks/useFIRS';
 import {
   useUpdateARInvoiceFirsFields,
@@ -227,7 +230,7 @@ export const InvoicesPage = () => {
   const [dateTo, setDateTo] = useState<Date | undefined>(undefined);
   const [batchNumber, setBatchNumber] = useState('');
   const [partyFilter, setPartyFilter] = useState<number | null>(null);
-  const [sortBy, setSortBy] = useState<string>('created_at');
+  const [sortBy, setSortBy] = useState<string>('invoice_date');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
@@ -349,6 +352,18 @@ export const InvoicesPage = () => {
   const canDelete = hasPermission('invoices.delete');
   const canValidateFIRS = hasPermission('firs.validate');
   const canSignFIRS = hasPermission('firs.submit');
+  const canViewParties = hasPermission('parties.view');
+
+  const validationPartyLinkId = useMemo(() => {
+    if (!validationResult) {
+      return null;
+    }
+    if (typeof validationResult.party_id === 'number') {
+      return validationResult.party_id;
+    }
+    const fromFix = validationResult.quick_fixes?.find((f) => typeof f.party_id === 'number');
+    return fromFix?.party_id ?? null;
+  }, [validationResult]);
 
   const handleSort = useCallback((column: string) => {
     setSortBy((prev) => {
@@ -695,32 +710,32 @@ export const InvoicesPage = () => {
       { label: string; className: string; icon: typeof CheckCircle }
     > = {
       approved: {
-        label: 'FIRS Approved',
+        label: 'NRS Approved',
         className: 'bg-green-100 text-green-800 border-green-200',
         icon: CheckCircle,
       },
       validated: {
-        label: 'FIRS Validated',
+        label: 'NRS Validated',
         className: 'bg-blue-100 text-blue-800 border-blue-200',
         icon: Shield,
       },
       pending: {
-        label: 'FIRS Pending',
+        label: 'NRS Pending',
         className: 'bg-yellow-100 text-yellow-800 border-yellow-200',
         icon: Clock,
       },
       signed: {
-        label: 'FIRS Signed',
+        label: 'NRS Signed',
         className: 'bg-purple-100 text-purple-800 border-purple-200',
         icon: Send,
       },
       cancelled: {
-        label: 'FIRS Cancelled',
+        label: 'NRS Cancelled',
         className: 'bg-gray-100 text-gray-800 border-gray-200',
         icon: XCircle,
       },
       rejected: {
-        label: 'FIRS Rejected',
+        label: 'NRS Rejected',
         className: 'bg-red-100 text-red-800 border-red-200',
         icon: XCircle,
       },
@@ -773,13 +788,31 @@ export const InvoicesPage = () => {
 
       if (response.status) {
         toast.success('Invoice validated successfully');
-        if (activeTab === 'ar') {
-          queryClient.invalidateQueries({ queryKey: ['invoices', 'ar'] });
-          await refetchAR();
-        } else {
-          queryClient.invalidateQueries({ queryKey: ['invoices', 'ap'] });
-          await refetchAP();
+        const tab = activeTab;
+        const payload =
+          response.data && typeof response.data === 'object'
+            ? (response.data as Record<string, unknown>)
+            : {};
+        const listPatch: Record<string, unknown> = { firs_status: 'validated' };
+        if (typeof payload.irn === 'string') {
+          listPatch.firs_irn = payload.irn;
         }
+        if (typeof payload.qr_code === 'string') {
+          listPatch.firs_qr_code = payload.qr_code;
+        }
+        mergeInvoiceIntoListCaches(queryClient, tab, invoice.id, listPatch);
+        setSelectedInvoice((prev) => {
+          if (prev?.id !== invoice.id) {
+            return prev;
+          }
+          return {
+            ...prev,
+            firs_status: 'validated',
+            ...(typeof payload.irn === 'string' ? { firs_irn: payload.irn } : {}),
+            ...(typeof payload.qr_code === 'string' ? { firs_qr_code: payload.qr_code } : {}),
+          };
+        });
+        queryClient.invalidateQueries({ queryKey: ['invoices', tab] });
         queryClient.invalidateQueries({ queryKey: ['dashboard'] });
       } else {
         const validationData = 
@@ -882,13 +915,31 @@ export const InvoicesPage = () => {
 
       if (response.status) {
         toast.success('Invoice signed successfully');
-        if (activeTab === 'ar') {
-          queryClient.invalidateQueries({ queryKey: ['invoices', 'ar'] });
-          await refetchAR();
-        } else {
-          queryClient.invalidateQueries({ queryKey: ['invoices', 'ap'] });
-          await refetchAP();
+        const tab = activeTab;
+        const payload =
+          response.data && typeof response.data === 'object'
+            ? (response.data as Record<string, unknown>)
+            : {};
+        const listPatch: Record<string, unknown> = { firs_status: 'signed' };
+        if (typeof payload.irn === 'string') {
+          listPatch.firs_irn = payload.irn;
         }
+        if (typeof payload.qr_code === 'string') {
+          listPatch.firs_qr_code = payload.qr_code;
+        }
+        mergeInvoiceIntoListCaches(queryClient, tab, invoice.id, listPatch);
+        setSelectedInvoice((prev) => {
+          if (prev?.id !== invoice.id) {
+            return prev;
+          }
+          return {
+            ...prev,
+            firs_status: 'signed',
+            ...(typeof payload.irn === 'string' ? { firs_irn: payload.irn } : {}),
+            ...(typeof payload.qr_code === 'string' ? { firs_qr_code: payload.qr_code } : {}),
+          };
+        });
+        queryClient.invalidateQueries({ queryKey: ['invoices', tab] });
         queryClient.invalidateQueries({ queryKey: ['dashboard'] });
       } else {
         toast.error(response.message || 'Failed to sign invoice');
@@ -913,13 +964,8 @@ export const InvoicesPage = () => {
 
       if (response.status) {
         toast.success(`Payment status updated to ${paymentStatus} successfully`);
-        if (activeTab === 'ar') {
-          queryClient.invalidateQueries({ queryKey: ['invoices', 'ar'] });
-          await refetchAR();
-        } else {
-          queryClient.invalidateQueries({ queryKey: ['invoices', 'ap'] });
-          await refetchAP();
-        }
+        const tab = activeTab;
+        queryClient.invalidateQueries({ queryKey: ['invoices', tab] });
         queryClient.invalidateQueries({ queryKey: ['dashboard'] });
       } else {
         toast.error(response.message || `Failed to update payment status to ${paymentStatus}`);
@@ -1130,7 +1176,7 @@ export const InvoicesPage = () => {
     }
 
     if (!firsNote.trim()) {
-      toast.error('FIRS note is required');
+      toast.error('NRS note is required');
       return;
     }
 
@@ -1177,7 +1223,7 @@ export const InvoicesPage = () => {
 
       handleCloseFirsFieldsDialog();
     } catch (error: unknown) {
-      toast.error(extractErrorMessage(error, 'Failed to update FIRS fields'));
+      toast.error(extractErrorMessage(error, 'Failed to update NRS fields'));
     } finally {
       setIsUpdatingFirsFields(false);
     }
@@ -1215,7 +1261,7 @@ export const InvoicesPage = () => {
           <div>
             <h1 className="text-3xl font-bold tracking-tight">Invoices</h1>
             <p className="text-muted-foreground">
-              Manage your invoices and track FIRS compliance status
+              Manage your invoices and track NRS compliance status
             </p>
           </div>
 
@@ -1593,8 +1639,8 @@ export const InvoicesPage = () => {
                     />
                     <SortableHead column="total_amount" label="Amount" />
                     <SortableHead column="status" label="Status" />
-                    <SortableHead column="firs_status" label="FIRS Status" />
-                    <SortableHead column="firs_invoice_type_code" label="FIRS Type" />
+                    <SortableHead column="firs_status" label="NRS Status" />
+                    <SortableHead column="firs_invoice_type_code" label="NRS Type" />
                     <SortableHead column="invoice_date" label="Date" />
                     <SortableHead column="due_date" label="Due Date" />
                     <TableHead className="text-right">Actions</TableHead>
@@ -1769,7 +1815,7 @@ export const InvoicesPage = () => {
                               }
                             >
                               <Edit className="mr-2 h-4 w-4" />
-                              Edit FIRS Fields
+                              Edit NRS Fields
                             </DropdownMenuItem>
                             <DropdownMenuItem
                               onClick={() => handleValidateFIRS(invoice)}
@@ -1782,7 +1828,7 @@ export const InvoicesPage = () => {
                               }
                                           >
                                             <Shield className="mr-2 h-4 w-4" />
-                              {isValidating ? 'Validating...' : 'Validate FIRS'}
+                              {isValidating ? 'Validating...' : 'Validate NRS'}
                               </DropdownMenuItem>
                                           <DropdownMenuItem
                               onClick={() => handleSignInvoice(invoice)}
@@ -2215,14 +2261,14 @@ export const InvoicesPage = () => {
                 </div>
                 <div>
                   <p className="text-sm font-medium text-muted-foreground">
-                    FIRS Status
+                    NRS Status
                   </p>
                   {getFirsStatusBadge(selectedInvoice.firs_status)}
                 </div>
                 {selectedInvoice.firs_irn && (
                   <div>
                     <p className="text-sm font-medium text-muted-foreground">
-                      FIRS IRN
+                      NRS IRN
                     </p>
                     <p className="text-sm font-mono">
                       {selectedInvoice.firs_irn}
@@ -2231,7 +2277,7 @@ export const InvoicesPage = () => {
                 )}
                 <div>
                   <p className="text-sm font-medium text-muted-foreground">
-                    FIRS Invoice Type
+                    NRS Invoice Type
                   </p>
                   {selectedInvoice.firs_invoice_type_code ? (
                     <p className="text-sm">
@@ -2248,7 +2294,7 @@ export const InvoicesPage = () => {
                 </div>
                 <div>
                   <p className="text-sm font-medium text-muted-foreground">
-                    FIRS Note
+                    NRS Note
                   </p>
                   <p className="text-sm">
                     {selectedInvoice.firs_note || (
@@ -2469,7 +2515,7 @@ export const InvoicesPage = () => {
         <DialogContent className="max-w-md bg-transparent border-none shadow-none">
           <div className="flex flex-col items-center justify-center bg-white/95 backdrop-blur-sm rounded-lg p-6 border border-gray-200">
             <DialogHeader className="w-full">
-              <DialogTitle className="text-center mb-4">FIRS QR Code</DialogTitle>
+              <DialogTitle className="text-center mb-4">NRS QR Code</DialogTitle>
               <DialogDescription className="text-center">
                 Scan this QR code to verify the invoice
               </DialogDescription>
@@ -2478,7 +2524,7 @@ export const InvoicesPage = () => {
               <div className="flex items-center justify-center p-4 bg-white rounded-lg shadow-lg">
                 <img
                   src={selectedQRCode.startsWith('data:') ? selectedQRCode : `data:image/png;base64,${selectedQRCode}`}
-                  alt="FIRS QR Code"
+                  alt="NRS QR Code"
                   className="w-64 h-64 object-contain"
                   onError={(e) => {
                     if (!selectedQRCode.startsWith('data:')) {
@@ -2505,7 +2551,7 @@ export const InvoicesPage = () => {
       <Dialog open={showValidationDialog} onOpenChange={setShowValidationDialog}>
         <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto z-50">
           <DialogHeader>
-            <DialogTitle>FIRS Validation Results</DialogTitle>
+            <DialogTitle>NRS Validation Results</DialogTitle>
             <DialogDescription>
               {validationResult?.message || 'Invoice validation details'}
             </DialogDescription>
@@ -2643,7 +2689,23 @@ export const InvoicesPage = () => {
                 )}
             </div>
           )}
-          <DialogFooter>
+          <DialogFooter className="flex-col sm:flex-row gap-2 sm:justify-end">
+            {validationResult && validationPartyLinkId != null && canViewParties && (
+              <Button variant="secondary" className="w-full sm:w-auto" asChild>
+                <Link
+                  to={`/dashboard/parties?editParty=${validationPartyLinkId}&partyType=${
+                    validationResult.invoice_type === 'ap' || activeTab === 'ap' ? 'vendor' : 'customer'
+                  }`}
+                  onClick={() => {
+                    setShowValidationDialog(false);
+                    setValidationResult(null);
+                  }}
+                >
+                  <ExternalLink className="w-4 h-4 mr-2" />
+                  Open party to edit (TIN, contact…)
+                </Link>
+              </Button>
+            )}
             <Button
               variant="outline"
               onClick={() => {
@@ -2745,7 +2807,7 @@ export const InvoicesPage = () => {
                   )}
                   {quickFixDialog.fix.field === 'tin' && (
                     <p className="text-xs text-muted-foreground">
-                      FIRS requires TIN in the format 12345678-1234 (8 digits, dash, 4 digits)
+                      NRS requires TIN in the format 12345678-1234 (8 digits, dash, 4 digits)
                     </p>
                   )}
                   {quickFixDialog.fix.field === 'telephone' && (
@@ -2775,13 +2837,13 @@ export const InvoicesPage = () => {
         </DialogContent>
       </Dialog>
 
-      {/* FIRS Fields Dialog */}
+      {/* NRS Fields Dialog */}
       <Dialog open={showFirsFieldsDialog} onOpenChange={setShowFirsFieldsDialog}>
         <DialogContent className="max-w-2xl z-50">
           <DialogHeader>
-            <DialogTitle>Edit FIRS Fields</DialogTitle>
+            <DialogTitle>Edit NRS Fields</DialogTitle>
             <DialogDescription>
-              Configure invoice type, note, and previous invoice reference for FIRS submission
+              Configure invoice type, note, and previous invoice reference for NRS submission
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 mt-4">
@@ -2856,13 +2918,13 @@ export const InvoicesPage = () => {
               </Popover>
             </div>
 
-            {/* FIRS Note */}
+            {/* NRS Note */}
             <div className="space-y-2">
-              <label className="text-sm font-medium">FIRS Note *</label>
+              <label className="text-sm font-medium">NRS Note *</label>
               <Input
                 value={firsNote}
                 onChange={(e) => setFirsNote(e.target.value)}
-                placeholder="Enter FIRS note..."
+                placeholder="Enter NRS note..."
                 disabled={isUpdatingFirsFields}
                 className="w-full"
               />
@@ -2908,7 +2970,7 @@ export const InvoicesPage = () => {
         <DialogContent className="max-w-md bg-transparent border-none shadow-none">
           <div className="flex flex-col items-center justify-center bg-white/95 backdrop-blur-sm rounded-lg p-6 border border-gray-200">
             <DialogHeader className="w-full">
-              <DialogTitle className="text-center mb-4">FIRS QR Code</DialogTitle>
+              <DialogTitle className="text-center mb-4">NRS QR Code</DialogTitle>
               <DialogDescription className="text-center">
                 Scan this QR code to verify the invoice
               </DialogDescription>
@@ -2917,7 +2979,7 @@ export const InvoicesPage = () => {
               <div className="flex items-center justify-center p-4 bg-white rounded-lg shadow-lg">
                 <img
                   src={selectedQRCode.startsWith('data:') ? selectedQRCode : `data:image/png;base64,${selectedQRCode}`}
-                  alt="FIRS QR Code"
+                  alt="NRS QR Code"
                   className="w-64 h-64 object-contain"
                   onError={(e) => {
                     if (!selectedQRCode.startsWith('data:')) {
@@ -2944,7 +3006,7 @@ export const InvoicesPage = () => {
       <Dialog open={showValidationDialog} onOpenChange={setShowValidationDialog}>
         <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto z-50">
           <DialogHeader>
-            <DialogTitle>FIRS Validation Results</DialogTitle>
+            <DialogTitle>NRS Validation Results</DialogTitle>
             <DialogDescription>
               {validationResult?.message || 'Invoice validation details'}
             </DialogDescription>
@@ -3082,7 +3144,23 @@ export const InvoicesPage = () => {
                 )}
             </div>
           )}
-          <DialogFooter>
+          <DialogFooter className="flex-col sm:flex-row gap-2 sm:justify-end">
+            {validationResult && validationPartyLinkId != null && canViewParties && (
+              <Button variant="secondary" className="w-full sm:w-auto" asChild>
+                <Link
+                  to={`/dashboard/parties?editParty=${validationPartyLinkId}&partyType=${
+                    validationResult.invoice_type === 'ap' || activeTab === 'ap' ? 'vendor' : 'customer'
+                  }`}
+                  onClick={() => {
+                    setShowValidationDialog(false);
+                    setValidationResult(null);
+                  }}
+                >
+                  <ExternalLink className="w-4 h-4 mr-2" />
+                  Open party to edit (TIN, contact…)
+                </Link>
+              </Button>
+            )}
             <Button
               variant="outline"
               onClick={() => {
@@ -3184,7 +3262,7 @@ export const InvoicesPage = () => {
                   )}
                   {quickFixDialog.fix.field === 'tin' && (
                     <p className="text-xs text-muted-foreground">
-                      FIRS requires TIN in the format 12345678-1234 (8 digits, dash, 4 digits)
+                      NRS requires TIN in the format 12345678-1234 (8 digits, dash, 4 digits)
                     </p>
                   )}
                   {quickFixDialog.fix.field === 'telephone' && (
@@ -3214,13 +3292,13 @@ export const InvoicesPage = () => {
         </DialogContent>
       </Dialog>
 
-      {/* FIRS Fields Dialog */}
+      {/* NRS Fields Dialog */}
       <Dialog open={showFirsFieldsDialog} onOpenChange={setShowFirsFieldsDialog}>
         <DialogContent className="max-w-2xl z-50">
           <DialogHeader>
-            <DialogTitle>Edit FIRS Fields</DialogTitle>
+            <DialogTitle>Edit NRS Fields</DialogTitle>
             <DialogDescription>
-              Configure invoice type, note, and previous invoice reference for FIRS submission
+              Configure invoice type, note, and previous invoice reference for NRS submission
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 mt-4">
@@ -3295,13 +3373,13 @@ export const InvoicesPage = () => {
               </Popover>
             </div>
 
-            {/* FIRS Note */}
+            {/* NRS Note */}
             <div className="space-y-2">
-              <label className="text-sm font-medium">FIRS Note *</label>
+              <label className="text-sm font-medium">NRS Note *</label>
               <Input
                 value={firsNote}
                 onChange={(e) => setFirsNote(e.target.value)}
-                placeholder="Enter FIRS note..."
+                placeholder="Enter NRS note..."
                 disabled={isUpdatingFirsFields}
                 className="w-full"
               />
@@ -3347,7 +3425,7 @@ export const InvoicesPage = () => {
         <DialogContent className="max-w-md bg-transparent border-none shadow-none">
           <div className="flex flex-col items-center justify-center bg-white/95 backdrop-blur-sm rounded-lg p-6 border border-gray-200">
             <DialogHeader className="w-full">
-              <DialogTitle className="text-center mb-4">FIRS QR Code</DialogTitle>
+              <DialogTitle className="text-center mb-4">NRS QR Code</DialogTitle>
               <DialogDescription className="text-center">
                 Scan this QR code to verify the invoice
               </DialogDescription>
@@ -3356,7 +3434,7 @@ export const InvoicesPage = () => {
               <div className="flex items-center justify-center p-4 bg-white rounded-lg shadow-lg">
                 <img
                   src={selectedQRCode.startsWith('data:') ? selectedQRCode : `data:image/png;base64,${selectedQRCode}`}
-                  alt="FIRS QR Code"
+                  alt="NRS QR Code"
                   className="w-64 h-64 object-contain"
                   onError={(e) => {
                     if (!selectedQRCode.startsWith('data:')) {
@@ -3383,7 +3461,7 @@ export const InvoicesPage = () => {
       <Dialog open={showValidationDialog} onOpenChange={setShowValidationDialog}>
         <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto z-50">
           <DialogHeader>
-            <DialogTitle>FIRS Validation Results</DialogTitle>
+            <DialogTitle>NRS Validation Results</DialogTitle>
             <DialogDescription>
               {validationResult?.message || 'Invoice validation details'}
             </DialogDescription>
@@ -3521,7 +3599,23 @@ export const InvoicesPage = () => {
                 )}
             </div>
           )}
-          <DialogFooter>
+          <DialogFooter className="flex-col sm:flex-row gap-2 sm:justify-end">
+            {validationResult && validationPartyLinkId != null && canViewParties && (
+              <Button variant="secondary" className="w-full sm:w-auto" asChild>
+                <Link
+                  to={`/dashboard/parties?editParty=${validationPartyLinkId}&partyType=${
+                    validationResult.invoice_type === 'ap' || activeTab === 'ap' ? 'vendor' : 'customer'
+                  }`}
+                  onClick={() => {
+                    setShowValidationDialog(false);
+                    setValidationResult(null);
+                  }}
+                >
+                  <ExternalLink className="w-4 h-4 mr-2" />
+                  Open party to edit (TIN, contact…)
+                </Link>
+              </Button>
+            )}
             <Button
               variant="outline"
               onClick={() => {
@@ -3623,7 +3717,7 @@ export const InvoicesPage = () => {
                   )}
                   {quickFixDialog.fix.field === 'tin' && (
                     <p className="text-xs text-muted-foreground">
-                      FIRS requires TIN in the format 12345678-1234 (8 digits, dash, 4 digits)
+                      NRS requires TIN in the format 12345678-1234 (8 digits, dash, 4 digits)
                     </p>
                   )}
                   {quickFixDialog.fix.field === 'telephone' && (
@@ -3653,13 +3747,13 @@ export const InvoicesPage = () => {
         </DialogContent>
       </Dialog>
 
-      {/* FIRS Fields Dialog */}
+      {/* NRS Fields Dialog */}
       <Dialog open={showFirsFieldsDialog} onOpenChange={setShowFirsFieldsDialog}>
         <DialogContent className="max-w-2xl z-50">
           <DialogHeader>
-            <DialogTitle>Edit FIRS Fields</DialogTitle>
+            <DialogTitle>Edit NRS Fields</DialogTitle>
             <DialogDescription>
-              Configure invoice type, note, and previous invoice reference for FIRS submission
+              Configure invoice type, note, and previous invoice reference for NRS submission
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 mt-4">
@@ -3734,13 +3828,13 @@ export const InvoicesPage = () => {
               </Popover>
             </div>
 
-            {/* FIRS Note */}
+            {/* NRS Note */}
             <div className="space-y-2">
-              <label className="text-sm font-medium">FIRS Note *</label>
+              <label className="text-sm font-medium">NRS Note *</label>
               <Input
                 value={firsNote}
                 onChange={(e) => setFirsNote(e.target.value)}
-                placeholder="Enter FIRS note..."
+                placeholder="Enter NRS note..."
                 disabled={isUpdatingFirsFields}
                 className="w-full"
               />
@@ -3786,7 +3880,7 @@ export const InvoicesPage = () => {
         <DialogContent className="max-w-md bg-transparent border-none shadow-none">
           <div className="flex flex-col items-center justify-center bg-white/95 backdrop-blur-sm rounded-lg p-6 border border-gray-200">
             <DialogHeader className="w-full">
-              <DialogTitle className="text-center mb-4">FIRS QR Code</DialogTitle>
+              <DialogTitle className="text-center mb-4">NRS QR Code</DialogTitle>
               <DialogDescription className="text-center">
                 Scan this QR code to verify the invoice
               </DialogDescription>
@@ -3795,7 +3889,7 @@ export const InvoicesPage = () => {
               <div className="flex items-center justify-center p-4 bg-white rounded-lg shadow-lg">
                 <img
                   src={selectedQRCode.startsWith('data:') ? selectedQRCode : `data:image/png;base64,${selectedQRCode}`}
-                  alt="FIRS QR Code"
+                  alt="NRS QR Code"
                   className="w-64 h-64 object-contain"
                   onError={(e) => {
                     if (!selectedQRCode.startsWith('data:')) {
@@ -3822,7 +3916,7 @@ export const InvoicesPage = () => {
       <Dialog open={showValidationDialog} onOpenChange={setShowValidationDialog}>
         <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto z-50">
           <DialogHeader>
-            <DialogTitle>FIRS Validation Results</DialogTitle>
+            <DialogTitle>NRS Validation Results</DialogTitle>
             <DialogDescription>
               {validationResult?.message || 'Invoice validation details'}
             </DialogDescription>
@@ -3960,7 +4054,23 @@ export const InvoicesPage = () => {
                 )}
             </div>
           )}
-          <DialogFooter>
+          <DialogFooter className="flex-col sm:flex-row gap-2 sm:justify-end">
+            {validationResult && validationPartyLinkId != null && canViewParties && (
+              <Button variant="secondary" className="w-full sm:w-auto" asChild>
+                <Link
+                  to={`/dashboard/parties?editParty=${validationPartyLinkId}&partyType=${
+                    validationResult.invoice_type === 'ap' || activeTab === 'ap' ? 'vendor' : 'customer'
+                  }`}
+                  onClick={() => {
+                    setShowValidationDialog(false);
+                    setValidationResult(null);
+                  }}
+                >
+                  <ExternalLink className="w-4 h-4 mr-2" />
+                  Open party to edit (TIN, contact…)
+                </Link>
+              </Button>
+            )}
             <Button
               variant="outline"
               onClick={() => {
@@ -4062,7 +4172,7 @@ export const InvoicesPage = () => {
                   )}
                   {quickFixDialog.fix.field === 'tin' && (
                     <p className="text-xs text-muted-foreground">
-                      FIRS requires TIN in the format 12345678-1234 (8 digits, dash, 4 digits)
+                      NRS requires TIN in the format 12345678-1234 (8 digits, dash, 4 digits)
                     </p>
                   )}
                   {quickFixDialog.fix.field === 'telephone' && (
@@ -4092,13 +4202,13 @@ export const InvoicesPage = () => {
         </DialogContent>
       </Dialog>
 
-      {/* FIRS Fields Dialog */}
+      {/* NRS Fields Dialog */}
       <Dialog open={showFirsFieldsDialog} onOpenChange={setShowFirsFieldsDialog}>
         <DialogContent className="max-w-2xl z-50">
           <DialogHeader>
-            <DialogTitle>Edit FIRS Fields</DialogTitle>
+            <DialogTitle>Edit NRS Fields</DialogTitle>
             <DialogDescription>
-              Configure invoice type, note, and previous invoice reference for FIRS submission
+              Configure invoice type, note, and previous invoice reference for NRS submission
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 mt-4">
@@ -4173,13 +4283,13 @@ export const InvoicesPage = () => {
               </Popover>
             </div>
 
-            {/* FIRS Note */}
+            {/* NRS Note */}
             <div className="space-y-2">
-              <label className="text-sm font-medium">FIRS Note *</label>
+              <label className="text-sm font-medium">NRS Note *</label>
               <Input
                 value={firsNote}
                 onChange={(e) => setFirsNote(e.target.value)}
-                placeholder="Enter FIRS note..."
+                placeholder="Enter NRS note..."
                 disabled={isUpdatingFirsFields}
                 className="w-full"
               />
@@ -4225,7 +4335,7 @@ export const InvoicesPage = () => {
         <DialogContent className="max-w-md bg-transparent border-none shadow-none">
           <div className="flex flex-col items-center justify-center bg-white/95 backdrop-blur-sm rounded-lg p-6 border border-gray-200">
             <DialogHeader className="w-full">
-              <DialogTitle className="text-center mb-4">FIRS QR Code</DialogTitle>
+              <DialogTitle className="text-center mb-4">NRS QR Code</DialogTitle>
               <DialogDescription className="text-center">
                 Scan this QR code to verify the invoice
               </DialogDescription>
@@ -4234,7 +4344,7 @@ export const InvoicesPage = () => {
               <div className="flex items-center justify-center p-4 bg-white rounded-lg shadow-lg">
                 <img
                   src={selectedQRCode.startsWith('data:') ? selectedQRCode : `data:image/png;base64,${selectedQRCode}`}
-                  alt="FIRS QR Code"
+                  alt="NRS QR Code"
                   className="w-64 h-64 object-contain"
                   onError={(e) => {
                     if (!selectedQRCode.startsWith('data:')) {
@@ -4261,7 +4371,7 @@ export const InvoicesPage = () => {
       <Dialog open={showValidationDialog} onOpenChange={setShowValidationDialog}>
         <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto z-50">
           <DialogHeader>
-            <DialogTitle>FIRS Validation Results</DialogTitle>
+            <DialogTitle>NRS Validation Results</DialogTitle>
             <DialogDescription>
               {validationResult?.message || 'Invoice validation details'}
             </DialogDescription>
@@ -4399,7 +4509,23 @@ export const InvoicesPage = () => {
                 )}
             </div>
           )}
-          <DialogFooter>
+          <DialogFooter className="flex-col sm:flex-row gap-2 sm:justify-end">
+            {validationResult && validationPartyLinkId != null && canViewParties && (
+              <Button variant="secondary" className="w-full sm:w-auto" asChild>
+                <Link
+                  to={`/dashboard/parties?editParty=${validationPartyLinkId}&partyType=${
+                    validationResult.invoice_type === 'ap' || activeTab === 'ap' ? 'vendor' : 'customer'
+                  }`}
+                  onClick={() => {
+                    setShowValidationDialog(false);
+                    setValidationResult(null);
+                  }}
+                >
+                  <ExternalLink className="w-4 h-4 mr-2" />
+                  Open party to edit (TIN, contact…)
+                </Link>
+              </Button>
+            )}
             <Button
               variant="outline"
               onClick={() => {
@@ -4501,7 +4627,7 @@ export const InvoicesPage = () => {
                   )}
                   {quickFixDialog.fix.field === 'tin' && (
                     <p className="text-xs text-muted-foreground">
-                      FIRS requires TIN in the format 12345678-1234 (8 digits, dash, 4 digits)
+                      NRS requires TIN in the format 12345678-1234 (8 digits, dash, 4 digits)
                     </p>
                   )}
                   {quickFixDialog.fix.field === 'telephone' && (
@@ -4531,13 +4657,13 @@ export const InvoicesPage = () => {
         </DialogContent>
       </Dialog>
 
-      {/* FIRS Fields Dialog */}
+      {/* NRS Fields Dialog */}
       <Dialog open={showFirsFieldsDialog} onOpenChange={setShowFirsFieldsDialog}>
         <DialogContent className="max-w-2xl z-50">
           <DialogHeader>
-            <DialogTitle>Edit FIRS Fields</DialogTitle>
+            <DialogTitle>Edit NRS Fields</DialogTitle>
             <DialogDescription>
-              Configure invoice type, note, and previous invoice reference for FIRS submission
+              Configure invoice type, note, and previous invoice reference for NRS submission
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 mt-4">
@@ -4612,13 +4738,13 @@ export const InvoicesPage = () => {
               </Popover>
             </div>
 
-            {/* FIRS Note */}
+            {/* NRS Note */}
             <div className="space-y-2">
-              <label className="text-sm font-medium">FIRS Note *</label>
+              <label className="text-sm font-medium">NRS Note *</label>
               <Input
                 value={firsNote}
                 onChange={(e) => setFirsNote(e.target.value)}
-                placeholder="Enter FIRS note..."
+                placeholder="Enter NRS note..."
                 disabled={isUpdatingFirsFields}
                 className="w-full"
               />

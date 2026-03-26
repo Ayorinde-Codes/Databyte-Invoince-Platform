@@ -321,7 +321,7 @@ export const SettingsPage = () => {
     },
     {
       id: '2',
-      name: 'FIRS Status Update',
+      name: 'NRS Status Update',
       url: 'https://api.company.com/webhooks/firs-status',
       events: ['firs.approved', 'firs.rejected'],
       status: 'active',
@@ -1062,9 +1062,9 @@ export const SettingsPage = () => {
 
                   <div className="flex items-center justify-between">
                     <div className="space-y-0.5">
-                      <Label>FIRS Compliance Alerts</Label>
+                      <Label>NRS Compliance Alerts</Label>
                       <p className="text-sm text-muted-foreground">
-                        Alerts for FIRS submission status
+                        Alerts for NRS submission status
                       </p>
                     </div>
                         <Switch

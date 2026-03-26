@@ -204,10 +204,10 @@ export const useUpdateARInvoiceFirsFields = () => {
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['invoices', 'ar', variables.invoiceId] });
       queryClient.invalidateQueries({ queryKey: ['invoices', 'ar'] });
-      toast.success('Invoice FIRS fields updated successfully');
+      toast.success('Invoice NRS fields updated successfully');
     },
     onError: (error: unknown) => {
-      toast.error(extractErrorMessage(error, 'Failed to update FIRS fields'));
+      toast.error(extractErrorMessage(error, 'Failed to update NRS fields'));
     },
   });
 };
@@ -404,10 +404,10 @@ export const useUpdateAPInvoiceFirsFields = () => {
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['invoices', 'ap', variables.invoiceId] });
       queryClient.invalidateQueries({ queryKey: ['invoices', 'ap'] });
-      toast.success('Invoice FIRS fields updated successfully');
+      toast.success('Invoice NRS fields updated successfully');
     },
     onError: (error: unknown) => {
-      toast.error(extractErrorMessage(error, 'Failed to update FIRS fields'));
+      toast.error(extractErrorMessage(error, 'Failed to update NRS fields'));
     },
   });
 };
