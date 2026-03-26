@@ -48,7 +48,7 @@ const ContactPage = () => {
             </h1>
             <p className="text-xl text-gray-200 leading-relaxed max-w-3xl mx-auto">
               Ready to streamline your e-invoicing process? Our team of experts
-              is here to help you get started with FIRS-compliant invoicing
+              is here to help you get started with NRS-compliant invoicing
               solutions tailored to your business needs.
             </p>
           </div>

@@ -43,7 +43,7 @@ const Index = () => {
       />
 
       {/* Navigation */}
-      <nav className="relative z-40 bg-white border-b border-gray-100 sticky top-0">
+      <nav className="z-40 bg-white border-b border-gray-100 sticky top-0">
         <div className="container mx-auto px-6">
           <div className="flex justify-between items-center h-20">
             {/* Logo */}
@@ -169,7 +169,7 @@ const Index = () => {
             <div className="space-y-8">
               <div className="space-y-6">
                 <Badge className="bg-blue-100 text-blue-800 px-4 py-2 text-sm font-medium">
-                  FIRS COMPLIANCE SERVICES
+                  NRS COMPLIANCE SERVICES
                 </Badge>
                 <h1 className="text-5xl lg:text-6xl font-bold text-gray-900 leading-tight">
                   Professional E-invoicing
@@ -178,7 +178,7 @@ const Index = () => {
                   </span>
                 </h1>
                 <p className="text-xl text-gray-600 leading-relaxed max-w-lg">
-                  Complete guide to integrating your ERP systems with FIRS
+                  Complete guide to integrating your ERP systems with NRS
                   e-invoicing. Streamline your business operations with our
                   comprehensive API solutions.
                 </p>
@@ -280,7 +280,7 @@ const Index = () => {
               </h2>
               <p className="text-xl text-gray-600 leading-relaxed max-w-3xl mx-auto">
                 We are Nigeria's leading e-invoicing platform, providing
-                comprehensive FIRS compliance solutions for businesses of all
+                comprehensive NRS compliance solutions for businesses of all
                 sizes. Our platform seamlessly integrates with major ERP systems
                 to streamline your invoicing and tax compliance processes.
               </p>
@@ -302,7 +302,7 @@ const Index = () => {
                   <CheckCircle className="w-8 h-8 text-green-600" />
                 </div>
                 <h3 className="text-xl font-semibold text-gray-900">
-                  FIRS Compliance
+                  NRS Compliance
                 </h3>
                 <p className="text-gray-600">
                   100% compliant with Nigerian tax regulations and requirements

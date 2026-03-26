@@ -101,37 +101,37 @@ export const RecentInvoices: React.FC<RecentInvoicesProps> = ({
 
     const statusConfig = {
       approved: {
-        label: 'FIRS Approved',
+        label: 'NRS Approved',
         className: 'bg-green-100 text-green-800 border-green-200',
         icon: CheckCircle,
       },
       validated: {
-        label: 'FIRS Validated',
+        label: 'NRS Validated',
         className: 'bg-blue-100 text-blue-800 border-blue-200',
         icon: Shield,
       },
       signed: {
-        label: 'FIRS Signed',
+        label: 'NRS Signed',
         className: 'bg-purple-100 text-purple-800 border-purple-200',
         icon: Send,
       },
       cancelled: {
-        label: 'FIRS Cancelled',
+        label: 'NRS Cancelled',
         className: 'bg-gray-100 text-gray-800 border-gray-200',
         icon: XCircle,
       },
       pending: {
-        label: 'FIRS Pending',
+        label: 'NRS Pending',
         className: 'bg-yellow-100 text-yellow-800 border-yellow-200',
         icon: Clock,
       },
       rejected: {
-        label: 'FIRS Rejected',
+        label: 'NRS Rejected',
         className: 'bg-red-100 text-red-800 border-red-200',
         icon: XCircle,
       },
       not_required: {
-        label: 'FIRS N/A',
+        label: 'NRS N/A',
         className: 'bg-gray-100 text-gray-800 border-gray-200',
         icon: CheckCircle,
       },
@@ -166,7 +166,7 @@ export const RecentInvoices: React.FC<RecentInvoicesProps> = ({
           <div>
             <CardTitle className="text-lg">Recent Invoices</CardTitle>
             <CardDescription>
-              Your latest invoice activity and FIRS compliance status
+              Your latest invoice activity and NRS compliance status
             </CardDescription>
           </div>
           <Button variant="outline" size="sm">

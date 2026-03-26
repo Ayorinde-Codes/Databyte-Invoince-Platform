@@ -78,11 +78,11 @@ export const NotificationsPage = () => {
   const getTypeLabel = (type: NotificationType) => {
     const labels: Record<NotificationType, string> = {
       [NotificationType.INVOICE_SUBMITTED]: 'Invoice Submitted',
-      [NotificationType.FIRS_APPROVAL]: 'FIRS Approval',
+      [NotificationType.FIRS_APPROVAL]: 'NRS Approval',
       [NotificationType.IRN_GENERATED]: 'IRN Generated',
       [NotificationType.INVOICE_PAID]: 'Invoice Paid',
       [NotificationType.INVOICE_REJECTED]: 'Invoice Rejected',
-      [NotificationType.FIRS_VALIDATION_FAILED]: 'FIRS Validation Failed',
+      [NotificationType.FIRS_VALIDATION_FAILED]: 'NRS Validation Failed',
       [NotificationType.INVOICE_SIGNING_FAILED]: 'Invoice Signing Failed',
       [NotificationType.ERP_SYNC]: 'ERP Sync',
       [NotificationType.ERP_SYNC_FAILED]: 'ERP Sync Failed',
@@ -174,7 +174,7 @@ export const NotificationsPage = () => {
                       Invoice Submitted
                     </SelectItem>
                     <SelectItem value={NotificationType.FIRS_APPROVAL}>
-                      FIRS Approval
+                      NRS Approval
                     </SelectItem>
                     <SelectItem value={NotificationType.IRN_GENERATED}>
                       IRN Generated
@@ -186,7 +186,7 @@ export const NotificationsPage = () => {
                       Invoice Rejected
                     </SelectItem>
                     <SelectItem value={NotificationType.FIRS_VALIDATION_FAILED}>
-                      FIRS Validation Failed
+                      NRS Validation Failed
                     </SelectItem>
                     <SelectItem value={NotificationType.INVOICE_SIGNING_FAILED}>
                       Invoice Signing Failed

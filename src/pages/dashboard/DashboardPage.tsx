@@ -623,7 +623,7 @@ export const DashboardPage = () => {
                 description="All platform users"
               />
               <MetricsCard
-                title="FIRS Compliance"
+                title="NRS Compliance"
                 value={metrics.complianceRate}
                 change={0}
                 changeType="neutral"
@@ -696,7 +696,7 @@ export const DashboardPage = () => {
                 description="Active vendors"
               />
               <MetricsCard
-                title="FIRS Compliance"
+                title="NRS Compliance"
                 value={metrics.complianceRate}
                 change={'complianceGrowth' in metrics ? metrics.complianceGrowth : undefined}
                 changeType={('complianceGrowth' in metrics && metrics.complianceGrowth != null) ? (metrics.complianceGrowth >= 0 ? "increase" : "decrease") : "neutral"}
@@ -771,7 +771,7 @@ export const DashboardPage = () => {
                   <Badge variant="secondary" className="bg-green-100 text-green-800">Connected</Badge>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-sm text-muted-foreground">FIRS API Status</span>
+                  <span className="text-sm text-muted-foreground">NRS API Status</span>
                   <Badge variant="secondary" className="bg-green-100 text-green-800">Active</Badge>
                 </div>
               </div>

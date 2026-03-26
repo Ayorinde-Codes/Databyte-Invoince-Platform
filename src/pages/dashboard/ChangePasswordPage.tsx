@@ -93,7 +93,7 @@ export const ChangePasswordPage = () => {
               Welcome back to your invoice management platform
             </h1>
             <p className="text-xl text-primary-foreground/80 leading-relaxed">
-              Streamline your FIRS e-invoicing compliance and manage your
+              Streamline your NRS e-invoicing compliance and manage your
               invoices with enterprise-grade security and reliability.
             </p>
           </div>
@@ -102,7 +102,7 @@ export const ChangePasswordPage = () => {
             <div className="flex items-center space-x-3">
               <div className="w-2 h-2 bg-primary-foreground/60 rounded-full" />
               <span className="text-primary-foreground/80">
-                FIRS Certified Integration
+                NRS Certified Integration
               </span>
             </div>
             <div className="flex items-center space-x-3">

@@ -337,10 +337,10 @@ export const useResyncFirsProfile = () => {
     mutationFn: () => apiService.resyncFirsProfile(),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['access-point-providers'] });
-      toast.success('FIRS profile resynced successfully');
+      toast.success('NRS profile resynced successfully');
     },
     onError: (error: unknown) => {
-      toast.error(extractErrorMessage(error, 'Failed to resync FIRS profile'));
+      toast.error(extractErrorMessage(error, 'Failed to resync NRS profile'));
     },
   });
 };

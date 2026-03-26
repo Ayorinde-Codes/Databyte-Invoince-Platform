@@ -3,7 +3,7 @@ import { env } from './env';
 // Application Constants
 export const APP_CONFIG = {
   name: 'Databyte Invoice Platform',
-  description: 'System Integrator for FIRS E-invoicing Compliance',
+  description: 'System Integrator for NRS E-invoicing Compliance',
   version: '1.0.0',
   company: 'Databyte Technologies',
   support_email: 'support@databyte.com',
@@ -442,9 +442,9 @@ export const NOTIFICATION_TYPES = {
   invoice_created: { label: 'Invoice Created', icon: 'FileText', color: 'blue' },
   invoice_sent: { label: 'Invoice Sent', icon: 'Send', color: 'green' },
   payment_received: { label: 'Payment Received', icon: 'DollarSign', color: 'green' },
-  firs_submission: { label: 'FIRS Submission', icon: 'Upload', color: 'blue' },
-  firs_approval: { label: 'FIRS Approval', icon: 'CheckCircle', color: 'green' },
-  firs_rejection: { label: 'FIRS Rejection', icon: 'XCircle', color: 'red' },
+  firs_submission: { label: 'NRS Submission', icon: 'Upload', color: 'blue' },
+  firs_approval: { label: 'NRS Approval', icon: 'CheckCircle', color: 'green' },
+  firs_rejection: { label: 'NRS Rejection', icon: 'XCircle', color: 'red' },
   erp_sync: { label: 'ERP Sync', icon: 'RefreshCw', color: 'blue' },
   system_alert: { label: 'System Alert', icon: 'AlertTriangle', color: 'yellow' },
 } as const;

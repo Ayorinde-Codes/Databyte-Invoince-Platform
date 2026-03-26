@@ -173,7 +173,7 @@ export const ForgotPasswordPage = () => {
           <div className="space-y-4">
             <div className="flex items-center space-x-3">
               <div className="w-2 h-2 bg-primary-foreground/60 rounded-full" />
-              <span className="text-primary-foreground/80">FIRS Certified Integration</span>
+              <span className="text-primary-foreground/80">NRS Certified Integration</span>
             </div>
             <div className="flex items-center space-x-3">
               <div className="w-2 h-2 bg-primary-foreground/60 rounded-full" />
