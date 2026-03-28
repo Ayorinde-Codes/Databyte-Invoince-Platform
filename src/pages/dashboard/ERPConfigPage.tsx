@@ -917,6 +917,9 @@ export const ERPConfigPage = () => {
 
     try {
       const settingValue = { ...erpCreateForm.setting_value };
+      if (erpCreateForm.erp_type !== 'sage_x3') {
+        delete settingValue.company_code;
+      }
       if (erpCreateForm.erp_type === 'sage_x3' && settingValue.server_details) {
         const serverDetails = { ...settingValue.server_details };
         // Remove database from server_details for Sage X3 (it's in credentials instead)
@@ -966,6 +969,9 @@ export const ERPConfigPage = () => {
     setFormErrors({});
     try {
       const settingValue = { ...erpCreateForm.setting_value };
+      if (erpCreateForm.erp_type !== 'sage_x3') {
+        delete settingValue.company_code;
+      }
       if (erpCreateForm.erp_type === 'sage_x3' && settingValue.server_details) {
         const serverDetails = { ...settingValue.server_details };
         if (serverDetails.database === '' || !serverDetails.database) {
