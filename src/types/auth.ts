@@ -17,6 +17,7 @@ export interface Company {
   api_public_key: string;
   subscription_status: 'active' | 'suspended' | 'cancelled' | 'trial';
   primary_service: string;
+  status?: string;
 }
 
 export interface LoginFormData {
@@ -41,6 +42,14 @@ export interface AuthResponse {
   user: User;
   requires_password_change?: boolean;
 }
+
+export interface PendingRegistrationResult {
+  pendingApproval: true;
+  message: string;
+  user: User;
+}
+
+export type RegisterResult = AuthResponse | PendingRegistrationResult;
 
 // API Response wrapper for authentication
 export interface AuthApiResponse {

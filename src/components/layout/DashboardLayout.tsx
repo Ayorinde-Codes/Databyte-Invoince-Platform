@@ -178,7 +178,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-slate-900">
+    <div className="min-h-screen bg-gray-50 dark:bg-background">
       {/* Mobile sidebar */}
       <div
         className={`fixed inset-0 z-50 lg:hidden ${sidebarOpen ? 'block' : 'hidden'}`}
@@ -187,7 +187,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
           className="fixed inset-0 bg-gray-600 bg-opacity-75 dark:bg-black/60"
           onClick={() => setSidebarOpen(false)}
         />
-        <div className="fixed inset-y-0 left-0 flex w-64 flex-col bg-white dark:bg-slate-900 border-r border-transparent dark:border-slate-800">
+        <div className="fixed inset-y-0 left-0 flex w-64 flex-col bg-white dark:bg-sidebar border-r border-transparent dark:border-sidebar-border">
           <div className="flex h-16 items-center justify-between px-4">
             <div className="flex items-center space-x-2">
               <img 
@@ -201,7 +201,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
               variant="ghost"
               size="sm"
               onClick={() => setSidebarOpen(false)}
-              className="text-gray-600 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-800"
+              className="text-gray-600 dark:text-sidebar-foreground hover:bg-gray-100 dark:hover:bg-sidebar-accent"
             >
               <X className="w-5 h-5" />
             </Button>
@@ -214,7 +214,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                 className={`group flex items-center px-2 py-2 text-sm font-medium rounded-md ${
                   item.current
                     ? 'bg-primary text-primary-foreground'
-                    : 'text-gray-600 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800 hover:text-gray-900 dark:hover:text-white'
+                    : 'text-gray-600 dark:text-sidebar-foreground hover:bg-gray-50 dark:hover:bg-sidebar-accent hover:text-gray-900 dark:hover:text-white'
                 }`}
                 onClick={() => setSidebarOpen(false)}
               >
@@ -232,7 +232,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
           sidebarCollapsed ? 'lg:w-16' : 'lg:w-64'
         }`}
       >
-        <div className="flex flex-col flex-grow bg-white dark:bg-slate-900 border-r border-gray-200 dark:border-slate-700 shadow-lg">
+        <div className="flex flex-col flex-grow bg-white dark:bg-sidebar border-r border-gray-200 dark:border-sidebar-border shadow-lg">
           <div className="flex h-16 items-center justify-between px-4">
             <div
               className={`flex items-center space-x-2 transition-all duration-300 ${
@@ -252,7 +252,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
               variant="ghost"
               size="sm"
               onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-              className="hidden lg:flex text-gray-600 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-800"
+              className="hidden lg:flex text-gray-600 dark:text-sidebar-foreground hover:bg-gray-100 dark:hover:bg-sidebar-accent"
             >
               <Menu className="w-4 h-4" />
             </Button>
@@ -265,7 +265,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                 className={`group flex items-center px-2 py-2 text-sm font-medium rounded-md transition-all duration-200 ${
                   item.current
                     ? 'bg-primary text-primary-foreground shadow-md'
-                    : 'text-gray-600 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800 hover:text-gray-900 dark:hover:text-white hover:shadow-sm'
+                    : 'text-gray-600 dark:text-sidebar-foreground hover:bg-gray-50 dark:hover:bg-sidebar-accent hover:text-gray-900 dark:hover:text-white hover:shadow-sm'
                 } ${sidebarCollapsed ? 'justify-center' : ''}`}
                 title={sidebarCollapsed ? item.name : ''}
               >
@@ -282,7 +282,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
           </nav>
 
           {/* Bottom section */}
-          <div className="flex-shrink-0 p-4 border-t border-gray-200 dark:border-slate-700">
+          <div className="flex-shrink-0 p-4 border-t border-gray-200 dark:border-sidebar-border">
             <div
               className={`flex items-center ${sidebarCollapsed ? 'justify-center' : 'space-x-3'}`}
             >
@@ -301,7 +301,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                   <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
                     {user?.name}
                   </p>
-                  <p className="text-xs text-gray-500 dark:text-slate-400 truncate">
+                  <p className="text-xs text-gray-500 dark:text-muted-foreground truncate">
                     {company?.name}
                   </p>
                 </div>
@@ -316,7 +316,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
         className={`transition-all duration-300 ${sidebarCollapsed ? 'lg:pl-16' : 'lg:pl-64'}`}
       >
         {/* Top navigation */}
-        <div className="sticky top-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm border-b border-gray-200 dark:border-gray-800 shadow-sm">
+        <div className="sticky top-0 z-40 bg-white/95 dark:bg-background/95 backdrop-blur-sm border-b border-gray-200 dark:border-border shadow-sm">
           <div className="flex h-16 items-center justify-between px-4 sm:px-6 lg:px-8">
             <div className="flex items-center">
               <Button
@@ -424,7 +424,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
         </div>
 
         {/* Page content */}
-        <main className="p-6 bg-gray-50 dark:bg-slate-900 min-h-[calc(100vh-4rem)]">{children}</main>
+        <main className="p-6 bg-gray-50 dark:bg-background min-h-[calc(100vh-4rem)]">{children}</main>
       </div>
     </div>
   );

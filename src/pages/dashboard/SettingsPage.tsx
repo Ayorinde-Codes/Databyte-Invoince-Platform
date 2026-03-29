@@ -93,6 +93,9 @@ type TeamMember = {
   last_login_at?: string | null;
 };
 
+/** Toggle to show API Keys & Webhooks tabs + panels again. */
+const ENABLE_API_WEBHOOK_SETTINGS_TABS = false;
+
 export const SettingsPage = () => {
   const { user } = useAuth();
   const { canManageUsers, isSuperAdmin, isCompanyUser } = usePermissions();
@@ -225,7 +228,7 @@ export const SettingsPage = () => {
     }
   }, [company]);
 
-  // API Keys - using real company data
+  // API Keys — data kept for when API Keys tab is re-enabled (see `false &&` block below)
   const apiKeys = company?.api_public_key ? [
     {
       id: '1',
@@ -311,6 +314,7 @@ export const SettingsPage = () => {
     return { label: user.status || 'Unknown', variant: 'secondary' as const };
   };
 
+  // Webhooks — mock data kept for when Webhooks tab is re-enabled
   const webhooks = [
     {
       id: '1',
@@ -493,11 +497,19 @@ export const SettingsPage = () => {
           onValueChange={setActiveTab}
           className="space-y-6"
         >
-          <TabsList className="flex w-full overflow-x-auto flex-nowrap gap-1 pb-2 md:grid md:grid-cols-6 md:overflow-visible">
+          <TabsList
+            className={`flex w-full overflow-x-auto flex-nowrap gap-1 pb-2 md:grid md:w-full md:overflow-visible ${
+              ENABLE_API_WEBHOOK_SETTINGS_TABS ? 'md:grid-cols-6' : 'md:grid-cols-4'
+            }`}
+          >
             <TabsTrigger value="company" className="flex-shrink-0">Company</TabsTrigger>
             <TabsTrigger value="team" className="flex-shrink-0">Team</TabsTrigger>
-            <TabsTrigger value="api" className="flex-shrink-0">API Keys</TabsTrigger>
-            <TabsTrigger value="webhooks" className="flex-shrink-0">Webhooks</TabsTrigger>
+            {ENABLE_API_WEBHOOK_SETTINGS_TABS && (
+              <TabsTrigger value="api" className="flex-shrink-0">API Keys</TabsTrigger>
+            )}
+            {ENABLE_API_WEBHOOK_SETTINGS_TABS && (
+              <TabsTrigger value="webhooks" className="flex-shrink-0">Webhooks</TabsTrigger>
+            )}
             <TabsTrigger value="notifications" className="flex-shrink-0">Notifications</TabsTrigger>
             <TabsTrigger value="security" className="flex-shrink-0">Security</TabsTrigger>
           </TabsList>
@@ -806,6 +818,9 @@ export const SettingsPage = () => {
             </Card>
           </TabsContent>
 
+          {/* API Keys & Webhooks: gated by ENABLE_API_WEBHOOK_SETTINGS_TABS */}
+          {ENABLE_API_WEBHOOK_SETTINGS_TABS && (
+            <>
           {/* API Keys */}
           <TabsContent value="api" className="space-y-6">
             <Card>
@@ -999,6 +1014,8 @@ export const SettingsPage = () => {
               </CardContent>
             </Card>
           </TabsContent>
+            </>
+          )}
 
           {/* Notifications */}
           <TabsContent value="notifications" className="space-y-6">

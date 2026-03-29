@@ -1578,17 +1578,12 @@ export const ERPConfigPage = () => {
         </div>
 
         <Tabs defaultValue="configurations" className="space-y-6">
-          <TabsList
-            className={`flex w-full overflow-x-auto flex-nowrap gap-1 pb-2 md:grid md:w-full md:overflow-visible ${isSuperAdmin ? 'md:grid-cols-4' : 'md:grid-cols-3'}`}
-          >
+          <TabsList className="flex w-full overflow-x-auto flex-nowrap gap-1 pb-2 md:grid md:w-full md:overflow-visible md:grid-cols-3">
             <TabsTrigger value="configurations" className="flex-shrink-0">Configurations</TabsTrigger>
             <TabsTrigger value="access-point-providers" className="flex-shrink-0">
               Access Point Providers
             </TabsTrigger>
             <TabsTrigger value="settings" className="flex-shrink-0">Settings</TabsTrigger>
-            {isSuperAdmin && (
-              <TabsTrigger value="sync-logs" className="flex-shrink-0">Sync Logs</TabsTrigger>
-            )}
           </TabsList>
 
           {/* Configurations Tab */}
@@ -2302,47 +2297,6 @@ export const ERPConfigPage = () => {
               </CardContent>
             </Card>
           </TabsContent>
-
-          {/* Sync Logs Tab - Only for Super Admin */}
-          {isSuperAdmin && (
-            <TabsContent value="sync-logs" className="space-y-6">
-              <Card>
-                <CardHeader>
-                  <div className="flex justify-between items-center">
-                    <div>
-                      <CardTitle>Synchronization Logs</CardTitle>
-                      <CardDescription>
-                        View detailed logs of all ERP synchronization activities
-                        across all companies
-                      </CardDescription>
-                    </div>
-                    <div className="flex space-x-2">
-                      <Button variant="outline" size="sm">
-                        <Download className="w-4 h-4 mr-2" />
-                        Export Logs
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => refetchSettings()}
-                      >
-                        <RefreshCw className="w-4 h-4 mr-2" />
-                        Refresh
-                      </Button>
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <Alert>
-                    <AlertDescription>
-                      Sync logs feature coming soon. This will show
-                      synchronization activities across all companies.
-                    </AlertDescription>
-                  </Alert>
-                </CardContent>
-              </Card>
-            </TabsContent>
-          )}
         </Tabs>
 
         {/* NRS Configuration Dialog */}

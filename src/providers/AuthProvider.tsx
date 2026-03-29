@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
-import { User, Company, AuthResponse, AuthApiResponse } from '../types/auth';
+import { User, Company, AuthResponse, AuthApiResponse, RegisterResult } from '../types/auth';
 import { AUTH_CONFIG } from '../utils/constants';
 import {
   getLocalStorage,
@@ -28,7 +28,7 @@ interface AuthContextType {
     address: string;
     tin: string;
     primary_service_id: number;
-  }) => Promise<AuthResponse>;
+  }) => Promise<RegisterResult>;
   logout: () => Promise<void>;
   updateUser: (user: Partial<User>) => void;
   updateCompany: (company: Partial<Company>) => void;
@@ -184,7 +184,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     address: string;
     tin: string;
     primary_service_id: number;
-  }): Promise<AuthResponse> => {
+  }): Promise<RegisterResult> => {
     setIsLoading(true);
 
     try {
@@ -205,22 +205,29 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         throw new Error(response.message || 'Registration failed');
       }
 
-      // Defensive checks for response structure
-      const { token, user } = response.data || {};
-      
-      if (!token || !user) {
-        console.error('Registration response missing required fields:', response);
+      const { token, user } = response.data;
+
+      if (!user) {
+        console.error('Registration response missing user:', response);
         throw new Error('Invalid registration response. Please try again.');
       }
 
-      const company = user?.company;
+      const company = user.company;
 
       if (!company) {
         console.error('Registration response missing company data:', response);
         throw new Error('Company data not found in registration response. Please contact support.');
       }
 
-      // Store auth data
+      // Pending approval: API omits token until admin activates the company (aligned with login).
+      if (!token) {
+        return {
+          pendingApproval: true,
+          message: response.message,
+          user,
+        };
+      }
+
       setToken(token);
       setUser(user);
       setCompany(company);
@@ -229,7 +236,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setLocalStorage(AUTH_CONFIG.user_key, user);
       setLocalStorage(AUTH_CONFIG.company_key, company);
 
-      return response.data;
+      return response.data as AuthResponse;
     } catch (error: unknown) {
       
       // Preserve the error structure instead of converting to Error
@@ -304,11 +311,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         null
       );
 
-      // If no refresh token exists, don't attempt refresh (Sanctum tokens don't expire by default)
-      // Only refresh if we have a refresh token mechanism implemented
       if (!storedRefreshToken) {
-        // Sanctum tokens don't expire by default, so we don't need to refresh
-        // Just return without doing anything
         return;
       }
 
@@ -321,18 +324,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setLocalStorage(AUTH_CONFIG.token_key, newToken);
       }
     } catch (error) {
-      // Only logout if we actually had a refresh token and it failed
-      // Don't logout if refresh token simply doesn't exist (normal for Sanctum)
       const storedRefreshToken = getLocalStorage(
         AUTH_CONFIG.refresh_token_key,
         null
       );
       
       if (storedRefreshToken) {
-        // Only logout if we had a refresh token and it failed
         logout();
       }
-      // Otherwise, silently ignore (Sanctum tokens don't need refresh)
     }
   }, [logout]);
 
