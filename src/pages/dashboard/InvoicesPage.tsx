@@ -429,16 +429,19 @@ export const InvoicesPage = () => {
   const {
     data: arData,
     isLoading: arLoading,
+    isFetching: arFetching,
     refetch: refetchAR,
   } = useARInvoices(queryParams);
   const {
     data: apData,
     isLoading: apLoading,
+    isFetching: apFetching,
     refetch: refetchAP,
   } = useAPInvoices(queryParams);
 
   const currentData = activeTab === 'ar' ? arData : apData;
   const isLoading = activeTab === 'ar' ? arLoading : apLoading;
+  const isInvoicesFetching = activeTab === 'ar' ? arFetching : apFetching;
   
   const currentDataObj = currentData?.data;
   const invoices = (currentDataObj && typeof currentDataObj === 'object' && 'data' in currentDataObj && Array.isArray(currentDataObj.data))
@@ -977,11 +980,17 @@ export const InvoicesPage = () => {
     }
   };
 
-  const handleRefresh = () => {
-    if (activeTab === 'ar') {
-      refetchAR();
-    } else {
-      refetchAP();
+  const handleRefresh = async () => {
+    try {
+      const result =
+        activeTab === 'ar' ? await refetchAR() : await refetchAP();
+      if (result.error) {
+        toast.error(
+          extractErrorMessage(result.error, 'Failed to refresh invoices')
+        );
+      }
+    } catch (error: unknown) {
+      toast.error(extractErrorMessage(error, 'Failed to refresh invoices'));
     }
   };
 
@@ -1482,11 +1491,11 @@ export const InvoicesPage = () => {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={handleRefresh}
-                  disabled={isLoading}
+                  onClick={() => void handleRefresh()}
+                  disabled={isLoading || isInvoicesFetching}
                 >
                   <RefreshCw
-                    className={`w-4 h-4 mr-2 ${isLoading ? 'animate-spin' : ''}`}
+                    className={`w-4 h-4 mr-2 ${isInvoicesFetching ? 'animate-spin' : ''}`}
                   />
                 Refresh
               </Button>

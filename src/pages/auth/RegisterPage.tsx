@@ -12,8 +12,41 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { cn } from '@/lib/utils';
 import { useAuth } from '../../hooks/useAuth';
 import { apiService } from '@/services/api';
+
+/** Public `/services` list item — inactive services stay visible but are not selectable. */
+type ErpServiceOption = {
+  id: number;
+  name: string;
+  code: string;
+  is_active: boolean;
+};
+
+function normalizeErpService(raw: unknown): ErpServiceOption | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const o = raw as Record<string, unknown>;
+  const id = typeof o.id === 'number' ? o.id : Number(o.id);
+  if (!Number.isFinite(id)) return null;
+  const name = typeof o.name === 'string' ? o.name : String(o.name ?? '');
+  const code = typeof o.code === 'string' ? o.code : String(o.code ?? '');
+
+  let is_active = true;
+  if (typeof o.is_active === 'boolean') {
+    is_active = o.is_active;
+  } else if (o.is_active === 0 || o.is_active === '0') {
+    is_active = false;
+  } else if (o.is_active === 1 || o.is_active === '1') {
+    is_active = true;
+  } else if (typeof o.status === 'string') {
+    const s = o.status.toLowerCase();
+    if (s === 'inactive' || s === 'disabled') is_active = false;
+    if (s === 'active') is_active = true;
+  }
+
+  return { id, name, code, is_active };
+}
 
 const registerSchema = z.object({
   name: z.string().min(2, 'Company name must be at least 2 characters'),
@@ -51,8 +84,13 @@ export const RegisterPage = () => {
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
 
-  const [services, setServices] = useState<Array<{ id: number; name: string; code: string }>>([]);
+  const [services, setServices] = useState<ErpServiceOption[]>([]);
   const [isLoadingServices, setIsLoadingServices] = useState(false);
+
+  const hasActiveErpService = useMemo(
+    () => services.some((s) => s.is_active),
+    [services]
+  );
 
   const {
     register,
@@ -107,7 +145,11 @@ export const RegisterPage = () => {
             serviceData = responseData;
           }
         }
-        setServices(Array.isArray(serviceData) ? serviceData : []);
+        const list = Array.isArray(serviceData) ? serviceData : [];
+        const normalized = list
+          .map(normalizeErpService)
+          .filter((s): s is ErpServiceOption => s !== null);
+        setServices(normalized);
       } catch (error) {
         console.error('Failed to load ERP services', error);
         toast.error('Failed to load ERP services. Please try again.');
@@ -130,7 +172,7 @@ export const RegisterPage = () => {
     clearErrors();
 
     try {
-      await registerUser({
+      const result = await registerUser({
         name: data.name,
         email: data.email,
         password: data.password,
@@ -139,6 +181,12 @@ export const RegisterPage = () => {
         tin: data.tin,
         primary_service_id: Number(data.primary_service_id),
       });
+
+      if ('pendingApproval' in result && result.pendingApproval) {
+        toast.success(result.message);
+        navigate('/auth/login', { replace: true });
+        return;
+      }
 
       toast.success('Registration successful! Welcome to Databyte.');
       navigate('/dashboard');
@@ -393,12 +441,24 @@ export const RegisterPage = () => {
                       </SelectTrigger>
                       <SelectContent>
                         {services.map((service) => (
-                          <SelectItem key={service.id} value={service.id.toString()}>
+                          <SelectItem
+                            key={service.id}
+                            value={service.id.toString()}
+                            disabled={!service.is_active}
+                            className={cn(
+                              !service.is_active && 'text-muted-foreground'
+                            )}
+                          >
                             {service.name}
                           </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
+                    {services.length > 0 && !hasActiveErpService && (
+                      <p className="text-sm text-muted-foreground">
+                        No ERP integrations are available for new sign-ups right now. Please try again later or contact support.
+                      </p>
+                    )}
                     {errors.primary_service_id && (
                       <p className="text-sm text-destructive">{errors.primary_service_id.message}</p>
                     )}
