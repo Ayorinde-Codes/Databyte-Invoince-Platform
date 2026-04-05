@@ -122,6 +122,43 @@ type PaginatedParties = {
   last_page?: number;
   from?: number;
   to?: number;
+  stats?: PartyListStats;
+};
+
+type PartyListStats = {
+  active_count: number;
+  inactive_count: number;
+  with_email_count: number;
+  with_tin_count: number;
+};
+
+const extractPartyListStats = (value: unknown): PartyListStats | null => {
+  if (!value || typeof value !== 'object') {
+    return null;
+  }
+  const s = (value as { stats?: unknown }).stats;
+  if (!s || typeof s !== 'object') {
+    return null;
+  }
+  const o = s as Record<string, unknown>;
+  const n = (k: string) => (typeof o[k] === 'number' ? o[k] : Number.NaN);
+  const active_count = n('active_count');
+  const inactive_count = n('inactive_count');
+  const with_email_count = n('with_email_count');
+  const with_tin_count = n('with_tin_count');
+  if (
+    [active_count, inactive_count, with_email_count, with_tin_count].some(
+      (x) => Number.isNaN(x)
+    )
+  ) {
+    return null;
+  }
+  return {
+    active_count,
+    inactive_count,
+    with_email_count,
+    with_tin_count,
+  };
 };
 
 const extractPaginatedParties = (value: unknown): PaginatedParties => {
@@ -141,6 +178,7 @@ const extractPaginatedParties = (value: unknown): PaginatedParties => {
       typeof candidate.last_page === 'number' ? candidate.last_page : undefined,
     from: typeof candidate.from === 'number' ? candidate.from : undefined,
     to: typeof candidate.to === 'number' ? candidate.to : undefined,
+    stats: extractPartyListStats(value) ?? undefined,
   };
 };
 
@@ -227,13 +265,19 @@ export const PartiesPage = () => {
   const parties = paginatedParties.data;
   // Pagination structure: Laravel returns pagination at the root level of data
   const pagination = paginatedParties;
+  const listStats = pagination.stats;
 
-  // Calculate summary stats
+  // Summary stats
   const totalParties = pagination.total || 0;
-  const activeParties = parties.filter((p) => p.is_active).length;
-  const inactiveParties = parties.filter((p) => !p.is_active).length;
-  const withEmail = parties.filter((p) => p.email).length;
-  const withTIN = parties.filter((p) => p.tin).length;
+  const activeParties = listStats
+    ? listStats.active_count
+    : parties.filter((p) => p.is_active).length;
+  const withEmail = listStats
+    ? listStats.with_email_count
+    : parties.filter((p) => p.email).length;
+  const withTIN = listStats
+    ? listStats.with_tin_count
+    : parties.filter((p) => p.tin).length;
 
   const getPartyInitials = (name: string) => {
     return name

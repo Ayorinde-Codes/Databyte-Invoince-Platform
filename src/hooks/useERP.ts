@@ -1,7 +1,30 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { apiService } from '@/services/api';
+import { apiService, type ApiResponse } from '@/services/api';
 import { toast } from 'sonner';
 import { extractErrorMessage } from '@/utils/error';
+
+/** HTTP 200 responses can still indicate a failed ERP check via `data.success === false`. */
+export function parseERPConnectionTestApiResponse(
+  response: ApiResponse<unknown>
+): { ok: boolean; message?: string } {
+  if (!response || typeof response !== 'object') {
+    return { ok: true };
+  }
+  if (response.status === false) {
+    return { ok: false, message: response.message };
+  }
+  const data = response.data;
+  if (data && typeof data === 'object' && !Array.isArray(data)) {
+    const inner = data as { success?: boolean; message?: string };
+    if (inner.success === false) {
+      return {
+        ok: false,
+        message: inner.message?.trim() || response.message,
+      };
+    }
+  }
+  return { ok: true };
+}
 
 type CreateERPSettingPayload = Parameters<typeof apiService.createERPSetting>[0];
 type UpdateERPSettingPayload = Parameters<typeof apiService.updateERPSetting>[1];
@@ -97,14 +120,25 @@ export const useTestERPConnection = () => {
   return useMutation({
     mutationFn: ({ id, connectionType }: { id: number; connectionType?: 'api' | 'database' }) =>
       apiService.testERPConnection(id, connectionType),
-    onSuccess: (_, variables) => {
-      const connectionType = variables.connectionType 
-        ? variables.connectionType === 'api' ? 'API ' : 'Database '
+    onSuccess: (response, variables) => {
+      const connectionType = variables.connectionType
+        ? variables.connectionType === 'api'
+          ? 'API '
+          : 'Database '
         : '';
-      toast.success(`${connectionType}Connection test successful`, {
-        duration: 4000, // Auto-dismiss after 4 seconds
-        closeButton: true, // Show close button
-      });
+      const { ok, message } = parseERPConnectionTestApiResponse(response);
+      const fallback = `${connectionType}Connection test failed`;
+      if (ok) {
+        toast.success(`${connectionType}Connection test successful`, {
+          duration: 4000,
+          closeButton: true,
+        });
+      } else {
+        toast.error(message || extractErrorMessage(null, fallback), {
+          duration: 5000,
+          closeButton: true,
+        });
+      }
     },
     onError: (error: unknown, variables) => {
       const connectionType = variables.connectionType 
@@ -123,14 +157,25 @@ export const useTestERPConnectionBeforeCreate = () => {
   return useMutation({
     mutationFn: (data: Parameters<typeof apiService.testERPConnectionBeforeCreate>[0]) =>
       apiService.testERPConnectionBeforeCreate(data),
-    onSuccess: (_, variables) => {
-      const connectionType = variables.connection_type 
-        ? variables.connection_type === 'api' ? 'API ' : 'Database '
+    onSuccess: (response, variables) => {
+      const connectionType = variables.connection_type
+        ? variables.connection_type === 'api'
+          ? 'API '
+          : 'Database '
         : '';
-      toast.success(`${connectionType}Connection test successful`, {
-        duration: 4000, // Auto-dismiss after 4 seconds
-        closeButton: true, // Show close button
-      });
+      const { ok, message } = parseERPConnectionTestApiResponse(response);
+      const fallback = `${connectionType}Connection test failed`;
+      if (ok) {
+        toast.success(`${connectionType}Connection test successful`, {
+          duration: 4000,
+          closeButton: true,
+        });
+      } else {
+        toast.error(message || extractErrorMessage(null, fallback), {
+          duration: 5000,
+          closeButton: true,
+        });
+      }
     },
     onError: (error: unknown, variables) => {
       const connectionType = variables.connection_type 
