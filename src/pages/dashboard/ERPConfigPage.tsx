@@ -90,6 +90,7 @@ import {
   useDeleteERPSetting,
   useTestERPConnection,
   useTestERPConnectionBeforeCreate,
+  parseERPConnectionTestApiResponse,
   useSyncERPData,
   useSyncAllERPData,
   useERPSyncStatus,
@@ -389,6 +390,12 @@ export const ERPConfigPage = () => {
     connectionType?: 'api' | 'database';
   } | null>(null);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+  const [createCredentialsMode, setCreateCredentialsMode] = useState<
+    'api' | 'database'
+  >('api');
+  const [editCredentialsMode, setEditCredentialsMode] = useState<
+    'api' | 'database'
+  >('api');
   const [showDeleteDialog, setShowDeleteDialog] = useState<number | null>(null);
   const [showSyncDialog, setShowSyncDialog] = useState<number | null>(null);
   const [syncDataType, setSyncDataType] = useState<SyncDataType>('invoices');
@@ -633,6 +640,20 @@ export const ERPConfigPage = () => {
         };
       }
 
+      if (
+        (erpSetting.erp_type === 'sage_300' ||
+          erpSetting.erp_type === 'sage_x3') &&
+        (!settingValue.credentials ||
+          typeof settingValue.credentials !== 'object' ||
+          Array.isArray(settingValue.credentials))
+      ) {
+        settingValue.credentials = {
+          username: '',
+          password: '',
+          database: '',
+        };
+      }
+
       if (erpSetting.erp_type === 'sage_x3' && settingValue.server_details) {
         const serverDetails = settingValue.server_details;
         if (
@@ -706,6 +727,17 @@ export const ERPConfigPage = () => {
         is_active: erpSetting.is_active ?? true,
         setting_value: settingValue,
       });
+
+      if (
+        erpSetting.erp_type === 'sage_300' ||
+        erpSetting.erp_type === 'sage_x3'
+      ) {
+        setEditCredentialsMode(
+          erpSetting.connection_type === 'database' ? 'database' : 'api'
+        );
+      } else {
+        setEditCredentialsMode('api');
+      }
     }
   }, [erpSetting, showEditDialog]);
 
@@ -929,7 +961,7 @@ export const ERPConfigPage = () => {
         settingValue.server_details = serverDetails;
       }
 
-      await testConnectionBeforeCreate.mutateAsync({
+      const response = await testConnectionBeforeCreate.mutateAsync({
         erp_type: erpCreateForm.erp_type,
         setting_value: settingValue,
         connection_type: connectionType,
@@ -941,9 +973,13 @@ export const ERPConfigPage = () => {
           : connectionType === 'database'
             ? 'Database '
             : '';
+      const { ok, message } = parseERPConnectionTestApiResponse(response);
       setTestResult({
-        success: true,
-        message: `${connectionTypeLabel}Connection test successful! Configuration is valid.`,
+        success: ok,
+        message: ok
+          ? `${connectionTypeLabel}Connection test successful! Configuration is valid.`
+          : message ||
+            `${connectionTypeLabel}Connection test failed`,
         connectionType,
       });
     } catch (error: unknown) {
@@ -1150,6 +1186,18 @@ export const ERPConfigPage = () => {
           ) {
             syncSettings.sync_timezone = getDefaultSyncSettings().sync_timezone;
           }
+        }
+      }
+
+      const settingVal = updateData.setting_value as Record<string, unknown> | undefined;
+      if (settingVal) {
+        const apiCreds = settingVal.api_credentials as Record<string, unknown> | undefined;
+        if (apiCreds?.password === '••••••••') {
+          delete apiCreds.password;
+        }
+        const dbCreds = settingVal.credentials as Record<string, unknown> | undefined;
+        if (dbCreds?.password === '••••••••') {
+          delete dbCreds.password;
         }
       }
 
@@ -1559,6 +1607,11 @@ export const ERPConfigPage = () => {
                                 },
                                 is_active: true,
                               });
+                              setCreateCredentialsMode(
+                                selectedService.connection_type === 'database'
+                                  ? 'database'
+                                  : 'api'
+                              );
                               setShowAddDialog(false);
                               setShowCreateDialog(true);
                               setSelectedERP('');
@@ -3670,23 +3723,48 @@ export const ERPConfigPage = () => {
                         </div>
                       )}
 
-                      {/* API Credentials - Show for Sage 300 and Sage X3 */}
                       {(erpSetting.erp_type === 'sage_300' ||
                         erpSetting.erp_type === 'sage_x3') && (
+                        <div className="space-y-2">
+                          <Label htmlFor="edit-credentials-mode">
+                            Connection credentials
+                          </Label>
+                          <Select
+                            value={editCredentialsMode}
+                            onValueChange={(v) =>
+                              setEditCredentialsMode(v as 'api' | 'database')
+                            }
+                          >
+                            <SelectTrigger id="edit-credentials-mode">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="api">API</SelectItem>
+                              <SelectItem value="database">Database</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <p className="text-xs text-muted-foreground">
+                            Show either API or database credentials.
+                          </p>
+                        </div>
+                      )}
+
+                      {(erpSetting.erp_type === 'sage_300' ||
+                        erpSetting.erp_type === 'sage_x3') &&
+                        editCredentialsMode === 'api' && (
                         <div className="space-y-3 p-4 border rounded-md bg-blue-50/50 border-blue-200">
                           <div className="flex items-center justify-between">
                             <Label className="text-sm font-semibold">
                               API Credentials
                             </Label>
                             <Badge variant="outline" className="text-xs">
-                              Primary Connection
+                              API connection
                             </Badge>
                           </div>
                           <Alert className="mb-3">
                             <AlertDescription className="text-xs">
-                              API credentials are used for the primary API
-                              connection. The system will use API first, then
-                              fall back to database if API is unavailable.
+                              Used for the ERP web API. Enter the API user and
+                              password from your Sage environment.
                             </AlertDescription>
                           </Alert>
                           <div className="grid grid-cols-2 gap-4">
@@ -3849,11 +3927,85 @@ export const ERPConfigPage = () => {
                               </div>
                             </div>
                           </div>
+                          <p className="text-xs text-muted-foreground">
+                            Tests the configuration saved on the server. Save
+                            changes first to verify new host or credentials.
+                          </p>
+                          <div className="flex justify-end pt-2">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                if (showEditDialog != null) {
+                                  void handleTestConnection(
+                                    showEditDialog,
+                                    'api'
+                                  );
+                                }
+                              }}
+                              disabled={
+                                testConnection.isPending ||
+                                updateERPSetting.isPending ||
+                                showEditDialog == null ||
+                                (erpSetting.erp_type === 'sage_x3' &&
+                                  !String(
+                                    (() => {
+                                      const sd =
+                                        erpEditForm.setting_value
+                                          ?.server_details;
+                                      if (
+                                        sd &&
+                                        typeof sd === 'object' &&
+                                        !Array.isArray(sd) &&
+                                        'pool_alias' in sd
+                                      ) {
+                                        return String(
+                                          (sd as { pool_alias?: string })
+                                            .pool_alias || ''
+                                        );
+                                      }
+                                      const esd =
+                                        erpSetting.setting_value
+                                          ?.server_details;
+                                      if (
+                                        esd &&
+                                        typeof esd === 'object' &&
+                                        !Array.isArray(esd) &&
+                                        'pool_alias' in esd
+                                      ) {
+                                        return String(
+                                          (esd as { pool_alias?: string })
+                                            .pool_alias || ''
+                                        );
+                                      }
+                                      return '';
+                                    })()
+                                  ).trim())
+                              }
+                            >
+                              {testConnection.isPending ? (
+                                <>
+                                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                  Testing API...
+                                </>
+                              ) : (
+                                <>
+                                  <TestTube className="w-4 h-4 mr-2" />
+                                  Test API Connection
+                                </>
+                              )}
+                            </Button>
+                          </div>
                         </div>
                       )}
 
-                      {/* Database Credentials */}
-                      {erpSetting.setting_value.credentials && (
+                      {(((erpSetting.erp_type !== 'sage_300' &&
+                        erpSetting.erp_type !== 'sage_x3') &&
+                        erpSetting.setting_value.credentials) ||
+                        ((erpSetting.erp_type === 'sage_300' ||
+                          erpSetting.erp_type === 'sage_x3') &&
+                          editCredentialsMode === 'database')) && (
                         <div className="space-y-3 p-4 border rounded-md bg-amber-50/50 border-amber-200">
                           <div className="flex items-center justify-between">
                             <Label className="text-sm font-semibold">
@@ -3862,7 +4014,7 @@ export const ERPConfigPage = () => {
                             {(erpSetting.erp_type === 'sage_300' ||
                               erpSetting.erp_type === 'sage_x3') && (
                               <Badge variant="outline" className="text-xs">
-                                Fallback Connection
+                                Database connection
                               </Badge>
                             )}
                           </div>
@@ -3870,11 +4022,10 @@ export const ERPConfigPage = () => {
                             erpSetting.erp_type === 'sage_x3') && (
                             <Alert className="mb-3">
                               <AlertDescription className="text-xs">
-                                Database credentials are used as a fallback if
-                                API connection is unavailable. Both API and
-                                Database credentials can be provided.
+                                Used for direct database access (read paths that
+                                use SQL).
                                 {erpSetting.erp_type === 'sage_300' &&
-                                  ' Note: Database name is also used for Sage 300 API connections.'}
+                                  ' The database name under Server Details is still used for Sage 300 API calls.'}
                               </AlertDescription>
                             </Alert>
                           )}
@@ -4211,7 +4362,31 @@ export const ERPConfigPage = () => {
                             )}
 
                           {Object.entries(
-                            erpSetting.setting_value.credentials
+                            (() => {
+                              const fromForm =
+                                erpEditForm.setting_value?.credentials;
+                              if (
+                                fromForm &&
+                                typeof fromForm === 'object' &&
+                                !Array.isArray(fromForm)
+                              ) {
+                                return fromForm as Record<string, unknown>;
+                              }
+                              const fromSetting =
+                                erpSetting.setting_value.credentials;
+                              if (
+                                fromSetting &&
+                                typeof fromSetting === 'object' &&
+                                !Array.isArray(fromSetting)
+                              ) {
+                                return fromSetting as Record<string, unknown>;
+                              }
+                              return {
+                                username: '',
+                                password: '',
+                                database: '',
+                              };
+                            })()
                           ).map(([key, value]: [string, unknown]) => {
                             const isPassword =
                               key.includes('password') ||
@@ -4298,6 +4473,47 @@ export const ERPConfigPage = () => {
                               </div>
                             );
                           })}
+                          {(erpSetting.erp_type === 'sage_300' ||
+                            erpSetting.erp_type === 'sage_x3') && (
+                            <>
+                              <p className="text-xs text-muted-foreground pt-1">
+                                Tests the database configuration saved on the
+                                server. Save changes first to verify updates.
+                              </p>
+                              <div className="flex justify-end pt-2">
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => {
+                                    if (showEditDialog != null) {
+                                      void handleTestConnection(
+                                        showEditDialog,
+                                        'database'
+                                      );
+                                    }
+                                  }}
+                                  disabled={
+                                    testConnection.isPending ||
+                                    updateERPSetting.isPending ||
+                                    showEditDialog == null
+                                  }
+                                >
+                                  {testConnection.isPending ? (
+                                    <>
+                                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                      Testing DB...
+                                    </>
+                                  ) : (
+                                    <>
+                                      <TestTube className="w-4 h-4 mr-2" />
+                                      Test Database Connection
+                                    </>
+                                  )}
+                                </Button>
+                              </div>
+                            </>
+                          )}
                         </div>
                       )}
 
@@ -4927,6 +5143,7 @@ export const ERPConfigPage = () => {
             setShowCreateDialog(open);
             if (!open) {
               setTestResult(null);
+              setCreateCredentialsMode('api');
             }
           }}
         >
@@ -5199,9 +5416,36 @@ export const ERPConfigPage = () => {
                 </div>
               )}
 
-              {/* API Credentials - Show for Sage 300 and Sage X3 */}
               {(erpCreateForm.erp_type === 'sage_300' ||
                 erpCreateForm.erp_type === 'sage_x3') && (
+                <div className="space-y-2">
+                  <Label htmlFor="create-credentials-mode">
+                    Connection credentials
+                  </Label>
+                  <Select
+                    value={createCredentialsMode}
+                    onValueChange={(v) =>
+                      setCreateCredentialsMode(v as 'api' | 'database')
+                    }
+                  >
+                    <SelectTrigger id="create-credentials-mode">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="api">API</SelectItem>
+                      <SelectItem value="database">Database</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    Show either API or database credentials. Pick the connection
+                    type you are configuring.
+                  </p>
+                </div>
+              )}
+
+              {(erpCreateForm.erp_type === 'sage_300' ||
+                erpCreateForm.erp_type === 'sage_x3') &&
+                createCredentialsMode === 'api' && (
                 <div className="space-y-3 p-4 border rounded-md bg-blue-50/50 border-blue-200">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center space-x-2">
@@ -5211,14 +5455,13 @@ export const ERPConfigPage = () => {
                       </Label>
                     </div>
                     <Badge variant="outline" className="text-xs">
-                      Primary Connection
+                      API connection
                     </Badge>
                   </div>
                   <Alert className="mb-3">
                     <AlertDescription className="text-xs">
-                      API credentials are used for the primary API connection.
-                      The system will use API first, then fall back to database
-                      if API is unavailable.
+                      Used for the ERP web API (REST/SOAP). Enter the API user
+                      and password from your Sage environment.
                     </AlertDescription>
                   </Alert>
                   <div className="grid grid-cols-2 gap-4">
@@ -5398,7 +5641,9 @@ export const ERPConfigPage = () => {
                 </div>
               )}
 
-              {/* Database Credentials - Show for all database-based ERPs */}
+              {((erpCreateForm.erp_type !== 'sage_300' &&
+                erpCreateForm.erp_type !== 'sage_x3') ||
+                createCredentialsMode === 'database') && (
               <div className="space-y-3 p-4 border rounded-md bg-amber-50/50 border-amber-200">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-2">
@@ -5410,7 +5655,7 @@ export const ERPConfigPage = () => {
                   {(erpCreateForm.erp_type === 'sage_300' ||
                     erpCreateForm.erp_type === 'sage_x3') && (
                     <Badge variant="outline" className="text-xs">
-                      Fallback Connection
+                      Database connection
                     </Badge>
                   )}
                 </div>
@@ -5418,11 +5663,9 @@ export const ERPConfigPage = () => {
                   erpCreateForm.erp_type === 'sage_x3') && (
                   <Alert className="mb-3">
                     <AlertDescription className="text-xs">
-                      Database credentials are used as a fallback if API
-                      connection is unavailable. Both API and Database
-                      credentials can be provided.
+                      Used for direct database access (read paths that use SQL).
                       {erpCreateForm.erp_type === 'sage_300' &&
-                        ' Note: Database name is also used for Sage 300 API connections.'}
+                        ' The database name under Server Details is still used for Sage 300 API calls.'}
                     </AlertDescription>
                   </Alert>
                 )}
@@ -5680,6 +5923,7 @@ export const ERPConfigPage = () => {
                   </Alert>
                 )}
               </div>
+              )}
 
               {/* Permissions */}
               <div className="space-y-4">
@@ -6107,6 +6351,7 @@ export const ERPConfigPage = () => {
                       },
                       is_active: true,
                     });
+                    setCreateCredentialsMode('api');
                   }}
                 >
                   Cancel
@@ -6126,14 +6371,23 @@ export const ERPConfigPage = () => {
                       ).trim()) ||
                     (erpCreateForm.erp_type === 'sage_300' ||
                     erpCreateForm.erp_type === 'sage_x3'
-                      ? !(
-                          (erpCreateForm.setting_value.api_credentials
-                            ?.username &&
+                      ? createCredentialsMode === 'api'
+                        ? !(
                             erpCreateForm.setting_value.api_credentials
-                              ?.password) ||
-                          (erpCreateForm.setting_value.credentials?.username &&
-                            erpCreateForm.setting_value.credentials?.password)
-                        )
+                              ?.username &&
+                            erpCreateForm.setting_value.api_credentials
+                              ?.password
+                          )
+                        : !(
+                            erpCreateForm.setting_value.credentials?.username &&
+                            erpCreateForm.setting_value.credentials
+                              ?.password &&
+                            (erpCreateForm.erp_type !== 'sage_x3' ||
+                              String(
+                                erpCreateForm.setting_value.credentials
+                                  ?.database ?? ''
+                              ).trim())
+                          )
                       : !(
                           erpCreateForm.setting_value.credentials?.username &&
                           erpCreateForm.setting_value.credentials?.password
