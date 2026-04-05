@@ -332,6 +332,69 @@ class ApiService {
     });
   }
 
+  // ==================== TWO-FACTOR AUTHENTICATION ====================
+
+  async getTFAStatus() {
+    return this.makeRequest(API_ENDPOINTS.auth.tfaStatus, { method: 'GET' });
+  }
+
+  async setupTFA(method: number) {
+    return this.makeRequest(API_ENDPOINTS.auth.tfaSetup, {
+      method: 'POST',
+      body: { method },
+    });
+  }
+
+  async enableTFA(method: number, code: string) {
+    return this.makeRequest(API_ENDPOINTS.auth.tfaEnable, {
+      method: 'POST',
+      body: { method, code },
+    });
+  }
+
+  async sendDisableCode() {
+    return this.makeRequest(API_ENDPOINTS.auth.tfaDisableSendCode, {
+      method: 'POST',
+    });
+  }
+
+  async disableTFA(code: string) {
+    return this.makeRequest(API_ENDPOINTS.auth.tfaDisable, {
+      method: 'POST',
+      body: { code },
+    });
+  }
+
+  async switchSetupTFA(method: number) {
+    return this.makeRequest(API_ENDPOINTS.auth.tfaSwitchSetup, {
+      method: 'POST',
+      body: { method },
+    });
+  }
+
+  async switchTFA(method: number, code: string) {
+    return this.makeRequest(API_ENDPOINTS.auth.tfaSwitch, {
+      method: 'POST',
+      body: { method, code },
+    });
+  }
+
+  async verifyTFALogin(email: string, tfaToken: string, code: string) {
+    return this.makeRequest(API_ENDPOINTS.auth.tfaVerifyLogin, {
+      method: 'POST',
+      body: { email, tfa_token: tfaToken, code },
+      requiresAuth: false,
+    });
+  }
+
+  async resendTFALoginCode(email: string, tfaToken: string) {
+    return this.makeRequest(API_ENDPOINTS.auth.tfaResendLoginCode, {
+      method: 'POST',
+      body: { email, tfa_token: tfaToken },
+      requiresAuth: false,
+    });
+  }
+
   // ==================== DASHBOARD ====================
 
   async getDashboardOverview(serviceId?: number): Promise<DashboardApiResponse> {

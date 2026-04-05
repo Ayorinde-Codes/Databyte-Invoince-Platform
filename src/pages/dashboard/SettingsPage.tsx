@@ -63,6 +63,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { DashboardLayout } from '../../components/layout/DashboardLayout';
+import { TwoFactorSection } from '../../components/security/TwoFactorSection';
 import { formatDate } from '../../utils/helpers';
 import { useAuth } from '../../hooks/useAuth';
 import {
@@ -356,17 +357,11 @@ export const SettingsPage = () => {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <div className="space-y-0.5">
-                    <Label>Two-Factor Authentication</Label>
-                    <p className="text-sm text-muted-foreground">
-                      Add an extra layer of security to your account
-                    </p>
-                  </div>
-                  <Button variant="outline">Enable 2FA</Button>
-                </div>
+              <TwoFactorSection />
 
+              <Separator />
+
+              <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <div className="space-y-0.5">
                     <Label>Session Timeout</Label>
@@ -1153,17 +1148,11 @@ export const SettingsPage = () => {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-0.5">
-                      <Label>Two-Factor Authentication</Label>
-                      <p className="text-sm text-muted-foreground">
-                        Add an extra layer of security to your account
-                      </p>
-                    </div>
-                    <Button variant="outline">Enable 2FA</Button>
-                  </div>
+                <TwoFactorSection />
 
+                <Separator />
+
+                <div className="space-y-4">
                   <div className="flex items-center justify-between">
                     <div className="space-y-0.5">
                       <Label>Session Timeout</Label>

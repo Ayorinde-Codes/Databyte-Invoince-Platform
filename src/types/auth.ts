@@ -8,6 +8,9 @@ export interface User {
   company: Company;
   created_at?: string | null;
   last_login_at?: string | null;
+  has_tfa?: boolean;
+  tfa_method?: string | null;
+  tfa_method_value?: number | null;
 }
 
 export interface Company {
@@ -41,6 +44,29 @@ export interface AuthResponse {
   token: string;
   user: User;
   requires_password_change?: boolean;
+  requires_tfa?: boolean;
+  tfa_token?: string;
+  tfa_method?: number;
+  tfa_method_name?: string;
+  email?: string;
+  entity_type?: string;
+}
+
+export interface TFAStatusResponse {
+  has_tfa: boolean;
+  tfa_method: string | null;
+  tfa_method_value: number | null;
+}
+
+export interface TFASetupResponse {
+  qr_code?: string;
+  secret?: string;
+}
+
+export interface TFAEnableResponse {
+  has_tfa: boolean;
+  tfa_method: string;
+  tfa_method_value: number;
 }
 
 export interface PendingRegistrationResult {

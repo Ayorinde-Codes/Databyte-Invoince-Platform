@@ -40,6 +40,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAuth } from '../../hooks/useAuth';
 import { formatDate } from '../../utils/helpers';
 import { DashboardLayout } from '../../components/layout/DashboardLayout';
+import { TwoFactorSection } from '../../components/security/TwoFactorSection';
 import { apiService } from '../../services/api';
 import type { User } from '../../types/auth';
 
@@ -466,23 +467,7 @@ export const ProfilePage = () => {
 
                 <Separator />
 
-                <div className="space-y-4">
-                  <h3 className="text-lg font-medium">
-                    Two-Factor Authentication
-                  </h3>
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-0.5">
-                      <Label>Enable 2FA</Label>
-                      <p className="text-sm text-muted-foreground">
-                        Add an extra layer of security to your account
-                      </p>
-                    </div>
-                    <Button variant="outline">
-                      <Shield className="w-4 h-4 mr-2" />
-                      Setup 2FA
-                    </Button>
-                  </div>
-                </div>
+                <TwoFactorSection />
               </CardContent>
             </Card>
           </TabsContent>
