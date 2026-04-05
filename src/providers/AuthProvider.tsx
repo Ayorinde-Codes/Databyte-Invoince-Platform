@@ -20,6 +20,7 @@ interface AuthContextType {
     email: string;
     password: string;
   }) => Promise<AuthResponse>;
+  completeLogin: (data: AuthResponse) => void;
   register: (userData: {
     name: string;
     email: string;
@@ -134,6 +135,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         throw new Error(errorMsg);
       }
 
+      // TFA challenge — password was correct but 2FA is required
+      if (response.data.requires_tfa) {
+        return response.data;
+      }
+
       const { token, user, requires_password_change } = response.data;
       const company = user.company;
 
@@ -174,6 +180,25 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
     // Don't set loading here either - LoginPage handles its own loading state
   };
+
+  const completeLogin = useCallback((data: AuthResponse) => {
+    const { token, user, requires_password_change } = data;
+    const company = user.company;
+
+    setToken(token);
+    setUser(user);
+    setCompany(company);
+    setRequiresPasswordChange(Boolean(requires_password_change));
+
+    setLocalStorage(AUTH_CONFIG.token_key, token);
+    setLocalStorage(AUTH_CONFIG.user_key, user);
+    setLocalStorage(AUTH_CONFIG.company_key, company);
+    if (requires_password_change) {
+      setLocalStorage(AUTH_CONFIG.requires_password_change_key, true);
+    } else {
+      removeLocalStorage(AUTH_CONFIG.requires_password_change_key);
+    }
+  }, []);
 
   // Real register function
   const register = async (userData: {
@@ -356,6 +381,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     requiresPasswordChange,
     clearRequiresPasswordChange,
     login,
+    completeLogin,
     register,
     logout,
     updateUser,
