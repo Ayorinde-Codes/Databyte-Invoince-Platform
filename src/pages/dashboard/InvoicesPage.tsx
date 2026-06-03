@@ -118,6 +118,7 @@ import { usePermissions } from '@/hooks/usePermissions';
 import { apiService, ApiError } from '@/services/api';
 import { toast } from 'sonner';
 import { extractErrorMessage } from '@/utils/error';
+import { resolveValidationErrorMessage } from '@/utils/hoptoolErrors';
 import { mergeInvoiceIntoListCaches } from '@/utils/mergeInvoiceInListCaches';
 import { useHsnCodes, useInvoiceTypes } from '@/hooks/useFIRS';
 import {
@@ -852,9 +853,12 @@ export const InvoicesPage = () => {
             });
           }
         } else {
-          const errorMessage = response.message || 'Validation failed';
-          toast.error(errorMessage);
+          toast.error(
+            resolveValidationErrorMessage(response.message, response.data),
+            { duration: 8000 }
+          );
         }
+        queryClient.invalidateQueries({ queryKey: ['invoices', activeTab] });
       }
     } catch (error: unknown) {
       const apiError = error as ApiError & { 
@@ -900,9 +904,16 @@ export const InvoicesPage = () => {
           });
         }
       } else {
-        const fallbackMessage = apiError.message || extractErrorMessage(error, 'Failed to validate invoice');
-        toast.error(fallbackMessage);
+        const responsePayload = apiError.response as { message?: string; data?: unknown } | undefined;
+        toast.error(
+          resolveValidationErrorMessage(
+            responsePayload?.message ?? apiError.message,
+            responsePayload?.data ?? apiError.data
+          ),
+          { duration: 8000 }
+        );
       }
+      queryClient.invalidateQueries({ queryKey: ['invoices', activeTab] });
     } finally {
       setIsValidating(false);
     }
@@ -1843,12 +1854,9 @@ export const InvoicesPage = () => {
                               onClick={() => handleSignInvoice(invoice)}
                               disabled={
                                 !canSignFIRS ||
-                                !invoice.firs_irn ||
                                 isSubmitting ||
-                                ['cancelled', 'rejected'].includes(invoice.firs_status || '') ||
                                 invoice.status === 'cancelled' ||
-                                invoice.firs_status === 'signed' ||
-                                ['approved'].includes(invoice.firs_status || '')
+                                invoice.firs_status !== 'validated'
                               }
                             >
                               <Send className="mr-2 h-4 w-4" />
