@@ -120,7 +120,23 @@ import { toast } from 'sonner';
 import { extractErrorMessage } from '@/utils/error';
 import { resolveValidationErrorMessage } from '@/utils/hoptoolErrors';
 import { mergeInvoiceIntoListCaches } from '@/utils/mergeInvoiceInListCaches';
-import { useHsnCodes, useInvoiceTypes } from '@/hooks/useFIRS';
+import { useHsnCodes, useInvoiceTypes, useQuantityCodes, useServiceCodes } from '@/hooks/useFIRS';
+import { IsicCodeCell } from '@/components/invoices/IsicCodeCell';
+import { LineTypeCell } from '@/components/invoices/LineTypeCell';
+import { LineNrsCodeLabel } from '@/components/invoices/LineNrsCodeLabel';
+import { UomCell } from '@/components/invoices/UomCell';
+import {
+  FirsCodeEntry,
+  getHsnCodeDisplay,
+  getHsnCodeValue,
+  getHsnProductCategory,
+  getQuantityCodeDisplay,
+  getQuantityCodeValue,
+  getServiceCodeDisplay,
+  getServiceCodeValue,
+  getServiceCategory,
+} from '@/utils/firsResourceCodes';
+import { isLineItemEditingLocked, isServiceLine } from '@/utils/invoiceLineItem';
 import {
   useUpdateARInvoiceFirsFields,
   useUpdateAPInvoiceFirsFields,
@@ -132,6 +148,8 @@ interface InvoiceItem {
   id: number;
   item_code: string | null;
   hsn_code: string | null;
+  isic_code?: string | null;
+  service_category?: string | null;
   description: string;
   quantity: number;
   unit_price: number;
@@ -142,6 +160,7 @@ interface InvoiceItem {
   uom: string | null;
   tax_category: string | null;
   product_category: string | null;
+  is_service?: boolean | null;
 }
 
 /** DB enum: sales | credit_note | debit_note | proforma | quotation */
@@ -169,7 +188,7 @@ interface Invoice {
 }
 
 interface QuickFix {
-  type: 'party_tin' | 'party_email' | 'party_telephone' | 'item_hsn_code' | 'firs_invoice_type_code' | 'firs_note' | 'previous_invoice_irn';
+  type: 'party_tin' | 'party_email' | 'party_telephone' | 'item_hsn_code' | 'item_isic_code' | 'item_uom' | 'firs_invoice_type_code' | 'firs_note' | 'previous_invoice_irn';
   message: string;
   party_id?: number;
   party_name?: string;
@@ -261,8 +280,15 @@ export const InvoicesPage = () => {
   const [isUpdatingQuickFix, setIsUpdatingQuickFix] = useState(false);
   const [editingItemId, setEditingItemId] = useState<number | null>(null);
   const [editingHsnCode, setEditingHsnCode] = useState<string>('');
+  const [editingIsicItemId, setEditingIsicItemId] = useState<number | null>(null);
+  const [editingIsicCode, setEditingIsicCode] = useState<string>('');
+  const [editingServiceCategory, setEditingServiceCategory] = useState<string>('');
+  const [isicCodePopoverOpen, setIsicCodePopoverOpen] = useState<number | null>(null);
   const [isUpdatingItem, setIsUpdatingItem] = useState(false);
   const [hsnCodePopoverOpen, setHsnCodePopoverOpen] = useState<number | null>(null);
+  const [editingUomItemId, setEditingUomItemId] = useState<number | null>(null);
+  const [editingUom, setEditingUom] = useState<string>('');
+  const [uomPopoverOpen, setUomPopoverOpen] = useState<number | null>(null);
 
   const [firsInvoiceTypeCode, setFirsInvoiceTypeCode] = useState<string>('');
   const [firsNote, setFirsNote] = useState<string>('');
@@ -276,6 +302,8 @@ export const InvoicesPage = () => {
   const updateAPFirsFields = useUpdateAPInvoiceFirsFields();
 
   const { data: hsnCodesData, isLoading: isLoadingHsnCodes } = useHsnCodes();
+  const { data: serviceCodesData, isLoading: isLoadingServiceCodes } = useServiceCodes();
+  const { data: quantityCodesData, isLoading: isLoadingQuantityCodes } = useQuantityCodes();
   const { data: invoiceTypesData, isLoading: isLoadingInvoiceTypes } = useInvoiceTypes();
   
   const hsnCodes = useMemo(() => {
@@ -292,6 +320,18 @@ export const InvoicesPage = () => {
     }
     return [];
   }, [hsnCodesData]);
+
+  const serviceCodes = useMemo(() => {
+    if (!serviceCodesData) return [];
+    if (Array.isArray(serviceCodesData)) return serviceCodesData as FirsCodeEntry[];
+    return [];
+  }, [serviceCodesData]);
+
+  const quantityCodes = useMemo(() => {
+    if (!quantityCodesData) return [];
+    if (Array.isArray(quantityCodesData)) return quantityCodesData as FirsCodeEntry[];
+    return [];
+  }, [quantityCodesData]);
   
   const invoiceTypes = useMemo(() => {
     if (!invoiceTypesData) return [];
@@ -335,18 +375,6 @@ export const InvoicesPage = () => {
     return invoiceType;
   }, []);
 
-  const getHsnCodeValue = (code: string | { hscode?: string; code?: string; value?: string; name?: string }): string => {
-    if (typeof code === 'string') return code;
-    return code.hscode || code.code || code.value || code.name || '';
-  };
-  
-  const getHsnCodeDisplay = (code: string | { hscode?: string; description?: string; code?: string; value?: string; name?: string }): string => {
-    if (typeof code === 'string') return code;
-    const codeValue = code.hscode || code.code || code.value || code.name || '';
-    const description = code.description ? ` - ${code.description}` : '';
-    return codeValue + description;
-  };
-
   const { canWrite, hasPermission } = usePermissions();
   const canCreate = hasPermission('invoices.create');
   const canUpdate = hasPermission('invoices.update');
@@ -354,6 +382,11 @@ export const InvoicesPage = () => {
   const canValidateFIRS = hasPermission('firs.validate');
   const canSignFIRS = hasPermission('firs.submit');
   const canViewParties = hasPermission('parties.view');
+
+  const canEditLineItems = useCallback(
+    (invoice: Invoice) => canUpdate && !isLineItemEditingLocked(invoice.firs_status),
+    [canUpdate]
+  );
 
   const validationPartyLinkId = useMemo(() => {
     if (!validationResult) {
@@ -570,10 +603,70 @@ export const InvoicesPage = () => {
         toast.success(`${fix.message} updated successfully`);
       } else if (fix.action === 'update_invoice_item' && fix.item_id && validationResult?.invoice_id && validationResult?.invoice_type) {
         if (fix.field === 'hsn_code') {
+          const selectedHsn = hsnCodes.find((c) => getHsnCodeValue(c) === value);
+          if (!selectedHsn) {
+            toast.error('Please select an HSN code from the NRS list');
+            setIsUpdatingQuickFix(false);
+            return;
+          }
+          const productCategory = getHsnProductCategory(selectedHsn);
           if (validationResult.invoice_type === 'ar') {
-            await apiService.updateARInvoiceItemHsnCode(validationResult.invoice_id, fix.item_id, value);
+            await apiService.updateARInvoiceItemHsnCode(
+              validationResult.invoice_id,
+              fix.item_id,
+              value,
+              productCategory
+            );
           } else {
-            await apiService.updateAPInvoiceItemHsnCode(validationResult.invoice_id, fix.item_id, value);
+            await apiService.updateAPInvoiceItemHsnCode(
+              validationResult.invoice_id,
+              fix.item_id,
+              value,
+              productCategory
+            );
+          }
+        } else if (fix.field === 'isic_code') {
+          const selectedIsic = serviceCodes.find((c) => getServiceCodeValue(c) === value);
+          if (!selectedIsic) {
+            toast.error('Please select an ISIC code from the NRS list');
+            setIsUpdatingQuickFix(false);
+            return;
+          }
+          const serviceCategory = getServiceCategory(selectedIsic) || 'General';
+          if (validationResult.invoice_type === 'ar') {
+            await apiService.updateARInvoiceItemIsicCode(
+              validationResult.invoice_id,
+              fix.item_id,
+              value,
+              serviceCategory
+            );
+          } else {
+            await apiService.updateAPInvoiceItemIsicCode(
+              validationResult.invoice_id,
+              fix.item_id,
+              value,
+              serviceCategory
+            );
+          }
+        } else if (fix.field === 'uom') {
+          const selectedUom = quantityCodes.find((c) => getQuantityCodeValue(c) === value);
+          if (!selectedUom) {
+            toast.error('Please select a UOM from the NRS list');
+            setIsUpdatingQuickFix(false);
+            return;
+          }
+          if (validationResult.invoice_type === 'ar') {
+            await apiService.updateARInvoiceItemUom(
+              validationResult.invoice_id,
+              fix.item_id,
+              value
+            );
+          } else {
+            await apiService.updateAPInvoiceItemUom(
+              validationResult.invoice_id,
+              fix.item_id,
+              value
+            );
           }
         } else {
           if (validationResult.invoice_type === 'ar') {
@@ -967,13 +1060,25 @@ export const InvoicesPage = () => {
 
   const handleUpdatePayment = async (
     invoice: Invoice,
-    paymentStatus: 'PENDING' | 'PAID' | 'REJECTED'
+    paymentStatus: 'PENDING' | 'PAID' | 'REJECTED' | 'PARTIAL'
   ) => {
     try {
+      let amount: number | undefined;
+      if (paymentStatus === 'PARTIAL') {
+        const raw = window.prompt('Enter partial payment amount:', String(invoice.total_amount ?? ''));
+        if (raw === null) return;
+        amount = parseFloat(raw);
+        if (!amount || amount <= 0) {
+          toast.error('Enter a valid partial payment amount');
+          return;
+        }
+      }
+
       const response = await apiService.updatePayment({
         invoice_id: invoice.id,
         invoice_type: activeTab,
         payment_status: paymentStatus,
+        ...(amount !== undefined ? { amount } : {}),
       });
 
       if (response.status) {
@@ -1112,12 +1217,29 @@ export const InvoicesPage = () => {
       return;
     }
 
+    const selected = hsnCodes.find((c) => getHsnCodeValue(c) === editingHsnCode.trim());
+    if (!selected) {
+      toast.error('Please select an HSN code from the NRS list');
+      return;
+    }
+    const productCategory = getHsnProductCategory(selected);
+
     setIsUpdatingItem(true);
     try {
       if (activeTab === 'ar') {
-        await apiService.updateARInvoiceItemHsnCode(invoice.id, item.id, editingHsnCode.trim());
+        await apiService.updateARInvoiceItemHsnCode(
+          invoice.id,
+          item.id,
+          editingHsnCode.trim(),
+          productCategory
+        );
       } else {
-        await apiService.updateAPInvoiceItemHsnCode(invoice.id, item.id, editingHsnCode.trim());
+        await apiService.updateAPInvoiceItemHsnCode(
+          invoice.id,
+          item.id,
+          editingHsnCode.trim(),
+          productCategory
+        );
       }
 
       toast.success('HSN code updated successfully');
@@ -1160,6 +1282,230 @@ export const InvoicesPage = () => {
       setHsnCodePopoverOpen(null);
     } catch (error: unknown) {
       toast.error(extractErrorMessage(error, 'Failed to update HSN code'));
+    } finally {
+      setIsUpdatingItem(false);
+    }
+  };
+
+  const handleStartEditIsic = (item: InvoiceItem) => {
+    setEditingIsicItemId(item.id);
+    setEditingIsicCode(item.isic_code || '');
+    setEditingServiceCategory(item.service_category || '');
+  };
+
+  const handleCancelEditIsic = () => {
+    setEditingIsicItemId(null);
+    setEditingIsicCode('');
+    setEditingServiceCategory('');
+    setIsicCodePopoverOpen(null);
+  };
+
+  const handleSaveIsicCode = async (invoice: Invoice, item: InvoiceItem) => {
+    if (!editingIsicCode.trim()) {
+      toast.error('ISIC code cannot be empty');
+      return;
+    }
+
+    const selected = serviceCodes.find((c) => getServiceCodeValue(c) === editingIsicCode.trim());
+    if (!selected) {
+      toast.error('Please select an ISIC code from the NRS list');
+      return;
+    }
+
+    setIsUpdatingItem(true);
+    try {
+      const serviceCategory = getServiceCategory(selected) || editingServiceCategory.trim() || 'General';
+      if (activeTab === 'ar') {
+        await apiService.updateARInvoiceItemIsicCode(
+          invoice.id,
+          item.id,
+          editingIsicCode.trim(),
+          serviceCategory
+        );
+      } else {
+        await apiService.updateAPInvoiceItemIsicCode(
+          invoice.id,
+          item.id,
+          editingIsicCode.trim(),
+          serviceCategory
+        );
+      }
+
+      toast.success('ISIC code updated successfully');
+
+      if (activeTab === 'ar') {
+        queryClient.invalidateQueries({ queryKey: ['invoices', 'ar'] });
+        queryClient.invalidateQueries({ queryKey: ['invoices', 'ar', invoice.id] });
+        await refetchAR();
+      } else {
+        queryClient.invalidateQueries({ queryKey: ['invoices', 'ap'] });
+        queryClient.invalidateQueries({ queryKey: ['invoices', 'ap', invoice.id] });
+        await refetchAP();
+      }
+
+      if (selectedInvoice && selectedInvoice.id === invoice.id) {
+        try {
+          if (activeTab === 'ar') {
+            const response = await apiService.getARInvoice(invoice.id, 'items');
+            if (response?.data) {
+              setSelectedInvoice(response.data as Invoice);
+            }
+          } else {
+            const response = await apiService.getAPInvoice(invoice.id, 'items');
+            if (response?.data) {
+              setSelectedInvoice(response.data as Invoice);
+            }
+          }
+        } catch (error) {
+          console.error('Failed to refresh selected invoice:', error);
+          if (selectedInvoice.items) {
+            setSelectedInvoice({
+              ...selectedInvoice,
+              items: selectedInvoice.items.map((i) =>
+                i.id === item.id
+                  ? {
+                      ...i,
+                      isic_code: editingIsicCode.trim(),
+                      service_category: serviceCategory,
+                      hsn_code: null,
+                      product_category: null,
+                    }
+                  : i
+              ),
+            });
+          }
+        }
+      }
+
+      handleCancelEditIsic();
+    } catch (error: unknown) {
+      toast.error(extractErrorMessage(error, 'Failed to update ISIC code'));
+    } finally {
+      setIsUpdatingItem(false);
+    }
+  };
+
+  const handleLineTypeChange = async (invoice: Invoice, item: InvoiceItem, isService: boolean) => {
+    if (isServiceLine(item) === isService) {
+      return;
+    }
+
+    handleCancelEditHsn();
+    handleCancelEditIsic();
+    handleCancelEditUom();
+
+    setIsUpdatingItem(true);
+    try {
+      if (activeTab === 'ar') {
+        await apiService.updateARInvoiceItemLineType(invoice.id, item.id, isService);
+      } else {
+        await apiService.updateAPInvoiceItemLineType(invoice.id, item.id, isService);
+      }
+
+      toast.success(`Line type updated to ${isService ? 'service' : 'goods'}`);
+
+      if (activeTab === 'ar') {
+        queryClient.invalidateQueries({ queryKey: ['invoices', 'ar'] });
+        queryClient.invalidateQueries({ queryKey: ['invoices', 'ar', invoice.id] });
+        await refetchAR();
+      } else {
+        queryClient.invalidateQueries({ queryKey: ['invoices', 'ap'] });
+        queryClient.invalidateQueries({ queryKey: ['invoices', 'ap', invoice.id] });
+        await refetchAP();
+      }
+
+      const patchItem = (i: InvoiceItem): InvoiceItem =>
+        i.id === item.id
+          ? {
+              ...i,
+              is_service: isService,
+              hsn_code: isService ? null : i.hsn_code,
+              product_category: isService ? null : i.product_category,
+              isic_code: isService ? i.isic_code : null,
+              service_category: isService ? i.service_category : null,
+            }
+          : i;
+
+      if (selectedInvoice && selectedInvoice.id === invoice.id && selectedInvoice.items) {
+        setSelectedInvoice({
+          ...selectedInvoice,
+          items: selectedInvoice.items.map(patchItem),
+        });
+      }
+    } catch (error: unknown) {
+      toast.error(extractErrorMessage(error, 'Failed to update line type'));
+    } finally {
+      setIsUpdatingItem(false);
+    }
+  };
+
+  const handleStartEditUom = (item: InvoiceItem) => {
+    setEditingUomItemId(item.id);
+    setEditingUom(item.uom || '');
+  };
+
+  const handleCancelEditUom = () => {
+    setEditingUomItemId(null);
+    setEditingUom('');
+    setUomPopoverOpen(null);
+  };
+
+  const handleSaveUom = async (invoice: Invoice, item: InvoiceItem) => {
+    if (!editingUom.trim()) {
+      toast.error('Unit of measure cannot be empty');
+      return;
+    }
+
+    const selected = quantityCodes.find((c) => getQuantityCodeValue(c) === editingUom.trim());
+    if (!selected) {
+      toast.error('Please select a UOM from the NRS list');
+      return;
+    }
+
+    setIsUpdatingItem(true);
+    try {
+      if (activeTab === 'ar') {
+        await apiService.updateARInvoiceItemUom(invoice.id, item.id, editingUom.trim());
+      } else {
+        await apiService.updateAPInvoiceItemUom(invoice.id, item.id, editingUom.trim());
+      }
+
+      toast.success('Unit of measure updated successfully');
+
+      if (activeTab === 'ar') {
+        queryClient.invalidateQueries({ queryKey: ['invoices', 'ar'] });
+        queryClient.invalidateQueries({ queryKey: ['invoices', 'ar', invoice.id] });
+        await refetchAR();
+      } else {
+        queryClient.invalidateQueries({ queryKey: ['invoices', 'ap'] });
+        queryClient.invalidateQueries({ queryKey: ['invoices', 'ap', invoice.id] });
+        await refetchAP();
+      }
+
+      if (selectedInvoice && selectedInvoice.id === invoice.id) {
+        try {
+          const response =
+            activeTab === 'ar'
+              ? await apiService.getARInvoice(invoice.id, 'items')
+              : await apiService.getAPInvoice(invoice.id, 'items');
+          if (response?.data) {
+            setSelectedInvoice(response.data as Invoice);
+          }
+        } catch {
+          if (selectedInvoice.items) {
+            setSelectedInvoice({
+              ...selectedInvoice,
+              items: selectedInvoice.items.map((i) =>
+                i.id === item.id ? { ...i, uom: editingUom.trim() } : i
+              ),
+            });
+          }
+        }
+      }
+
+      handleCancelEditUom();
+    } catch (error: unknown) {
+      toast.error(extractErrorMessage(error, 'Failed to update unit of measure'));
     } finally {
       setIsUpdatingItem(false);
     }
@@ -1877,6 +2223,18 @@ export const InvoicesPage = () => {
                                   Mark as Paid
                               </DropdownMenuItem>
                                 <DropdownMenuItem
+                                  onClick={() => handleUpdatePayment(invoice, 'PARTIAL')}
+                                  disabled={
+                                    !canSignFIRS ||
+                                    invoice.status === 'paid' ||
+                                    invoice.status === 'cancelled' ||
+                                    ['cancelled', 'rejected'].includes(invoice.firs_status || '')
+                                  }
+                                >
+                                  <Clock className="mr-2 h-4 w-4" />
+                                  Record Partial Payment
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
                                   onClick={() => handleUpdatePayment(invoice, 'PENDING')}
                                   disabled={
                                     !canSignFIRS ||
@@ -1944,7 +2302,9 @@ export const InvoicesPage = () => {
                                               <TableHead className="w-[50px]">#</TableHead>
                                               <TableHead>Item Code</TableHead>
                                               <TableHead>Description</TableHead>
-                                              <TableHead>HSN Code</TableHead>
+                                              <TableHead>Type</TableHead>
+                                              <TableHead>HSN / ISIC</TableHead>
+                                              <TableHead>UOM</TableHead>
                                               <TableHead className="text-right">Qty</TableHead>
                                               <TableHead className="text-right">Unit Price</TableHead>
                                               <TableHead className="text-right">Tax</TableHead>
@@ -1952,7 +2312,11 @@ export const InvoicesPage = () => {
                                             </TableRow>
                                           </TableHeader>
                                           <TableBody>
-                                            {invoice.items.map((item: InvoiceItem, index: number) => (
+                                            {invoice.items.map((item: InvoiceItem, index: number) => {
+                                              const canEditItems = canEditLineItems(invoice);
+                                              const lineIsService = isServiceLine(item);
+
+                                              return (
                                               <TableRow key={item.id}>
                                                 <TableCell className="font-medium">
                                                   {index + 1}
@@ -1974,7 +2338,36 @@ export const InvoicesPage = () => {
                                                     )}
                                                   </div>
                                                 </TableCell>
-                                                <TableCell>
+                                                <LineTypeCell
+                                                  isService={lineIsService}
+                                                  canEdit={canEditItems}
+                                                  isUpdating={isUpdatingItem}
+                                                  onChange={(isService) => handleLineTypeChange(invoice, item, isService)}
+                                                />
+                                                {lineIsService ? (
+                                                  <IsicCodeCell
+                                                    item={item}
+                                                    canUpdate={canEditItems}
+                                                    isEditing={editingIsicItemId === item.id}
+                                                    editingCode={editingIsicCode}
+                                                    isUpdating={isUpdatingItem}
+                                                    popoverOpen={isicCodePopoverOpen === item.id}
+                                                    serviceCodes={serviceCodes}
+                                                    isLoadingCodes={isLoadingServiceCodes}
+                                                    onStartEdit={() => handleStartEditIsic(item)}
+                                                    onCancelEdit={handleCancelEditIsic}
+                                                    onSave={() => handleSaveIsicCode(invoice, item)}
+                                                    onSelectCode={(code, category) => {
+                                                      setEditingIsicCode(code);
+                                                      setEditingServiceCategory(category);
+                                                    }}
+                                                    onPopoverOpenChange={(open) =>
+                                                      setIsicCodePopoverOpen(open ? item.id : null)
+                                                    }
+                                                  />
+                                                ) : (
+                                                <TableCell className={!canEditItems ? 'opacity-60' : undefined}>
+                                                  <LineNrsCodeLabel isService={false} />
                                                   {editingItemId === item.id ? (
                                                     <div className="flex items-center gap-2">
                                                       <Popover
@@ -1985,7 +2378,7 @@ export const InvoicesPage = () => {
                                                           <Button
                                                             variant="outline"
                                                             role="combobox"
-                                                            className="h-7 w-32 justify-between text-xs"
+                                                            className="h-7 min-w-[12rem] justify-between text-xs"
                                                             disabled={isUpdatingItem}
                                                           >
                                                             {editingHsnCode || 'Select HSN code...'}
@@ -2000,11 +2393,8 @@ export const InvoicesPage = () => {
                                                             />
                                                             <CommandList>
                                                               <CommandEmpty>
-                                                                <div className="py-2 text-center text-sm">
-                                                                  <div>No HSN code found.</div>
-                                                                  <div className="text-xs text-muted-foreground mt-1">
-                                                                    Type to enter custom code
-                                                                  </div>
+                                                                <div className="py-2 text-center text-sm text-muted-foreground">
+                                                                  No matching HSN code
                                                                 </div>
                                                               </CommandEmpty>
                                                               <CommandGroup>
@@ -2035,13 +2425,6 @@ export const InvoicesPage = () => {
                                                           </Command>
                                                         </PopoverContent>
                                                       </Popover>
-                                                      <Input
-                                                        value={editingHsnCode}
-                                                        onChange={(e) => setEditingHsnCode(e.target.value)}
-                                                        placeholder="Or type custom code"
-                                                        className="h-7 text-xs w-32"
-                                                        disabled={isUpdatingItem}
-                                                      />
                                                       <Button
                                                         size="sm"
                                                         variant="ghost"
@@ -2066,13 +2449,13 @@ export const InvoicesPage = () => {
                                                       <span className="text-sm">
                                                         {item.hsn_code || 'Not set'}
                                                       </span>
-                                                      {(canUpdate || !item.hsn_code) && (
+                                                      {canEditItems && (
                                                         <Button
                                                           size="sm"
                                                           variant="ghost"
                                                           className="h-5 w-5 p-0"
                                                           onClick={() => handleStartEditHsn(item)}
-                                                          title={!canUpdate && !item.hsn_code ? 'Set HSN code' : 'Edit HSN code'}
+                                                          title={!canEditItems && !item.hsn_code ? 'Set HSN code' : 'Edit HSN code'}
                                                         >
                                                           <Edit className="h-3 w-3" />
                                                         </Button>
@@ -2080,22 +2463,31 @@ export const InvoicesPage = () => {
                                                     </div>
                                                   )}
                                                 </TableCell>
+                                                )}
+                                                <UomCell
+                                                  item={item}
+                                                  canUpdate={canEditItems}
+                                                  isEditing={editingUomItemId === item.id}
+                                                  editingUom={editingUom}
+                                                  isUpdating={isUpdatingItem}
+                                                  popoverOpen={uomPopoverOpen === item.id}
+                                                  quantityCodes={quantityCodes}
+                                                  isLoadingCodes={isLoadingQuantityCodes}
+                                                  onStartEdit={() => handleStartEditUom(item)}
+                                                  onCancelEdit={handleCancelEditUom}
+                                                  onSave={() => handleSaveUom(invoice, item)}
+                                                  onSelectCode={setEditingUom}
+                                                  onPopoverOpenChange={(open) =>
+                                                    setUomPopoverOpen(open ? item.id : null)
+                                                  }
+                                                />
                                                 <TableCell className="text-right">
-                                                  <div>
-                                                    <div className="font-medium">
-                                                      {typeof item.quantity === 'number'
-                                                        ? item.quantity.toLocaleString('en-US', {
-                                                            minimumFractionDigits: 0,
-                                                            maximumFractionDigits: 3,
-                                                          })
-                                                        : item.quantity}
-                                                    </div>
-                                                    {item.uom && (
-                                                      <div className="text-xs text-muted-foreground">
-                                                        {item.uom}
-                                                      </div>
-                                                    )}
-                                                  </div>
+                                                  {typeof item.quantity === 'number'
+                                                    ? item.quantity.toLocaleString('en-US', {
+                                                        minimumFractionDigits: 0,
+                                                        maximumFractionDigits: 3,
+                                                      })
+                                                    : item.quantity}
                                                 </TableCell>
                                                 <TableCell className="text-right">
                                                   {formatCurrency(
@@ -2116,7 +2508,8 @@ export const InvoicesPage = () => {
                                                   )}
                       </TableCell>
                     </TableRow>
-                  ))}
+                  );
+                })}
                                           </TableBody>
                                         </Table>
                                       </div>
@@ -2361,14 +2754,20 @@ export const InvoicesPage = () => {
                           <TableHead className="w-[50px]">#</TableHead>
                           <TableHead>Item Code</TableHead>
                           <TableHead>Description</TableHead>
-                          <TableHead>HSN Code</TableHead>
+                          <TableHead>Type</TableHead>
+                          <TableHead>HSN / ISIC</TableHead>
+                          <TableHead>UOM</TableHead>
                           <TableHead className="text-right">Qty</TableHead>
                           <TableHead className="text-right">Unit Price</TableHead>
                           <TableHead className="text-right">Total</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {selectedInvoice.items.map((item: InvoiceItem, index: number) => (
+                        {selectedInvoice.items.map((item: InvoiceItem, index: number) => {
+                          const canEditItems = canEditLineItems(selectedInvoice);
+                          const lineIsService = isServiceLine(item);
+
+                          return (
                           <TableRow key={item.id}>
                             <TableCell className="font-medium">{index + 1}</TableCell>
                             <TableCell>{item.item_code || 'N/A'}</TableCell>
@@ -2377,7 +2776,36 @@ export const InvoicesPage = () => {
                                 <div className="line-clamp-2">{item.description}</div>
                               </div>
                             </TableCell>
-                            <TableCell>
+                            <LineTypeCell
+                              isService={lineIsService}
+                              canEdit={canEditItems}
+                              isUpdating={isUpdatingItem}
+                              onChange={(isService) => handleLineTypeChange(selectedInvoice, item, isService)}
+                            />
+                            {lineIsService ? (
+                              <IsicCodeCell
+                                item={item}
+                                canUpdate={canEditItems}
+                                isEditing={editingIsicItemId === item.id}
+                                editingCode={editingIsicCode}
+                                isUpdating={isUpdatingItem}
+                                popoverOpen={isicCodePopoverOpen === item.id}
+                                serviceCodes={serviceCodes}
+                                isLoadingCodes={isLoadingServiceCodes}
+                                onStartEdit={() => handleStartEditIsic(item)}
+                                onCancelEdit={handleCancelEditIsic}
+                                onSave={() => handleSaveIsicCode(selectedInvoice, item)}
+                                onSelectCode={(code, category) => {
+                                  setEditingIsicCode(code);
+                                  setEditingServiceCategory(category);
+                                }}
+                                onPopoverOpenChange={(open) =>
+                                  setIsicCodePopoverOpen(open ? item.id : null)
+                                }
+                              />
+                            ) : (
+                            <TableCell className={!canEditItems ? 'opacity-60' : undefined}>
+                              <LineNrsCodeLabel isService={false} />
                               {editingItemId === item.id ? (
                                 <div className="flex items-center gap-2">
                                   <Popover
@@ -2388,7 +2816,7 @@ export const InvoicesPage = () => {
                                       <Button
                                         variant="outline"
                                         role="combobox"
-                                        className="h-8 w-40 justify-between text-xs"
+                                        className="h-8 min-w-[12rem] justify-between text-xs"
                                         disabled={isUpdatingItem}
                                       >
                                         {editingHsnCode || 'Select HSN code...'}
@@ -2403,11 +2831,8 @@ export const InvoicesPage = () => {
                                         />
                                         <CommandList>
                                           <CommandEmpty>
-                                            <div className="py-2 text-center text-sm">
-                                              <div>No HSN code found.</div>
-                                              <div className="text-xs text-muted-foreground mt-1">
-                                                Type to enter custom code
-                                              </div>
+                                            <div className="py-2 text-center text-sm text-muted-foreground">
+                                              No matching HSN code
                                             </div>
                                           </CommandEmpty>
                                           <CommandGroup>
@@ -2438,13 +2863,6 @@ export const InvoicesPage = () => {
                                       </Command>
                                     </PopoverContent>
                                   </Popover>
-                                  <Input
-                                    value={editingHsnCode}
-                                    onChange={(e) => setEditingHsnCode(e.target.value)}
-                                    placeholder="Or type custom code"
-                                    className="h-8 text-xs w-32"
-                                    disabled={isUpdatingItem}
-                                  />
                                   <Button
                                     size="sm"
                                     variant="ghost"
@@ -2469,13 +2887,13 @@ export const InvoicesPage = () => {
                                   <span className="text-sm">
                                     {item.hsn_code || 'Not set'}
                                   </span>
-                                  {(canUpdate || !item.hsn_code) && (
+                                  {canEditItems && (
                                     <Button
                                       size="sm"
                                       variant="ghost"
                                       className="h-6 w-6 p-0"
                                       onClick={() => handleStartEditHsn(item)}
-                                      title={!canUpdate && !item.hsn_code ? 'Set HSN code' : 'Edit HSN code'}
+                                      title={!canEditItems && !item.hsn_code ? 'Set HSN code' : 'Edit HSN code'}
                                     >
                                       <Edit className="h-3 w-3" />
                                     </Button>
@@ -2483,6 +2901,24 @@ export const InvoicesPage = () => {
                                 </div>
                               )}
                             </TableCell>
+                            )}
+                            <UomCell
+                              item={item}
+                              canUpdate={canEditItems}
+                              isEditing={editingUomItemId === item.id}
+                              editingUom={editingUom}
+                              isUpdating={isUpdatingItem}
+                              popoverOpen={uomPopoverOpen === item.id}
+                              quantityCodes={quantityCodes}
+                              isLoadingCodes={isLoadingQuantityCodes}
+                              onStartEdit={() => handleStartEditUom(item)}
+                              onCancelEdit={handleCancelEditUom}
+                              onSave={() => handleSaveUom(selectedInvoice, item)}
+                              onSelectCode={setEditingUom}
+                              onPopoverOpenChange={(open) =>
+                                setUomPopoverOpen(open ? item.id : null)
+                              }
+                            />
                             <TableCell className="text-right">
                               {typeof item.quantity === 'number'
                                 ? item.quantity.toLocaleString('en-US', {
@@ -2504,7 +2940,8 @@ export const InvoicesPage = () => {
                               )}
                             </TableCell>
                           </TableRow>
-                        ))}
+                          );
+                        })}
                       </TableBody>
                     </Table>
                   </div>
@@ -2593,7 +3030,11 @@ export const InvoicesPage = () => {
                         if (fix.type === 'party_tin' && (error.includes('TIN is missing') || error.includes('TIN'))) return true;
                         if (fix.type === 'party_email' && error.includes('email')) return true;
                         if (fix.type === 'party_telephone' && error.includes('telephone')) return true;
-                        if (fix.type === 'item_hsn_code' && error.includes('HSN codes')) {
+                        if (fix.type === 'item_hsn_code' && error.includes('HSN')) {
+                          if (fix.item_description && error.includes(fix.item_description)) return true;
+                          return true;
+                        }
+                        if (fix.type === 'item_isic_code' && error.includes('ISIC')) {
                           if (fix.item_description && error.includes(fix.item_description)) return true;
                           return true;
                         }
@@ -2754,7 +3195,9 @@ export const InvoicesPage = () => {
                     {quickFixDialog.fix.field === 'email' && 'Email'}
                     {quickFixDialog.fix.field === 'telephone' && 'Telephone'}
                     {quickFixDialog.fix.field === 'hsn_code' && 'HSN Code'}
-                    {quickFixDialog.fix.field !== 'tin' && quickFixDialog.fix.field !== 'email' && quickFixDialog.fix.field !== 'telephone' && quickFixDialog.fix.field !== 'hsn_code' && quickFixDialog.fix.field}
+                    {quickFixDialog.fix.field === 'isic_code' && 'ISIC Code'}
+                    {quickFixDialog.fix.field === 'uom' && 'Unit of Measure'}
+                    {quickFixDialog.fix.field !== 'tin' && quickFixDialog.fix.field !== 'email' && quickFixDialog.fix.field !== 'telephone' && quickFixDialog.fix.field !== 'hsn_code' && quickFixDialog.fix.field !== 'isic_code' && quickFixDialog.fix.field !== 'uom' && quickFixDialog.fix.field}
                   </label>
                   {quickFixDialog.fix.field === 'hsn_code' && hsnCodes.length > 0 ? (
                     <Popover>
@@ -2779,11 +3222,8 @@ export const InvoicesPage = () => {
                           <CommandInput placeholder="Search HSN codes..." className="h-9" />
                           <CommandList>
                             <CommandEmpty>
-                              <div className="py-2 text-center text-sm">
-                                <div>No HSN code found.</div>
-                                <div className="text-xs text-muted-foreground mt-1">
-                                  Type to enter custom code
-                                </div>
+                              <div className="py-2 text-center text-sm text-muted-foreground">
+                                No matching HSN code
                               </div>
                             </CommandEmpty>
                             <CommandGroup>
@@ -2813,6 +3253,116 @@ export const InvoicesPage = () => {
                         </Command>
                       </PopoverContent>
                     </Popover>
+                  ) : quickFixDialog.fix.field === 'hsn_code' ? (
+                    <p className="text-sm text-muted-foreground">
+                      {isLoadingHsnCodes ? 'Loading HSN codes...' : 'HSN codes unavailable. Run firs:sync-resources.'}
+                    </p>
+                  ) : quickFixDialog.fix.field === 'isic_code' && serviceCodes.length > 0 ? (
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          role="combobox"
+                          className="w-full justify-between"
+                          disabled={isUpdatingQuickFix}
+                        >
+                          {quickFixDialog.value
+                            ? (() => {
+                                const selectedCode = serviceCodes.find((c) => getServiceCodeValue(c) === quickFixDialog.value);
+                                return selectedCode ? getServiceCodeDisplay(selectedCode) : quickFixDialog.value;
+                              })()
+                            : 'Select ISIC code...'}
+                          <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0 z-[100]" align="start">
+                        <Command>
+                          <CommandInput placeholder="Search service codes..." className="h-9" />
+                          <CommandList>
+                            <CommandEmpty>No service code found.</CommandEmpty>
+                            <CommandGroup>
+                              {isLoadingServiceCodes ? (
+                                <div className="py-2 text-center text-sm text-muted-foreground">
+                                  Loading service codes...
+                                </div>
+                              ) : (
+                                serviceCodes.map((code) => {
+                                  const codeValue = getServiceCodeValue(code);
+                                  return (
+                                    <CommandItem
+                                      key={codeValue}
+                                      value={codeValue}
+                                      onSelect={() => {
+                                        setQuickFixDialog({ ...quickFixDialog, value: codeValue });
+                                      }}
+                                    >
+                                      {getServiceCodeDisplay(code)}
+                                    </CommandItem>
+                                  );
+                                })
+                              )}
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
+                  ) : quickFixDialog.fix.field === 'isic_code' ? (
+                    <p className="text-sm text-muted-foreground">
+                      {isLoadingServiceCodes ? 'Loading ISIC codes...' : 'ISIC codes unavailable. Run firs:sync-resources.'}
+                    </p>
+                  ) : quickFixDialog.fix.field === 'uom' && quantityCodes.length > 0 ? (
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          role="combobox"
+                          className="w-full justify-between"
+                          disabled={isUpdatingQuickFix}
+                        >
+                          {quickFixDialog.value
+                            ? (() => {
+                                const selectedCode = quantityCodes.find((c) => getQuantityCodeValue(c) === quickFixDialog.value);
+                                return selectedCode ? getQuantityCodeDisplay(selectedCode) : quickFixDialog.value;
+                              })()
+                            : 'Select UOM...'}
+                          <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0 z-[100]" align="start">
+                        <Command>
+                          <CommandInput placeholder="Search UOM codes..." className="h-9" />
+                          <CommandList>
+                            <CommandEmpty>No UOM code found.</CommandEmpty>
+                            <CommandGroup>
+                              {isLoadingQuantityCodes ? (
+                                <div className="py-2 text-center text-sm text-muted-foreground">
+                                  Loading UOM codes...
+                                </div>
+                              ) : (
+                                quantityCodes.map((code) => {
+                                  const codeValue = getQuantityCodeValue(code);
+                                  return (
+                                    <CommandItem
+                                      key={codeValue}
+                                      value={codeValue}
+                                      onSelect={() => {
+                                        setQuickFixDialog({ ...quickFixDialog, value: codeValue });
+                                      }}
+                                    >
+                                      {getQuantityCodeDisplay(code)}
+                                    </CommandItem>
+                                  );
+                                })
+                              )}
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
+                  ) : quickFixDialog.fix.field === 'uom' ? (
+                    <p className="text-sm text-muted-foreground">
+                      {isLoadingQuantityCodes ? 'Loading UOM codes...' : 'UOM codes unavailable. Run firs:sync-resources.'}
+                    </p>
                   ) : (
                     <Input
                       type={quickFixDialog.fix.field === 'email' ? 'email' : 'text'}
@@ -3048,7 +3598,11 @@ export const InvoicesPage = () => {
                         if (fix.type === 'party_tin' && (error.includes('TIN is missing') || error.includes('TIN'))) return true;
                         if (fix.type === 'party_email' && error.includes('email')) return true;
                         if (fix.type === 'party_telephone' && error.includes('telephone')) return true;
-                        if (fix.type === 'item_hsn_code' && error.includes('HSN codes')) {
+                        if (fix.type === 'item_hsn_code' && error.includes('HSN')) {
+                          if (fix.item_description && error.includes(fix.item_description)) return true;
+                          return true;
+                        }
+                        if (fix.type === 'item_isic_code' && error.includes('ISIC')) {
                           if (fix.item_description && error.includes(fix.item_description)) return true;
                           return true;
                         }
@@ -3209,7 +3763,9 @@ export const InvoicesPage = () => {
                     {quickFixDialog.fix.field === 'email' && 'Email'}
                     {quickFixDialog.fix.field === 'telephone' && 'Telephone'}
                     {quickFixDialog.fix.field === 'hsn_code' && 'HSN Code'}
-                    {quickFixDialog.fix.field !== 'tin' && quickFixDialog.fix.field !== 'email' && quickFixDialog.fix.field !== 'telephone' && quickFixDialog.fix.field !== 'hsn_code' && quickFixDialog.fix.field}
+                    {quickFixDialog.fix.field === 'isic_code' && 'ISIC Code'}
+                    {quickFixDialog.fix.field === 'uom' && 'Unit of Measure'}
+                    {quickFixDialog.fix.field !== 'tin' && quickFixDialog.fix.field !== 'email' && quickFixDialog.fix.field !== 'telephone' && quickFixDialog.fix.field !== 'hsn_code' && quickFixDialog.fix.field !== 'isic_code' && quickFixDialog.fix.field !== 'uom' && quickFixDialog.fix.field}
                   </label>
                   {quickFixDialog.fix.field === 'hsn_code' && hsnCodes.length > 0 ? (
                     <Popover>
@@ -3234,11 +3790,8 @@ export const InvoicesPage = () => {
                           <CommandInput placeholder="Search HSN codes..." className="h-9" />
                           <CommandList>
                             <CommandEmpty>
-                              <div className="py-2 text-center text-sm">
-                                <div>No HSN code found.</div>
-                                <div className="text-xs text-muted-foreground mt-1">
-                                  Type to enter custom code
-                                </div>
+                              <div className="py-2 text-center text-sm text-muted-foreground">
+                                No matching HSN code
                               </div>
                             </CommandEmpty>
                             <CommandGroup>
@@ -3268,6 +3821,116 @@ export const InvoicesPage = () => {
                         </Command>
                       </PopoverContent>
                     </Popover>
+                  ) : quickFixDialog.fix.field === 'hsn_code' ? (
+                    <p className="text-sm text-muted-foreground">
+                      {isLoadingHsnCodes ? 'Loading HSN codes...' : 'HSN codes unavailable. Run firs:sync-resources.'}
+                    </p>
+                  ) : quickFixDialog.fix.field === 'isic_code' && serviceCodes.length > 0 ? (
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          role="combobox"
+                          className="w-full justify-between"
+                          disabled={isUpdatingQuickFix}
+                        >
+                          {quickFixDialog.value
+                            ? (() => {
+                                const selectedCode = serviceCodes.find((c) => getServiceCodeValue(c) === quickFixDialog.value);
+                                return selectedCode ? getServiceCodeDisplay(selectedCode) : quickFixDialog.value;
+                              })()
+                            : 'Select ISIC code...'}
+                          <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0 z-[100]" align="start">
+                        <Command>
+                          <CommandInput placeholder="Search service codes..." className="h-9" />
+                          <CommandList>
+                            <CommandEmpty>No service code found.</CommandEmpty>
+                            <CommandGroup>
+                              {isLoadingServiceCodes ? (
+                                <div className="py-2 text-center text-sm text-muted-foreground">
+                                  Loading service codes...
+                                </div>
+                              ) : (
+                                serviceCodes.map((code) => {
+                                  const codeValue = getServiceCodeValue(code);
+                                  return (
+                                    <CommandItem
+                                      key={codeValue}
+                                      value={codeValue}
+                                      onSelect={() => {
+                                        setQuickFixDialog({ ...quickFixDialog, value: codeValue });
+                                      }}
+                                    >
+                                      {getServiceCodeDisplay(code)}
+                                    </CommandItem>
+                                  );
+                                })
+                              )}
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
+                  ) : quickFixDialog.fix.field === 'isic_code' ? (
+                    <p className="text-sm text-muted-foreground">
+                      {isLoadingServiceCodes ? 'Loading ISIC codes...' : 'ISIC codes unavailable. Run firs:sync-resources.'}
+                    </p>
+                  ) : quickFixDialog.fix.field === 'uom' && quantityCodes.length > 0 ? (
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          role="combobox"
+                          className="w-full justify-between"
+                          disabled={isUpdatingQuickFix}
+                        >
+                          {quickFixDialog.value
+                            ? (() => {
+                                const selectedCode = quantityCodes.find((c) => getQuantityCodeValue(c) === quickFixDialog.value);
+                                return selectedCode ? getQuantityCodeDisplay(selectedCode) : quickFixDialog.value;
+                              })()
+                            : 'Select UOM...'}
+                          <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0 z-[100]" align="start">
+                        <Command>
+                          <CommandInput placeholder="Search UOM codes..." className="h-9" />
+                          <CommandList>
+                            <CommandEmpty>No UOM code found.</CommandEmpty>
+                            <CommandGroup>
+                              {isLoadingQuantityCodes ? (
+                                <div className="py-2 text-center text-sm text-muted-foreground">
+                                  Loading UOM codes...
+                                </div>
+                              ) : (
+                                quantityCodes.map((code) => {
+                                  const codeValue = getQuantityCodeValue(code);
+                                  return (
+                                    <CommandItem
+                                      key={codeValue}
+                                      value={codeValue}
+                                      onSelect={() => {
+                                        setQuickFixDialog({ ...quickFixDialog, value: codeValue });
+                                      }}
+                                    >
+                                      {getQuantityCodeDisplay(code)}
+                                    </CommandItem>
+                                  );
+                                })
+                              )}
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
+                  ) : quickFixDialog.fix.field === 'uom' ? (
+                    <p className="text-sm text-muted-foreground">
+                      {isLoadingQuantityCodes ? 'Loading UOM codes...' : 'UOM codes unavailable. Run firs:sync-resources.'}
+                    </p>
                   ) : (
                     <Input
                       type={quickFixDialog.fix.field === 'email' ? 'email' : 'text'}
@@ -3503,7 +4166,11 @@ export const InvoicesPage = () => {
                         if (fix.type === 'party_tin' && (error.includes('TIN is missing') || error.includes('TIN'))) return true;
                         if (fix.type === 'party_email' && error.includes('email')) return true;
                         if (fix.type === 'party_telephone' && error.includes('telephone')) return true;
-                        if (fix.type === 'item_hsn_code' && error.includes('HSN codes')) {
+                        if (fix.type === 'item_hsn_code' && error.includes('HSN')) {
+                          if (fix.item_description && error.includes(fix.item_description)) return true;
+                          return true;
+                        }
+                        if (fix.type === 'item_isic_code' && error.includes('ISIC')) {
                           if (fix.item_description && error.includes(fix.item_description)) return true;
                           return true;
                         }
@@ -3664,7 +4331,9 @@ export const InvoicesPage = () => {
                     {quickFixDialog.fix.field === 'email' && 'Email'}
                     {quickFixDialog.fix.field === 'telephone' && 'Telephone'}
                     {quickFixDialog.fix.field === 'hsn_code' && 'HSN Code'}
-                    {quickFixDialog.fix.field !== 'tin' && quickFixDialog.fix.field !== 'email' && quickFixDialog.fix.field !== 'telephone' && quickFixDialog.fix.field !== 'hsn_code' && quickFixDialog.fix.field}
+                    {quickFixDialog.fix.field === 'isic_code' && 'ISIC Code'}
+                    {quickFixDialog.fix.field === 'uom' && 'Unit of Measure'}
+                    {quickFixDialog.fix.field !== 'tin' && quickFixDialog.fix.field !== 'email' && quickFixDialog.fix.field !== 'telephone' && quickFixDialog.fix.field !== 'hsn_code' && quickFixDialog.fix.field !== 'isic_code' && quickFixDialog.fix.field !== 'uom' && quickFixDialog.fix.field}
                   </label>
                   {quickFixDialog.fix.field === 'hsn_code' && hsnCodes.length > 0 ? (
                     <Popover>
@@ -3689,11 +4358,8 @@ export const InvoicesPage = () => {
                           <CommandInput placeholder="Search HSN codes..." className="h-9" />
                           <CommandList>
                             <CommandEmpty>
-                              <div className="py-2 text-center text-sm">
-                                <div>No HSN code found.</div>
-                                <div className="text-xs text-muted-foreground mt-1">
-                                  Type to enter custom code
-                                </div>
+                              <div className="py-2 text-center text-sm text-muted-foreground">
+                                No matching HSN code
                               </div>
                             </CommandEmpty>
                             <CommandGroup>
@@ -3723,6 +4389,116 @@ export const InvoicesPage = () => {
                         </Command>
                       </PopoverContent>
                     </Popover>
+                  ) : quickFixDialog.fix.field === 'hsn_code' ? (
+                    <p className="text-sm text-muted-foreground">
+                      {isLoadingHsnCodes ? 'Loading HSN codes...' : 'HSN codes unavailable. Run firs:sync-resources.'}
+                    </p>
+                  ) : quickFixDialog.fix.field === 'isic_code' && serviceCodes.length > 0 ? (
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          role="combobox"
+                          className="w-full justify-between"
+                          disabled={isUpdatingQuickFix}
+                        >
+                          {quickFixDialog.value
+                            ? (() => {
+                                const selectedCode = serviceCodes.find((c) => getServiceCodeValue(c) === quickFixDialog.value);
+                                return selectedCode ? getServiceCodeDisplay(selectedCode) : quickFixDialog.value;
+                              })()
+                            : 'Select ISIC code...'}
+                          <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0 z-[100]" align="start">
+                        <Command>
+                          <CommandInput placeholder="Search service codes..." className="h-9" />
+                          <CommandList>
+                            <CommandEmpty>No service code found.</CommandEmpty>
+                            <CommandGroup>
+                              {isLoadingServiceCodes ? (
+                                <div className="py-2 text-center text-sm text-muted-foreground">
+                                  Loading service codes...
+                                </div>
+                              ) : (
+                                serviceCodes.map((code) => {
+                                  const codeValue = getServiceCodeValue(code);
+                                  return (
+                                    <CommandItem
+                                      key={codeValue}
+                                      value={codeValue}
+                                      onSelect={() => {
+                                        setQuickFixDialog({ ...quickFixDialog, value: codeValue });
+                                      }}
+                                    >
+                                      {getServiceCodeDisplay(code)}
+                                    </CommandItem>
+                                  );
+                                })
+                              )}
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
+                  ) : quickFixDialog.fix.field === 'isic_code' ? (
+                    <p className="text-sm text-muted-foreground">
+                      {isLoadingServiceCodes ? 'Loading ISIC codes...' : 'ISIC codes unavailable. Run firs:sync-resources.'}
+                    </p>
+                  ) : quickFixDialog.fix.field === 'uom' && quantityCodes.length > 0 ? (
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          role="combobox"
+                          className="w-full justify-between"
+                          disabled={isUpdatingQuickFix}
+                        >
+                          {quickFixDialog.value
+                            ? (() => {
+                                const selectedCode = quantityCodes.find((c) => getQuantityCodeValue(c) === quickFixDialog.value);
+                                return selectedCode ? getQuantityCodeDisplay(selectedCode) : quickFixDialog.value;
+                              })()
+                            : 'Select UOM...'}
+                          <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0 z-[100]" align="start">
+                        <Command>
+                          <CommandInput placeholder="Search UOM codes..." className="h-9" />
+                          <CommandList>
+                            <CommandEmpty>No UOM code found.</CommandEmpty>
+                            <CommandGroup>
+                              {isLoadingQuantityCodes ? (
+                                <div className="py-2 text-center text-sm text-muted-foreground">
+                                  Loading UOM codes...
+                                </div>
+                              ) : (
+                                quantityCodes.map((code) => {
+                                  const codeValue = getQuantityCodeValue(code);
+                                  return (
+                                    <CommandItem
+                                      key={codeValue}
+                                      value={codeValue}
+                                      onSelect={() => {
+                                        setQuickFixDialog({ ...quickFixDialog, value: codeValue });
+                                      }}
+                                    >
+                                      {getQuantityCodeDisplay(code)}
+                                    </CommandItem>
+                                  );
+                                })
+                              )}
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
+                  ) : quickFixDialog.fix.field === 'uom' ? (
+                    <p className="text-sm text-muted-foreground">
+                      {isLoadingQuantityCodes ? 'Loading UOM codes...' : 'UOM codes unavailable. Run firs:sync-resources.'}
+                    </p>
                   ) : (
                     <Input
                       type={quickFixDialog.fix.field === 'email' ? 'email' : 'text'}
@@ -3958,7 +4734,11 @@ export const InvoicesPage = () => {
                         if (fix.type === 'party_tin' && (error.includes('TIN is missing') || error.includes('TIN'))) return true;
                         if (fix.type === 'party_email' && error.includes('email')) return true;
                         if (fix.type === 'party_telephone' && error.includes('telephone')) return true;
-                        if (fix.type === 'item_hsn_code' && error.includes('HSN codes')) {
+                        if (fix.type === 'item_hsn_code' && error.includes('HSN')) {
+                          if (fix.item_description && error.includes(fix.item_description)) return true;
+                          return true;
+                        }
+                        if (fix.type === 'item_isic_code' && error.includes('ISIC')) {
                           if (fix.item_description && error.includes(fix.item_description)) return true;
                           return true;
                         }
@@ -4119,7 +4899,9 @@ export const InvoicesPage = () => {
                     {quickFixDialog.fix.field === 'email' && 'Email'}
                     {quickFixDialog.fix.field === 'telephone' && 'Telephone'}
                     {quickFixDialog.fix.field === 'hsn_code' && 'HSN Code'}
-                    {quickFixDialog.fix.field !== 'tin' && quickFixDialog.fix.field !== 'email' && quickFixDialog.fix.field !== 'telephone' && quickFixDialog.fix.field !== 'hsn_code' && quickFixDialog.fix.field}
+                    {quickFixDialog.fix.field === 'isic_code' && 'ISIC Code'}
+                    {quickFixDialog.fix.field === 'uom' && 'Unit of Measure'}
+                    {quickFixDialog.fix.field !== 'tin' && quickFixDialog.fix.field !== 'email' && quickFixDialog.fix.field !== 'telephone' && quickFixDialog.fix.field !== 'hsn_code' && quickFixDialog.fix.field !== 'isic_code' && quickFixDialog.fix.field !== 'uom' && quickFixDialog.fix.field}
                   </label>
                   {quickFixDialog.fix.field === 'hsn_code' && hsnCodes.length > 0 ? (
                     <Popover>
@@ -4144,11 +4926,8 @@ export const InvoicesPage = () => {
                           <CommandInput placeholder="Search HSN codes..." className="h-9" />
                           <CommandList>
                             <CommandEmpty>
-                              <div className="py-2 text-center text-sm">
-                                <div>No HSN code found.</div>
-                                <div className="text-xs text-muted-foreground mt-1">
-                                  Type to enter custom code
-                                </div>
+                              <div className="py-2 text-center text-sm text-muted-foreground">
+                                No matching HSN code
                               </div>
                             </CommandEmpty>
                             <CommandGroup>
@@ -4178,6 +4957,116 @@ export const InvoicesPage = () => {
                         </Command>
                       </PopoverContent>
                     </Popover>
+                  ) : quickFixDialog.fix.field === 'hsn_code' ? (
+                    <p className="text-sm text-muted-foreground">
+                      {isLoadingHsnCodes ? 'Loading HSN codes...' : 'HSN codes unavailable. Run firs:sync-resources.'}
+                    </p>
+                  ) : quickFixDialog.fix.field === 'isic_code' && serviceCodes.length > 0 ? (
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          role="combobox"
+                          className="w-full justify-between"
+                          disabled={isUpdatingQuickFix}
+                        >
+                          {quickFixDialog.value
+                            ? (() => {
+                                const selectedCode = serviceCodes.find((c) => getServiceCodeValue(c) === quickFixDialog.value);
+                                return selectedCode ? getServiceCodeDisplay(selectedCode) : quickFixDialog.value;
+                              })()
+                            : 'Select ISIC code...'}
+                          <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0 z-[100]" align="start">
+                        <Command>
+                          <CommandInput placeholder="Search service codes..." className="h-9" />
+                          <CommandList>
+                            <CommandEmpty>No service code found.</CommandEmpty>
+                            <CommandGroup>
+                              {isLoadingServiceCodes ? (
+                                <div className="py-2 text-center text-sm text-muted-foreground">
+                                  Loading service codes...
+                                </div>
+                              ) : (
+                                serviceCodes.map((code) => {
+                                  const codeValue = getServiceCodeValue(code);
+                                  return (
+                                    <CommandItem
+                                      key={codeValue}
+                                      value={codeValue}
+                                      onSelect={() => {
+                                        setQuickFixDialog({ ...quickFixDialog, value: codeValue });
+                                      }}
+                                    >
+                                      {getServiceCodeDisplay(code)}
+                                    </CommandItem>
+                                  );
+                                })
+                              )}
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
+                  ) : quickFixDialog.fix.field === 'isic_code' ? (
+                    <p className="text-sm text-muted-foreground">
+                      {isLoadingServiceCodes ? 'Loading ISIC codes...' : 'ISIC codes unavailable. Run firs:sync-resources.'}
+                    </p>
+                  ) : quickFixDialog.fix.field === 'uom' && quantityCodes.length > 0 ? (
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          role="combobox"
+                          className="w-full justify-between"
+                          disabled={isUpdatingQuickFix}
+                        >
+                          {quickFixDialog.value
+                            ? (() => {
+                                const selectedCode = quantityCodes.find((c) => getQuantityCodeValue(c) === quickFixDialog.value);
+                                return selectedCode ? getQuantityCodeDisplay(selectedCode) : quickFixDialog.value;
+                              })()
+                            : 'Select UOM...'}
+                          <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0 z-[100]" align="start">
+                        <Command>
+                          <CommandInput placeholder="Search UOM codes..." className="h-9" />
+                          <CommandList>
+                            <CommandEmpty>No UOM code found.</CommandEmpty>
+                            <CommandGroup>
+                              {isLoadingQuantityCodes ? (
+                                <div className="py-2 text-center text-sm text-muted-foreground">
+                                  Loading UOM codes...
+                                </div>
+                              ) : (
+                                quantityCodes.map((code) => {
+                                  const codeValue = getQuantityCodeValue(code);
+                                  return (
+                                    <CommandItem
+                                      key={codeValue}
+                                      value={codeValue}
+                                      onSelect={() => {
+                                        setQuickFixDialog({ ...quickFixDialog, value: codeValue });
+                                      }}
+                                    >
+                                      {getQuantityCodeDisplay(code)}
+                                    </CommandItem>
+                                  );
+                                })
+                              )}
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
+                  ) : quickFixDialog.fix.field === 'uom' ? (
+                    <p className="text-sm text-muted-foreground">
+                      {isLoadingQuantityCodes ? 'Loading UOM codes...' : 'UOM codes unavailable. Run firs:sync-resources.'}
+                    </p>
                   ) : (
                     <Input
                       type={quickFixDialog.fix.field === 'email' ? 'email' : 'text'}
@@ -4413,7 +5302,11 @@ export const InvoicesPage = () => {
                         if (fix.type === 'party_tin' && (error.includes('TIN is missing') || error.includes('TIN'))) return true;
                         if (fix.type === 'party_email' && error.includes('email')) return true;
                         if (fix.type === 'party_telephone' && error.includes('telephone')) return true;
-                        if (fix.type === 'item_hsn_code' && error.includes('HSN codes')) {
+                        if (fix.type === 'item_hsn_code' && error.includes('HSN')) {
+                          if (fix.item_description && error.includes(fix.item_description)) return true;
+                          return true;
+                        }
+                        if (fix.type === 'item_isic_code' && error.includes('ISIC')) {
                           if (fix.item_description && error.includes(fix.item_description)) return true;
                           return true;
                         }
@@ -4574,7 +5467,9 @@ export const InvoicesPage = () => {
                     {quickFixDialog.fix.field === 'email' && 'Email'}
                     {quickFixDialog.fix.field === 'telephone' && 'Telephone'}
                     {quickFixDialog.fix.field === 'hsn_code' && 'HSN Code'}
-                    {quickFixDialog.fix.field !== 'tin' && quickFixDialog.fix.field !== 'email' && quickFixDialog.fix.field !== 'telephone' && quickFixDialog.fix.field !== 'hsn_code' && quickFixDialog.fix.field}
+                    {quickFixDialog.fix.field === 'isic_code' && 'ISIC Code'}
+                    {quickFixDialog.fix.field === 'uom' && 'Unit of Measure'}
+                    {quickFixDialog.fix.field !== 'tin' && quickFixDialog.fix.field !== 'email' && quickFixDialog.fix.field !== 'telephone' && quickFixDialog.fix.field !== 'hsn_code' && quickFixDialog.fix.field !== 'isic_code' && quickFixDialog.fix.field !== 'uom' && quickFixDialog.fix.field}
                   </label>
                   {quickFixDialog.fix.field === 'hsn_code' && hsnCodes.length > 0 ? (
                     <Popover>
@@ -4599,11 +5494,8 @@ export const InvoicesPage = () => {
                           <CommandInput placeholder="Search HSN codes..." className="h-9" />
                           <CommandList>
                             <CommandEmpty>
-                              <div className="py-2 text-center text-sm">
-                                <div>No HSN code found.</div>
-                                <div className="text-xs text-muted-foreground mt-1">
-                                  Type to enter custom code
-                                </div>
+                              <div className="py-2 text-center text-sm text-muted-foreground">
+                                No matching HSN code
                               </div>
                             </CommandEmpty>
                             <CommandGroup>
@@ -4633,6 +5525,116 @@ export const InvoicesPage = () => {
                         </Command>
                       </PopoverContent>
                     </Popover>
+                  ) : quickFixDialog.fix.field === 'hsn_code' ? (
+                    <p className="text-sm text-muted-foreground">
+                      {isLoadingHsnCodes ? 'Loading HSN codes...' : 'HSN codes unavailable. Run firs:sync-resources.'}
+                    </p>
+                  ) : quickFixDialog.fix.field === 'isic_code' && serviceCodes.length > 0 ? (
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          role="combobox"
+                          className="w-full justify-between"
+                          disabled={isUpdatingQuickFix}
+                        >
+                          {quickFixDialog.value
+                            ? (() => {
+                                const selectedCode = serviceCodes.find((c) => getServiceCodeValue(c) === quickFixDialog.value);
+                                return selectedCode ? getServiceCodeDisplay(selectedCode) : quickFixDialog.value;
+                              })()
+                            : 'Select ISIC code...'}
+                          <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0 z-[100]" align="start">
+                        <Command>
+                          <CommandInput placeholder="Search service codes..." className="h-9" />
+                          <CommandList>
+                            <CommandEmpty>No service code found.</CommandEmpty>
+                            <CommandGroup>
+                              {isLoadingServiceCodes ? (
+                                <div className="py-2 text-center text-sm text-muted-foreground">
+                                  Loading service codes...
+                                </div>
+                              ) : (
+                                serviceCodes.map((code) => {
+                                  const codeValue = getServiceCodeValue(code);
+                                  return (
+                                    <CommandItem
+                                      key={codeValue}
+                                      value={codeValue}
+                                      onSelect={() => {
+                                        setQuickFixDialog({ ...quickFixDialog, value: codeValue });
+                                      }}
+                                    >
+                                      {getServiceCodeDisplay(code)}
+                                    </CommandItem>
+                                  );
+                                })
+                              )}
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
+                  ) : quickFixDialog.fix.field === 'isic_code' ? (
+                    <p className="text-sm text-muted-foreground">
+                      {isLoadingServiceCodes ? 'Loading ISIC codes...' : 'ISIC codes unavailable. Run firs:sync-resources.'}
+                    </p>
+                  ) : quickFixDialog.fix.field === 'uom' && quantityCodes.length > 0 ? (
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          role="combobox"
+                          className="w-full justify-between"
+                          disabled={isUpdatingQuickFix}
+                        >
+                          {quickFixDialog.value
+                            ? (() => {
+                                const selectedCode = quantityCodes.find((c) => getQuantityCodeValue(c) === quickFixDialog.value);
+                                return selectedCode ? getQuantityCodeDisplay(selectedCode) : quickFixDialog.value;
+                              })()
+                            : 'Select UOM...'}
+                          <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0 z-[100]" align="start">
+                        <Command>
+                          <CommandInput placeholder="Search UOM codes..." className="h-9" />
+                          <CommandList>
+                            <CommandEmpty>No UOM code found.</CommandEmpty>
+                            <CommandGroup>
+                              {isLoadingQuantityCodes ? (
+                                <div className="py-2 text-center text-sm text-muted-foreground">
+                                  Loading UOM codes...
+                                </div>
+                              ) : (
+                                quantityCodes.map((code) => {
+                                  const codeValue = getQuantityCodeValue(code);
+                                  return (
+                                    <CommandItem
+                                      key={codeValue}
+                                      value={codeValue}
+                                      onSelect={() => {
+                                        setQuickFixDialog({ ...quickFixDialog, value: codeValue });
+                                      }}
+                                    >
+                                      {getQuantityCodeDisplay(code)}
+                                    </CommandItem>
+                                  );
+                                })
+                              )}
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
+                  ) : quickFixDialog.fix.field === 'uom' ? (
+                    <p className="text-sm text-muted-foreground">
+                      {isLoadingQuantityCodes ? 'Loading UOM codes...' : 'UOM codes unavailable. Run firs:sync-resources.'}
+                    </p>
                   ) : (
                     <Input
                       type={quickFixDialog.fix.field === 'email' ? 'email' : 'text'}
