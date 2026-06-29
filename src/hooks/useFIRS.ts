@@ -89,36 +89,52 @@ export const useTestFIRSConnection = () => {
 };
 
 // Query hook for fetching HSN codes
+const extractFirsResourceList = (response: { data?: unknown }): unknown[] => {
+  const responseData = response.data;
+  let data: unknown = [];
+  if (responseData && typeof responseData === 'object') {
+    if ('data' in responseData) {
+      data = (responseData as { data?: unknown }).data || [];
+    } else {
+      data = responseData;
+    }
+  }
+  if (Array.isArray(data)) {
+    return data;
+  }
+  if (data && typeof data === 'object' && 'codes' in data && Array.isArray((data as { codes?: unknown }).codes)) {
+    return (data as { codes: unknown[] }).codes;
+  }
+  if (data && typeof data === 'object' && 'data' in data && Array.isArray((data as { data?: unknown }).data)) {
+    return (data as { data: unknown[] }).data;
+  }
+  return [];
+};
+
 export const useHsnCodes = () => {
   return useQuery({
     queryKey: ['firs', 'hsn-codes'],
     queryFn: () => apiService.getFIRSHsnCodes(),
-    staleTime: 12 * 60 * 60 * 1000, // 12 hours (matches backend cache)
-    select: (response) => {
-      // Extract the HSN codes array from the response
-      const responseData = response.data;
-      let data: unknown = [];
-      if (responseData && typeof responseData === 'object') {
-        if ('data' in responseData) {
-          data = (responseData as { data?: unknown }).data || [];
-        } else {
-          data = responseData;
-        }
-      }
-      // Handle different response structures
-      if (Array.isArray(data)) {
-        return data;
-      }
-      // If it's an object with codes array
-      if (data && typeof data === 'object' && 'codes' in data && Array.isArray((data as { codes?: unknown }).codes)) {
-        return (data as { codes: unknown[] }).codes;
-      }
-      // If it's an object with data array
-      if (data && typeof data === 'object' && 'data' in data && Array.isArray((data as { data?: unknown }).data)) {
-        return (data as { data: unknown[] }).data;
-      }
-      return [];
-    },
+    staleTime: 12 * 60 * 60 * 1000,
+    select: (response) => extractFirsResourceList(response) as unknown[],
+  });
+};
+
+export const useServiceCodes = () => {
+  return useQuery({
+    queryKey: ['firs', 'service-codes'],
+    queryFn: () => apiService.getFIRSServiceCodes(),
+    staleTime: 12 * 60 * 60 * 1000,
+    select: (response) => extractFirsResourceList(response) as unknown[],
+  });
+};
+
+export const useQuantityCodes = () => {
+  return useQuery({
+    queryKey: ['firs', 'quantity-codes'],
+    queryFn: () => apiService.getFIRSQuantityCodes(),
+    staleTime: 12 * 60 * 60 * 1000,
+    select: (response) => extractFirsResourceList(response) as unknown[],
   });
 };
 

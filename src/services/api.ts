@@ -622,14 +622,66 @@ class ApiService {
     });
   }
 
-  async updateARInvoiceItemHsnCode(invoiceId: number, itemId: number, hsnCode: string) {
+  async updateARInvoiceItemHsnCode(
+    invoiceId: number,
+    itemId: number,
+    hsnCode: string,
+    productCategory?: string
+  ) {
     return this.makeRequest(
       API_ENDPOINTS.invoices.ar.updateItemHsnCode
         .replace(':invoiceId', invoiceId.toString())
         .replace(':itemId', itemId.toString()),
       {
         method: 'PUT',
-        body: { hsn_code: hsnCode },
+        body: {
+          hsn_code: hsnCode,
+          ...(productCategory ? { product_category: productCategory } : {}),
+        },
+      }
+    );
+  }
+
+  async updateARInvoiceItemIsicCode(
+    invoiceId: number,
+    itemId: number,
+    isicCode: string,
+    serviceCategory: string
+  ) {
+    return this.makeRequest(
+      API_ENDPOINTS.invoices.ar.updateItemIsicCode
+        .replace(':invoiceId', invoiceId.toString())
+        .replace(':itemId', itemId.toString()),
+      {
+        method: 'PUT',
+        body: {
+          isic_code: isicCode,
+          service_category: serviceCategory,
+        },
+      }
+    );
+  }
+
+  async updateARInvoiceItemLineType(invoiceId: number, itemId: number, isService: boolean) {
+    return this.makeRequest(
+      API_ENDPOINTS.invoices.ar.updateItemLineType
+        .replace(':invoiceId', invoiceId.toString())
+        .replace(':itemId', itemId.toString()),
+      {
+        method: 'PUT',
+        body: { is_service: isService },
+      }
+    );
+  }
+
+  async updateARInvoiceItemUom(invoiceId: number, itemId: number, uom: string) {
+    return this.makeRequest(
+      API_ENDPOINTS.invoices.ar.updateItemUom
+        .replace(':invoiceId', invoiceId.toString())
+        .replace(':itemId', itemId.toString()),
+      {
+        method: 'PUT',
+        body: { uom },
       }
     );
   }
@@ -838,14 +890,66 @@ class ApiService {
     });
   }
 
-  async updateAPInvoiceItemHsnCode(invoiceId: number, itemId: number, hsnCode: string) {
+  async updateAPInvoiceItemHsnCode(
+    invoiceId: number,
+    itemId: number,
+    hsnCode: string,
+    productCategory?: string
+  ) {
     return this.makeRequest(
       API_ENDPOINTS.invoices.ap.updateItemHsnCode
         .replace(':invoiceId', invoiceId.toString())
         .replace(':itemId', itemId.toString()),
       {
         method: 'PUT',
-        body: { hsn_code: hsnCode },
+        body: {
+          hsn_code: hsnCode,
+          ...(productCategory ? { product_category: productCategory } : {}),
+        },
+      }
+    );
+  }
+
+  async updateAPInvoiceItemIsicCode(
+    invoiceId: number,
+    itemId: number,
+    isicCode: string,
+    serviceCategory: string
+  ) {
+    return this.makeRequest(
+      API_ENDPOINTS.invoices.ap.updateItemIsicCode
+        .replace(':invoiceId', invoiceId.toString())
+        .replace(':itemId', itemId.toString()),
+      {
+        method: 'PUT',
+        body: {
+          isic_code: isicCode,
+          service_category: serviceCategory,
+        },
+      }
+    );
+  }
+
+  async updateAPInvoiceItemLineType(invoiceId: number, itemId: number, isService: boolean) {
+    return this.makeRequest(
+      API_ENDPOINTS.invoices.ap.updateItemLineType
+        .replace(':invoiceId', invoiceId.toString())
+        .replace(':itemId', itemId.toString()),
+      {
+        method: 'PUT',
+        body: { is_service: isService },
+      }
+    );
+  }
+
+  async updateAPInvoiceItemUom(invoiceId: number, itemId: number, uom: string) {
+    return this.makeRequest(
+      API_ENDPOINTS.invoices.ap.updateItemUom
+        .replace(':invoiceId', invoiceId.toString())
+        .replace(':itemId', itemId.toString()),
+      {
+        method: 'PUT',
+        body: { uom },
       }
     );
   }
@@ -1466,8 +1570,9 @@ class ApiService {
   async updatePayment(data: {
     invoice_id: number;
     invoice_type: 'ar' | 'ap';
-    payment_status: 'PENDING' | 'PAID' | 'REJECTED';
+    payment_status: 'PENDING' | 'PAID' | 'REJECTED' | 'PARTIAL';
     request_id?: string;
+    amount?: number;
   }) {
     return this.makeRequest(API_ENDPOINTS.firs.updatePayment, {
       method: 'PUT',
@@ -1522,6 +1627,14 @@ class ApiService {
 
   async getFIRSHsnCodes() {
     return this.makeRequest(API_ENDPOINTS.firs.hsnCodes);
+  }
+
+  async getFIRSServiceCodes() {
+    return this.makeRequest(API_ENDPOINTS.firs.serviceCodes);
+  }
+
+  async getFIRSQuantityCodes() {
+    return this.makeRequest(API_ENDPOINTS.firs.quantityCodes);
   }
 
   async syncFIRSResources() {
