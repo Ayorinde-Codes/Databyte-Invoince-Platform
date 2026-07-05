@@ -124,6 +124,7 @@ import { useHsnCodes, useInvoiceTypes, useQuantityCodes, useServiceCodes } from 
 import { IsicCodeCell } from '@/components/invoices/IsicCodeCell';
 import { LineTypeCell } from '@/components/invoices/LineTypeCell';
 import { LineNrsCodeLabel } from '@/components/invoices/LineNrsCodeLabel';
+import { PartialPaymentDialog } from '@/components/invoices/PartialPaymentDialog';
 import { UomCell } from '@/components/invoices/UomCell';
 import {
   FirsCodeEntry,
@@ -297,6 +298,11 @@ export const InvoicesPage = () => {
   const [invoiceTypePopoverOpen, setInvoiceTypePopoverOpen] = useState(false);
   const [showFirsFieldsDialog, setShowFirsFieldsDialog] = useState(false);
   const [editingInvoiceForFirs, setEditingInvoiceForFirs] = useState<Invoice | null>(null);
+  const [partialPaymentDialog, setPartialPaymentDialog] = useState<{
+    open: boolean;
+    invoice: Invoice | null;
+  }>({ open: false, invoice: null });
+  const [isUpdatingPayment, setIsUpdatingPayment] = useState(false);
 
   const updateARFirsFields = useUpdateARInvoiceFirsFields();
   const updateAPFirsFields = useUpdateAPInvoiceFirsFields();
@@ -1058,22 +1064,13 @@ export const InvoicesPage = () => {
     }
   };
 
-  const handleUpdatePayment = async (
+  const submitPaymentUpdate = async (
     invoice: Invoice,
-    paymentStatus: 'PENDING' | 'PAID' | 'REJECTED' | 'PARTIAL'
+    paymentStatus: 'PENDING' | 'PAID' | 'REJECTED' | 'PARTIAL',
+    amount?: number
   ) => {
+    setIsUpdatingPayment(true);
     try {
-      let amount: number | undefined;
-      if (paymentStatus === 'PARTIAL') {
-        const raw = window.prompt('Enter partial payment amount:', String(invoice.total_amount ?? ''));
-        if (raw === null) return;
-        amount = parseFloat(raw);
-        if (!amount || amount <= 0) {
-          toast.error('Enter a valid partial payment amount');
-          return;
-        }
-      }
-
       const response = await apiService.updatePayment({
         invoice_id: invoice.id,
         invoice_type: activeTab,
@@ -1086,6 +1083,7 @@ export const InvoicesPage = () => {
         const tab = activeTab;
         queryClient.invalidateQueries({ queryKey: ['invoices', tab] });
         queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+        setPartialPaymentDialog({ open: false, invoice: null });
       } else {
         toast.error(response.message || `Failed to update payment status to ${paymentStatus}`);
       }
@@ -1093,7 +1091,26 @@ export const InvoicesPage = () => {
       toast.error(
         extractErrorMessage(error, `Failed to update payment status to ${paymentStatus}`)
       );
+    } finally {
+      setIsUpdatingPayment(false);
     }
+  };
+
+  const handleUpdatePayment = async (
+    invoice: Invoice,
+    paymentStatus: 'PENDING' | 'PAID' | 'REJECTED' | 'PARTIAL'
+  ) => {
+    if (paymentStatus === 'PARTIAL') {
+      setPartialPaymentDialog({ open: true, invoice });
+      return;
+    }
+
+    await submitPaymentUpdate(invoice, paymentStatus);
+  };
+
+  const handleConfirmPartialPayment = async (amount: number) => {
+    if (!partialPaymentDialog.invoice) return;
+    await submitPaymentUpdate(partialPaymentDialog.invoice, 'PARTIAL', amount);
   };
 
   const handleRefresh = async () => {
@@ -2583,6 +2600,28 @@ export const InvoicesPage = () => {
       </div>
 
       {/* Delete Confirmation Dialog */}
+      <PartialPaymentDialog
+        open={partialPaymentDialog.open}
+        onOpenChange={(open) =>
+          setPartialPaymentDialog((prev) => ({
+            open,
+            invoice: open ? prev.invoice : null,
+          }))
+        }
+        invoice={
+          partialPaymentDialog.invoice
+            ? {
+                id: partialPaymentDialog.invoice.id,
+                invoice_number: partialPaymentDialog.invoice.invoice_number,
+                total_amount: partialPaymentDialog.invoice.total_amount,
+                currency: partialPaymentDialog.invoice.currency,
+              }
+            : null
+        }
+        isSubmitting={isUpdatingPayment}
+        onConfirm={handleConfirmPartialPayment}
+      />
+
       <AlertDialog
         open={showDeleteDialog}
         onOpenChange={setShowDeleteDialog}
