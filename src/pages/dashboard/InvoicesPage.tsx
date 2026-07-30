@@ -935,14 +935,14 @@ export const InvoicesPage = () => {
             party_id: validationData.party_id,
             party_name: validationData.party_name,
             tin_status: validationData.tin_status ?? null,
-            message: response.message || 'Invoice is not ready for FIRS',
+            message: response.message || 'Invoice is not ready for NRS',
           });
           setShowValidationDialog(true);
           
           if (validationData.errors && validationData.errors.length > 0) {
             const errorMessages = validationData.errors.slice(0, 3).join('; ');
             const moreCount = validationData.errors.length > 3 ? ` (+${validationData.errors.length - 3} more)` : '';
-            toast.error(`${response.message || 'Invoice is not ready for FIRS'}: ${errorMessages}${moreCount}`, {
+            toast.error(`${response.message || 'Invoice is not ready for NRS'}: ${errorMessages}${moreCount}`, {
               duration: 8000,
             });
           }

@@ -231,7 +231,7 @@ export function ValidationResultDialog({
       <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto z-50">
         <DialogHeader>
           <DialogTitle>
-            {hasRequired ? 'Invoice not ready for FIRS' : 'NRS Validation Results'}
+            {hasRequired ? 'Invoice not ready for NRS' : 'NRS Validation Results'}
           </DialogTitle>
           <DialogDescription>
             {hasRequired
