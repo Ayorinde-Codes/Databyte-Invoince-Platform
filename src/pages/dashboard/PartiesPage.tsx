@@ -93,6 +93,7 @@ type PartyType = 'customer' | 'vendor';
 interface Party {
   id: number;
   party_type: 'customer' | 'vendor';
+  buyer_type?: 'B2B' | 'B2C';
   party_name: string;
   code: string | null;
   tin: string | null;
@@ -335,7 +336,6 @@ export const PartiesPage = () => {
       'contact_email',
       'contact_phone',
       'payment_terms',
-      'payment_terms',
     ];
 
     fields.forEach((field) => {
@@ -344,6 +344,11 @@ export const PartiesPage = () => {
         updateData[field] = value.toString().trim();
       }
     });
+
+    const buyerType = formData.get('buyer_type');
+    if (buyerType && (buyerType === 'B2B' || buyerType === 'B2C')) {
+      updateData.buyer_type = buyerType;
+    }
 
     const creditLimit = formData.get('credit_limit');
     if (creditLimit && creditLimit.toString().trim()) {
@@ -610,8 +615,12 @@ export const PartiesPage = () => {
                                     </AvatarFallback>
                                   </Avatar>
                                   <div>
-                                    <div className="font-medium">
+                                    <div className="font-medium flex items-center gap-2">
                                       {party.party_name}
+                                      {party.party_type === 'customer' &&
+                                        party.buyer_type === 'B2C' && (
+                                          <Badge variant="secondary">B2C</Badge>
+                                        )}
                                     </div>
                                     {party.tin && (
                                       <div className="text-sm text-muted-foreground">
@@ -841,6 +850,14 @@ export const PartiesPage = () => {
                         : 'Vendor'}
                     </Badge>
                   </div>
+                  {selectedParty.party_type === 'customer' && (
+                    <div>
+                      <Label className="text-muted-foreground">Buyer type</Label>
+                      <p className="font-medium mt-1">
+                        {selectedParty.buyer_type || 'B2B'}
+                      </p>
+                    </div>
+                  )}
                   <div>
                     <Label className="text-muted-foreground">Status</Label>
                     <div className="mt-1">
@@ -1078,6 +1095,28 @@ export const PartiesPage = () => {
                           defaultValue={party.tin || ''}
                         />
                       </div>
+                      {party.party_type === 'customer' && (
+                        <div>
+                          <Label htmlFor="buyer_type">Buyer type</Label>
+                          <select
+                            id="buyer_type"
+                            name="buyer_type"
+                            defaultValue={party.buyer_type || 'B2B'}
+                            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                          >
+                            <option value="B2B">
+                              Business (B2B) — TIN required
+                            </option>
+                            <option value="B2C">
+                              Consumer (B2C) — TIN optional
+                            </option>
+                          </select>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Default B2B. Set B2C only for real consumers
+                            (Hoptool).
+                          </p>
+                        </div>
+                      )}
                       <div>
                         <Label htmlFor="email">Email</Label>
                         <Input
