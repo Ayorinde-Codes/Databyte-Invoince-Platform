@@ -43,6 +43,7 @@ export interface QuickFix {
 
 export interface TinStatus {
   valid?: boolean;
+  optional?: boolean;
   value?: string | null;
   party_type?: string;
   party_name?: string | null;
@@ -245,18 +246,27 @@ export function ValidationResultDialog({
             {tinStatus && (
               <div
                 className={`rounded-lg border p-3 text-sm flex items-start gap-2 transition-colors ${
-                  tinStatus.valid
-                    ? 'bg-emerald-50/80 border-emerald-200 text-emerald-900 hover:bg-emerald-50 dark:bg-emerald-950/40 dark:border-emerald-800 dark:text-emerald-100 dark:hover:bg-emerald-950/60'
-                    : 'bg-amber-50/80 border-amber-200 text-amber-950 hover:bg-amber-50 dark:bg-amber-950/35 dark:border-amber-800 dark:text-amber-100 dark:hover:bg-amber-950/55'
+                  tinStatus.optional
+                    ? 'bg-sky-50/80 border-sky-200 text-sky-950 hover:bg-sky-50 dark:bg-sky-950/35 dark:border-sky-800 dark:text-sky-100 dark:hover:bg-sky-950/55'
+                    : tinStatus.valid
+                      ? 'bg-emerald-50/80 border-emerald-200 text-emerald-900 hover:bg-emerald-50 dark:bg-emerald-950/40 dark:border-emerald-800 dark:text-emerald-100 dark:hover:bg-emerald-950/60'
+                      : 'bg-amber-50/80 border-amber-200 text-amber-950 hover:bg-amber-50 dark:bg-amber-950/35 dark:border-amber-800 dark:text-amber-100 dark:hover:bg-amber-950/55'
                 }`}
               >
-                {tinStatus.valid ? (
+                {tinStatus.optional ? (
+                  <CheckCircle className="w-4 h-4 mt-0.5 shrink-0 text-sky-600 dark:text-sky-400" />
+                ) : tinStatus.valid ? (
                   <CheckCircle className="w-4 h-4 mt-0.5 shrink-0 text-emerald-600 dark:text-emerald-400" />
                 ) : (
                   <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0 text-amber-600 dark:text-amber-400" />
                 )}
                 <div>
-                  {tinStatus.valid ? (
+                  {tinStatus.optional ? (
+                    <>
+                      <span className="font-medium">{partyTypeLabel} TIN not required</span>
+                      <span className="text-sky-800 dark:text-sky-200"> — buyer is B2C (consumer)</span>
+                    </>
+                  ) : tinStatus.valid ? (
                     <>
                       <span className="font-medium">{partyTypeLabel} TIN looks valid</span>
                       {tinStatus.value ? (

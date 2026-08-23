@@ -577,6 +577,7 @@ export const InvoicesPage = () => {
       fix,
       value: defaultValue,
     });
+    setShowValidationDialog(false);
   };
 
   const handleQuickFixUpdate = async () => {
@@ -728,6 +729,8 @@ export const InvoicesPage = () => {
           setValidationResult(null);
           setShowValidationDialog(false);
           toast.success('Required validation issues resolved. You can validate again.');
+        } else {
+          setShowValidationDialog(true);
         }
       } else {
         setValidationResult(null);
@@ -3051,15 +3054,22 @@ export const InvoicesPage = () => {
       />
 
       {/* Quick Fix Dialog */}
-      <Dialog open={quickFixDialog.open} onOpenChange={(open) => !open && setQuickFixDialog({ open: false, fix: null, value: '' })}>
-        <DialogContent className="max-w-md">
+      <Dialog open={quickFixDialog.open} onOpenChange={(open) => {
+        if (!open) {
+          setQuickFixDialog({ open: false, fix: null, value: '' });
+          if (validationResult) {
+            setShowValidationDialog(true);
+          }
+        }
+      }}>
+        <DialogContent className="max-w-md z-[60] overflow-hidden">
           <DialogHeader>
             <DialogTitle>Quick Fix</DialogTitle>
             <DialogDescription>
               {quickFixDialog.fix?.message || 'Update field value'}
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 mt-4">
+          <div className="min-w-0 space-y-4 mt-4 overflow-hidden">
             {quickFixDialog.fix && (
               <>
                 <div className="space-y-2">
@@ -3073,27 +3083,29 @@ export const InvoicesPage = () => {
                     {quickFixDialog.fix.field !== 'tin' && quickFixDialog.fix.field !== 'email' && quickFixDialog.fix.field !== 'telephone' && quickFixDialog.fix.field !== 'hsn_code' && quickFixDialog.fix.field !== 'isic_code' && quickFixDialog.fix.field !== 'uom' && quickFixDialog.fix.field}
                   </label>
                   {quickFixDialog.fix.field === 'hsn_code' && hsnCodes.length > 0 ? (
-                    <Popover>
+                    <Popover modal>
                       <PopoverTrigger asChild>
                         <Button
                           variant="outline"
                           role="combobox"
-                          className="w-full justify-between"
+                          className="w-full min-w-0 justify-between gap-2"
                           disabled={isUpdatingQuickFix}
                         >
+                          <span className="truncate text-left">
                           {quickFixDialog.value 
                             ? (() => {
                                 const selectedCode = hsnCodes.find((c: string | { hscode?: string; code?: string; value?: string; name?: string }) => getHsnCodeValue(c) === quickFixDialog.value);
                                 return selectedCode ? getHsnCodeDisplay(selectedCode) : quickFixDialog.value;
                               })()
                             : 'Select HSN code...'}
-                          <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                          </span>
+                          <ChevronDown className="h-4 w-4 shrink-0 opacity-50" />
                         </Button>
                       </PopoverTrigger>
-                      <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0 z-[100]" align="start">
+                      <PopoverContent className="w-[var(--radix-popover-trigger-width)] max-w-[min(24rem,calc(100vw-2rem))] p-0 z-[100]" align="start">
                         <Command>
                           <CommandInput placeholder="Search HSN codes..." className="h-9" />
-                          <CommandList>
+                          <CommandList className="max-h-[min(300px,50vh)]">
                             <CommandEmpty>
                               <div className="py-2 text-center text-sm text-muted-foreground">
                                 No matching HSN code
@@ -3131,27 +3143,29 @@ export const InvoicesPage = () => {
                       {isLoadingHsnCodes ? 'Loading HSN codes...' : 'HSN codes unavailable. Run firs:sync-resources.'}
                     </p>
                   ) : quickFixDialog.fix.field === 'isic_code' && serviceCodes.length > 0 ? (
-                    <Popover>
+                    <Popover modal>
                       <PopoverTrigger asChild>
                         <Button
                           variant="outline"
                           role="combobox"
-                          className="w-full justify-between"
+                          className="w-full min-w-0 justify-between gap-2"
                           disabled={isUpdatingQuickFix}
                         >
+                          <span className="truncate text-left">
                           {quickFixDialog.value
                             ? (() => {
                                 const selectedCode = serviceCodes.find((c) => getServiceCodeValue(c) === quickFixDialog.value);
                                 return selectedCode ? getServiceCodeDisplay(selectedCode) : quickFixDialog.value;
                               })()
                             : 'Select ISIC code...'}
-                          <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                          </span>
+                          <ChevronDown className="h-4 w-4 shrink-0 opacity-50" />
                         </Button>
                       </PopoverTrigger>
-                      <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0 z-[100]" align="start">
+                      <PopoverContent className="w-[var(--radix-popover-trigger-width)] max-w-[min(24rem,calc(100vw-2rem))] p-0 z-[100]" align="start">
                         <Command>
                           <CommandInput placeholder="Search service codes..." className="h-9" />
-                          <CommandList>
+                          <CommandList className="max-h-[min(300px,50vh)]">
                             <CommandEmpty>No service code found.</CommandEmpty>
                             <CommandGroup>
                               {isLoadingServiceCodes ? (
@@ -3184,27 +3198,29 @@ export const InvoicesPage = () => {
                       {isLoadingServiceCodes ? 'Loading ISIC codes...' : 'ISIC codes unavailable. Run firs:sync-resources.'}
                     </p>
                   ) : quickFixDialog.fix.field === 'uom' && quantityCodes.length > 0 ? (
-                    <Popover>
+                    <Popover modal>
                       <PopoverTrigger asChild>
                         <Button
                           variant="outline"
                           role="combobox"
-                          className="w-full justify-between"
+                          className="w-full min-w-0 justify-between gap-2"
                           disabled={isUpdatingQuickFix}
                         >
+                          <span className="truncate text-left">
                           {quickFixDialog.value
                             ? (() => {
                                 const selectedCode = quantityCodes.find((c) => getQuantityCodeValue(c) === quickFixDialog.value);
                                 return selectedCode ? getQuantityCodeDisplay(selectedCode) : quickFixDialog.value;
                               })()
                             : 'Select UOM...'}
-                          <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                          </span>
+                          <ChevronDown className="h-4 w-4 shrink-0 opacity-50" />
                         </Button>
                       </PopoverTrigger>
-                      <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0 z-[100]" align="start">
+                      <PopoverContent className="w-[var(--radix-popover-trigger-width)] max-w-[min(24rem,calc(100vw-2rem))] p-0 z-[100]" align="start">
                         <Command>
                           <CommandInput placeholder="Search UOM codes..." className="h-9" />
-                          <CommandList>
+                          <CommandList className="max-h-[min(300px,50vh)]">
                             <CommandEmpty>No UOM code found.</CommandEmpty>
                             <CommandGroup>
                               {isLoadingQuantityCodes ? (
@@ -3259,10 +3275,15 @@ export const InvoicesPage = () => {
               </>
             )}
           </div>
-          <DialogFooter>
+          <DialogFooter className="gap-2 sm:gap-0">
             <Button
               variant="outline"
-              onClick={() => setQuickFixDialog({ open: false, fix: null, value: '' })}
+              onClick={() => {
+                setQuickFixDialog({ open: false, fix: null, value: '' });
+                if (validationResult) {
+                  setShowValidationDialog(true);
+                }
+              }}
               disabled={isUpdatingQuickFix}
             >
               Cancel
