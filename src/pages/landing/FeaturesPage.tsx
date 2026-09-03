@@ -416,7 +416,7 @@ export const FeaturesPage = () => {
           </div>
 
           <div className="border-t mt-8 pt-8 text-center text-muted-foreground">
-            <p>&copy; 2024 Databyte Technologies. All rights reserved.</p>
+            <p>&copy; {new Date().getFullYear()} Databyte Technologies. All rights reserved.</p>
           </div>
         </div>
       </footer>
