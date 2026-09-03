@@ -436,7 +436,7 @@ const Index = () => {
       <footer className="bg-gray-900 border-t border-gray-800 py-12">
         <div className="container mx-auto px-6">
           <div className="text-center text-gray-400">
-            <p>&copy; 2024 E-invoicing Platform. All rights reserved.</p>
+            <p>&copy; {new Date().getFullYear()} E-invoicing Platform. All rights reserved.</p>
           </div>
         </div>
       </footer>
