@@ -1053,8 +1053,10 @@ export const PartiesPage = () => {
           <DialogHeader>
             <DialogTitle>Edit Party</DialogTitle>
             <DialogDescription>
-              Update party information. Leave fields empty to keep current
-              values.
+              {partyDetails?.data?.source_system &&
+              partyDetails.data.source_system !== 'manual'
+                ? 'ERP-sourced fields are read-only. Update them in Sage, then re-sync. Buyer type can still be changed here.'
+                : 'Update party information. Leave fields empty to keep current values.'}
             </DialogDescription>
           </DialogHeader>
           {isLoadingPartyDetails ? (
@@ -1067,8 +1069,21 @@ export const PartiesPage = () => {
             <form onSubmit={handleSaveEdit} className="space-y-4 py-4">
               {(() => {
                 const party = partyDetails.data as Party;
+                const isErpParty = Boolean(
+                  party.source_system && party.source_system !== 'manual'
+                );
                 return (
                   <>
+                    {isErpParty && (
+                      <p className="text-sm text-muted-foreground rounded-md border bg-muted/40 px-3 py-2">
+                        These fields come from{' '}
+                        {party.source_system
+                          ?.replace(/_/g, ' ')
+                          .replace(/\b\w/g, (c) => c.toUpperCase()) || 'Sage'}
+                        . Update them there, then re-sync. Only Buyer type is
+                        editable in Databytes.
+                      </p>
+                    )}
                     <div className="grid grid-cols-2 gap-4">
                       <div>
                         <Label htmlFor="party_name">Party Name *</Label>
@@ -1076,7 +1091,8 @@ export const PartiesPage = () => {
                           id="party_name"
                           name="party_name"
                           defaultValue={party.party_name}
-                          required
+                          required={!isErpParty}
+                          disabled={isErpParty}
                         />
                       </div>
                       <div>
@@ -1085,6 +1101,7 @@ export const PartiesPage = () => {
                           id="code"
                           name="code"
                           defaultValue={party.code || ''}
+                          disabled={isErpParty}
                         />
                       </div>
                       <div>
@@ -1093,6 +1110,7 @@ export const PartiesPage = () => {
                           id="tin"
                           name="tin"
                           defaultValue={party.tin || ''}
+                          disabled={isErpParty}
                         />
                       </div>
                       {party.party_type === 'customer' && (
@@ -1124,6 +1142,7 @@ export const PartiesPage = () => {
                           name="email"
                           type="email"
                           defaultValue={party.email || ''}
+                          disabled={isErpParty}
                         />
                       </div>
                       <div>
@@ -1132,6 +1151,7 @@ export const PartiesPage = () => {
                           id="telephone"
                           name="telephone"
                           defaultValue={party.telephone || ''}
+                          disabled={isErpParty}
                         />
                       </div>
                       <div>
@@ -1158,6 +1178,7 @@ export const PartiesPage = () => {
                         name="address"
                         defaultValue={party.address || ''}
                         rows={2}
+                        disabled={isErpParty}
                       />
                     </div>
 
@@ -1168,6 +1189,7 @@ export const PartiesPage = () => {
                           id="city"
                           name="city"
                           defaultValue={party.city || ''}
+                          disabled={isErpParty}
                         />
                       </div>
                       <div>
@@ -1176,6 +1198,7 @@ export const PartiesPage = () => {
                           id="state"
                           name="state"
                           defaultValue={party.state || ''}
+                          disabled={isErpParty}
                         />
                       </div>
                       <div>
@@ -1184,6 +1207,7 @@ export const PartiesPage = () => {
                           id="lga"
                           name="lga"
                           defaultValue={party.lga || ''}
+                          disabled={isErpParty}
                         />
                       </div>
                       <div>
@@ -1192,6 +1216,7 @@ export const PartiesPage = () => {
                           id="country"
                           name="country"
                           defaultValue={party.country || ''}
+                          disabled={isErpParty}
                         />
                       </div>
                       <div>
@@ -1200,6 +1225,7 @@ export const PartiesPage = () => {
                           id="postal_code"
                           name="postal_code"
                           defaultValue={party.postal_code || ''}
+                          disabled={isErpParty}
                         />
                       </div>
                     </div>
@@ -1213,6 +1239,7 @@ export const PartiesPage = () => {
                         name="business_description"
                         defaultValue={party.business_description || ''}
                         rows={3}
+                        disabled={isErpParty}
                       />
                     </div>
 
@@ -1223,6 +1250,7 @@ export const PartiesPage = () => {
                           id="contact_person"
                           name="contact_person"
                           defaultValue={party.contact_person || ''}
+                          disabled={isErpParty}
                         />
                       </div>
                       <div>
@@ -1232,6 +1260,7 @@ export const PartiesPage = () => {
                           name="contact_email"
                           type="email"
                           defaultValue={party.contact_email || ''}
+                          disabled={isErpParty}
                         />
                       </div>
                       <div>
@@ -1240,6 +1269,7 @@ export const PartiesPage = () => {
                           id="contact_phone"
                           name="contact_phone"
                           defaultValue={party.contact_phone || ''}
+                          disabled={isErpParty}
                         />
                       </div>
                       <div>
@@ -1248,6 +1278,7 @@ export const PartiesPage = () => {
                           id="payment_terms"
                           name="payment_terms"
                           defaultValue={party.payment_terms || ''}
+                          disabled={isErpParty}
                         />
                       </div>
                       {party.party_type === 'customer' && (
@@ -1259,6 +1290,7 @@ export const PartiesPage = () => {
                             type="number"
                             step="0.01"
                             defaultValue={party.credit_limit || ''}
+                            disabled={isErpParty}
                           />
                         </div>
                       )}
