@@ -33,11 +33,15 @@ export const useARInvoices = (params?: {
   sort_by?: string;
   sort_order?: 'asc' | 'desc';
   search?: string;
-}) => {
+  has_firs_irn?: boolean;
+  for_reference?: boolean;
+  exclude_id?: number;
+}, options?: { enabled?: boolean }) => {
   return useQuery({
     queryKey: ['invoices', 'ar', params],
     queryFn: () => apiService.getARInvoices(params),
     staleTime: 5 * 60 * 1000, // 5 minutes
+    enabled: options?.enabled ?? true,
   });
 };
 
@@ -252,11 +256,15 @@ export const useAPInvoices = (params?: {
   sort_by?: string;
   sort_order?: 'asc' | 'desc';
   search?: string;
-}) => {
+  has_firs_irn?: boolean;
+  for_reference?: boolean;
+  exclude_id?: number;
+}, options?: { enabled?: boolean }) => {
   return useQuery({
     queryKey: ['invoices', 'ap', params],
     queryFn: () => apiService.getAPInvoices(params),
     staleTime: 5 * 60 * 1000, // 5 minutes
+    enabled: options?.enabled ?? true,
   });
 };
 

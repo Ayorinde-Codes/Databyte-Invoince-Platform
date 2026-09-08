@@ -280,6 +280,9 @@ export const InvoicesPage = () => {
   const [previousInvoiceIrn, setPreviousInvoiceIrn] = useState<string>('');
   const [isUpdatingFirsFields, setIsUpdatingFirsFields] = useState(false);
   const [invoiceTypePopoverOpen, setInvoiceTypePopoverOpen] = useState(false);
+  const [previousIrnPopoverOpen, setPreviousIrnPopoverOpen] = useState(false);
+  const [previousIrnSearch, setPreviousIrnSearch] = useState('');
+  const [debouncedPreviousIrnSearch, setDebouncedPreviousIrnSearch] = useState('');
   const [showFirsFieldsDialog, setShowFirsFieldsDialog] = useState(false);
   const [editingInvoiceForFirs, setEditingInvoiceForFirs] = useState<Invoice | null>(null);
   const [partialPaymentDialog, setPartialPaymentDialog] = useState<{
@@ -353,6 +356,46 @@ export const InvoicesPage = () => {
     const value = typeLabel.toLowerCase();
     return value.includes('credit note') || value.includes('debit note');
   }, [getInvoiceTypeLabel]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setDebouncedPreviousIrnSearch(previousIrnSearch.trim());
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [previousIrnSearch]);
+
+  const needsPreviousIrnLookup =
+    showFirsFieldsDialog && requiresPreviousIrn(firsInvoiceTypeCode);
+
+  const referenceLookupParams = {
+    per_page: 20,
+    page: 1,
+    has_firs_irn: true,
+    for_reference: true,
+    ...(debouncedPreviousIrnSearch && { search: debouncedPreviousIrnSearch }),
+    ...(editingInvoiceForFirs?.id != null && { exclude_id: editingInvoiceForFirs.id }),
+  };
+
+  const { data: arReferenceData, isFetching: arReferenceFetching } = useARInvoices(
+    referenceLookupParams,
+    { enabled: needsPreviousIrnLookup && activeTab === 'ar' }
+  );
+  const { data: apReferenceData, isFetching: apReferenceFetching } = useAPInvoices(
+    referenceLookupParams,
+    { enabled: needsPreviousIrnLookup && activeTab === 'ap' }
+  );
+
+  const referenceInvoices = useMemo(() => {
+    const payload =
+      activeTab === 'ar' ? arReferenceData?.data : apReferenceData?.data;
+    if (payload && typeof payload === 'object' && 'data' in payload && Array.isArray(payload.data)) {
+      return payload.data as Invoice[];
+    }
+    return [] as Invoice[];
+  }, [activeTab, arReferenceData, apReferenceData]);
+
+  const isReferenceFetching =
+    activeTab === 'ar' ? arReferenceFetching : apReferenceFetching;
 
   const getDocumentTypeLabel = useCallback((invoiceType: string | undefined | null): string => {
     if (!invoiceType) return '';
@@ -1547,6 +1590,9 @@ export const InvoicesPage = () => {
     setFirsNote('');
     setPreviousInvoiceIrn('');
     setInvoiceTypePopoverOpen(false);
+    setPreviousIrnPopoverOpen(false);
+    setPreviousIrnSearch('');
+    setDebouncedPreviousIrnSearch('');
   };
 
   const handleSaveFirsFields = async () => {
@@ -3398,12 +3444,108 @@ export const InvoicesPage = () => {
                 <Input
                   value={previousInvoiceIrn}
                   onChange={(e) => setPreviousInvoiceIrn(e.target.value)}
-                  placeholder="Enter previous invoice IRN..."
+                  placeholder="Paste IRN or look up a submitted invoice..."
                   disabled={isUpdatingFirsFields}
-                  className="w-full"
+                  className="w-full font-mono text-sm"
                 />
+                <Popover
+                  open={previousIrnPopoverOpen}
+                  onOpenChange={(open) => {
+                    setPreviousIrnPopoverOpen(open);
+                    if (open) {
+                      setPreviousIrnSearch('');
+                      setDebouncedPreviousIrnSearch('');
+                    }
+                  }}
+                  modal={false}
+                >
+                  <PopoverTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="w-full justify-between"
+                      disabled={isUpdatingFirsFields}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <span className="truncate text-left">
+                        Look up from submitted invoices...
+                      </span>
+                      <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent
+                    className="w-[var(--radix-popover-trigger-width)] p-0 z-[100]"
+                    align="start"
+                    onInteractOutside={(e) => {
+                      const target = e.target as HTMLElement;
+                      if (target.closest('[role="dialog"]')) {
+                        e.preventDefault();
+                      }
+                    }}
+                  >
+                    <Command shouldFilter={false}>
+                      <CommandInput
+                        placeholder="Search invoice #, customer, or IRN..."
+                        className="h-9"
+                        value={previousIrnSearch}
+                        onValueChange={setPreviousIrnSearch}
+                      />
+                      <CommandList className="max-h-[min(280px,50vh)]">
+                        {isReferenceFetching ? (
+                          <div className="py-3 text-center text-sm text-muted-foreground">
+                            Searching submitted invoices...
+                          </div>
+                        ) : (
+                          <>
+                            <CommandEmpty>
+                              <div className="py-2 text-center text-sm space-y-1">
+                                <div>No submitted invoice found.</div>
+                                <div className="text-xs text-muted-foreground">
+                                  Paste an IRN in the field above if it is not in Databytes.
+                                </div>
+                              </div>
+                            </CommandEmpty>
+                            <CommandGroup>
+                              {referenceInvoices.map((inv) => {
+                                const partyName =
+                                  activeTab === 'ar'
+                                    ? inv.customer?.party_name
+                                    : inv.vendor?.party_name;
+                                const irn = inv.firs_irn || '';
+                                return (
+                                  <CommandItem
+                                    key={inv.id}
+                                    value={`${inv.invoice_number} ${partyName || ''} ${irn}`}
+                                    onSelect={() => {
+                                      if (!irn) return;
+                                      setPreviousInvoiceIrn(irn);
+                                      setPreviousIrnPopoverOpen(false);
+                                      setPreviousIrnSearch('');
+                                      setDebouncedPreviousIrnSearch('');
+                                    }}
+                                  >
+                                    <div className="flex flex-col gap-0.5 min-w-0">
+                                      <span className="font-medium truncate">
+                                        {inv.invoice_number}
+                                        {partyName ? ` — ${partyName}` : ''}
+                                      </span>
+                                      <span className="text-xs text-muted-foreground font-mono truncate">
+                                        {irn}
+                                      </span>
+                                    </div>
+                                  </CommandItem>
+                                );
+                              })}
+                            </CommandGroup>
+                          </>
+                        )}
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
                 <p className="text-xs text-muted-foreground">
-                  Required for credit note or debit note invoices
+                  Required for credit/debit notes. Search only loads submitted invoices
+                  (with FIRS IRN), 20 at a time — you can always paste an IRN manually.
                 </p>
               </div>
             )}

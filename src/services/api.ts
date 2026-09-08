@@ -519,6 +519,9 @@ class ApiService {
     sort_by?: string;
     sort_order?: 'asc' | 'desc';
     search?: string;
+    has_firs_irn?: boolean;
+    for_reference?: boolean;
+    exclude_id?: number;
   }) {
     const queryParams = new URLSearchParams();
     if (params?.per_page) queryParams.append('per_page', params.per_page.toString());
@@ -533,6 +536,9 @@ class ApiService {
     if (params?.sort_by) queryParams.append('sort_by', params.sort_by);
     if (params?.sort_order) queryParams.append('sort_order', params.sort_order);
     if (params?.search) queryParams.append('search', params.search);
+    if (params?.has_firs_irn) queryParams.append('has_firs_irn', '1');
+    if (params?.for_reference) queryParams.append('for_reference', '1');
+    if (params?.exclude_id != null) queryParams.append('exclude_id', params.exclude_id.toString());
     
     const endpoint = queryParams.toString() 
       ? `${API_ENDPOINTS.invoices.ar.list}?${queryParams}`
@@ -800,6 +806,9 @@ class ApiService {
     sort_by?: string;
     sort_order?: 'asc' | 'desc';
     search?: string;
+    has_firs_irn?: boolean;
+    for_reference?: boolean;
+    exclude_id?: number;
   }) {
     const queryParams = new URLSearchParams();
     if (params?.per_page) queryParams.append('per_page', params.per_page.toString());
@@ -813,6 +822,9 @@ class ApiService {
     if (params?.sort_by) queryParams.append('sort_by', params.sort_by);
     if (params?.sort_order) queryParams.append('sort_order', params.sort_order);
     if (params?.search) queryParams.append('search', params.search);
+    if (params?.has_firs_irn) queryParams.append('has_firs_irn', '1');
+    if (params?.for_reference) queryParams.append('for_reference', '1');
+    if (params?.exclude_id != null) queryParams.append('exclude_id', params.exclude_id.toString());
     
     const endpoint = queryParams.toString() 
       ? `${API_ENDPOINTS.invoices.ap.list}?${queryParams}`
