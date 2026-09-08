@@ -23,6 +23,6 @@ function getEnvVar(key: keyof ImportMetaEnv, fallback?: string): string {
 export const env = {
   VITE_DATABYTES_BACKEND_BASE_URL: getEnvVar(
     'VITE_DATABYTES_BACKEND_BASE_URL',
-    'http://192.168.191.230:8000/api'
+    'http://127.0.0.1:8000/api'
   ),
 } as const;
