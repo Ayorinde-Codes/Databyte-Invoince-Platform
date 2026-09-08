@@ -1053,10 +1053,12 @@ export const PartiesPage = () => {
           <DialogHeader>
             <DialogTitle>Edit Party</DialogTitle>
             <DialogDescription>
-              {partyDetails?.data?.source_system &&
-              partyDetails.data.source_system !== 'manual'
-                ? 'ERP-sourced fields are read-only. Update them in Sage, then re-sync. Buyer type can still be changed here.'
-                : 'Update party information. Leave fields empty to keep current values.'}
+              {(() => {
+                const party = partyDetails?.data as Party | undefined;
+                return party?.source_system && party.source_system !== 'manual'
+                  ? 'ERP-sourced fields are read-only. Update them in Sage, then re-sync. Buyer type can still be changed here.'
+                  : 'Update party information. Leave fields empty to keep current values.';
+              })()}
             </DialogDescription>
           </DialogHeader>
           {isLoadingPartyDetails ? (
